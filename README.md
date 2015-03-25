@@ -1,8 +1,17 @@
+IMGT resources
+==============
+```
+http://www.imgt.org/IMGT_GENE-DB/GENElect?query=7.2+IGHV&species=Mus+musculus
+http://www.imgt.org/IMGT_GENE-DB/GENElect?query=7.2+IGHD&species=Mus+musculus
+http://www.imgt.org/IMGT_GENE-DB/GENElect?query=7.2+IGHJ&species=Mus+musculus
+```
+
+
 Generate an igblast database
 ============================
 
 ```
-somatic load-reference imgt/mouse/mouse_igmt_dh.fasta imgt/mouse/mouse_igmt_jh.fasta imgt/mouse/mouse_igmt_vh.fasta
+somatic load-reference imgt/mouse/mouse_imgt_dh.fasta imgt/mouse/mouse_imgt_jh.fasta imgt/mouse/mouse_imgt_vh.fasta
 somatic to-blast-fasta -r V > igblast/database/mouse_imgt_vh
 somatic to-blast-fasta -r D > igblast/database/mouse_imgt_dh
 somatic to-blast-fasta -r J > igblast/database/mouse_imgt_jh
