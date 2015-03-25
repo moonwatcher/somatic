@@ -31,6 +31,26 @@ expression = {
     'igblast hit table': re.compile('^# Hit table'),
     'igblast result end': re.compile('^# BLAST processed '),
     'nucleotide sequence': re.compile('^[atcgnATCGN]+$'),
+    'expand igblast hit': re.compile(
+        r"""
+        (?P<segment>[VDJ]),
+        (?P<subject_id>[^,]+),
+        (?P<query_start>[^,]+),
+        (?P<query_end>[^,]+),
+        (?P<subject_start>[^,]+),
+        (?P<subject_end>[^,]+),
+        (?P<gap_openings>[^,]+),
+        (?P<gaps>[^,]+),
+        (?P<mismatches>[^,]+),
+        (?P<percentage_identical>[^,]+),
+        (?P<bit_score>[^,]+),
+        (?P<evalue>[^,]+),
+        (?P<alignment_length>[^,]+),
+        (?P<subject_strand>[^,]),
+        (?P<query_strand>[^,])
+        """,
+        re.VERBOSE
+    ),
     'igblast hit': re.compile(
         r"""
         (?P<segment>[VDJ])\t
@@ -253,6 +273,50 @@ class Processor(object):
     def full(self):
         return not len(self.buffer) < self.buffer_size
 
+    def expand(self, sample):
+        if 'match' in sample:
+            hits = []
+            for r in sample['match']:
+                match = expression['expand igblast hit'].search(r['hit'])
+                if match:
+                    hit = match.groupdict()
+                    hit['hit'] = r['hit']
+                    for k in [
+                        'query_start',
+                        'query_end',
+                        'subject_start',
+                        'subject_end',
+                        'gap_openings',
+                        'gaps',
+                        'mismatches',
+                        'alignment_length'
+                    ]:
+                        try: hit[k] = int(hit[k])
+                        except ValueError as e:
+                            self.log.warning('could not parse value %s for %s as int', hit[k], k)
+                            hit[k] = None
+                            
+                    for k in [
+                        'percentage_identical',
+                        'bit_score',
+                        'evalue',
+                    ]: 
+                        try: hit[k] = float(hit[k])
+                        except ValueError:
+                            self.log.warning('could not parse value %s for %s as int', hit[k], k)
+                            hit[k] = None
+                    hits.append(hit)
+        sample['match'] = hits
+
+    def analyze(self, library):
+        collection = self.database[library]
+        cursor = collection.find()
+        for sample in cursor:
+            self.expand(sample)
+            del sample['_id']
+            print(to_json(sample))
+            
+
     def populate(self, library):
         collection = self.database[library]
         while self.read_block():
@@ -260,8 +324,8 @@ class Processor(object):
             self.compress()
             
             batch = [ s.node for s in self.buffer ]
-            print(to_json(batch))
-            # result = collection.insert_many(batch)
+            # print(to_json(batch))
+            result = collection.insert_many(batch)
             self.count += len(self.buffer)
             self.log.debug('%s so far', self.count)
 
@@ -465,6 +529,15 @@ def decode_cli():
         required=True,
         help='library name to to put results in')
         
+    c = s.add_parser( 'analyze', help='analyze samples for library',
+        description='analyze'
+    )
+    c.add_argument(
+        '-l', '--library',
+        dest='library', 
+        metavar='NAME', 
+        required=True,
+        help='library name to analyze')
     for k,v in vars(p.parse_args()).items():
         if v is not None:
             env[k] = v
@@ -494,6 +567,10 @@ def main():
     elif env['action'] == 'populate':
         processor = Processor()
         processor.populate(env['library'])
+
+    elif env['action'] == 'analyze':
+        processor = Processor()
+        processor.analyze(env['library'])
 
 if __name__ == '__main__':
     main()
