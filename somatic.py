@@ -8,9 +8,11 @@ import json
 import io
 
 from subprocess import Popen, PIPE
-from io import StringIO
-from pymongo import MongoClient
+from io import StringIO, BytesIO
+from pymongo import MongoClient, DESCENDING, ASCENDING
 from argparse import ArgumentParser
+from bson.objectid import ObjectId
+from datetime import timedelta, datetime
 
 def to_json(node):
     return json.dumps(node, sort_keys=False, indent=4)
@@ -24,6 +26,80 @@ log_levels = {
 }
 
 expression = {
+    'complement': { 
+        'A': 'T',
+        'C': 'G',
+        'G': 'C',
+        'T': 'A',
+        'N': 'N' 
+    }, 
+    'nucleic to amino': {
+        'GCT':'A',
+        'GCC':'A',
+        'GCA':'A',
+        'GCG':'A',
+        'TTA':'L',
+        'TTG':'L',
+        'CTT':'L',
+        'CTC':'L',
+        'CTA':'L',
+        'CTG':'L',
+        'CGT':'R',
+        'CGC':'R',
+        'CGA':'R',
+        'CGG':'R',
+        'AGA':'R',
+        'AGG':'R',
+        'AAA':'K',
+        'AAG':'K',
+        'AAT':'N',
+        'AAC':'N',
+        'ATG':'M',
+        'GAT':'D',
+        'GAC':'D',
+        'TTT':'F',
+        'TTC':'F',
+        'TGT':'C',
+        'TGC':'C',
+        'CCT':'P',
+        'CCC':'P',
+        'CCA':'P',
+        'CCG':'P',
+        'CAA':'Q',
+        'CAG':'Q',
+        'TCT':'S',
+        'TCC':'S',
+        'TCA':'S',
+        'TCG':'S',
+        'AGT':'S',
+        'AGC':'S',
+        'GAA':'E',
+        'GAG':'E',
+        'ACT':'T',
+        'ACC':'T',
+        'ACA':'T',
+        'ACG':'T',
+        'GGT':'G',
+        'GGC':'G',
+        'GGA':'G',
+        'GGG':'G',
+        'TGG':'W',
+        'CAT':'H',
+        'CAC':'H',
+        'TAT':'Y',
+        'TAC':'Y',
+        'ATT':'I',
+        'ATC':'I',
+        'ATA':'I',
+        'GTT':'V',
+        'GTC':'V',
+        'GTA':'V',
+        'GTG':'V',
+        'TAA':'*',
+        'TGA':'*',
+        'TAG':'*',
+    },
+    'buffer size': 1,
     'regions': ['V', 'D', 'J'],
     'fasta line length': 80,
     'igblast result start': re.compile('^# IGBLASTN '),
@@ -201,8 +277,9 @@ class Reference(object):
 
 
 class Sample(object):
-    def __init__(self, node=None):
+    def __init__(self, pipeline, node=None):
         self.log = logging.getLogger('Sample')
+        self.pipeline = pipeline
         self.node = node
         
         if self.node is None:
@@ -242,110 +319,278 @@ class Sample(object):
             self.node['match'] = []
         return self.node['match']
 
-
-class Processor(object):
-    def __init__(self):
-        self.log = logging.getLogger('Processor')
-        self.buffer_size = 128
-        self.buffer = []
-        self.count = 0
-        self._connection = None
+    @property
+    def codon_sequence(self):
+        if 'codon_sequence' not in self.node:
+            if self.reading_frame and self.sequence:
+                self.node['codon_sequence'] = self.to_codon(self.sequence, self.reading_frame)
+            return self.node['codon_sequence']
+            
+        if 'codon_sequence' not in self.node:
+            self.node['codon_sequence'] = None
+            
+        return self.node['codon_sequence']
 
     @property
-    def connection(self):
-        if self._connection is None:
-            try:
-                self._connection = MongoClient('mongodb://localhost')
-            except pymongo.errors.ConnectionFailure as e:
-                self.log.error('failed to establish connection %s', e)
+    def reverse_complement_codon_sequence(self):
+        if 'reverse_complement_codon_sequence' not in self.node:
+            if self.reading_frame and self.reverse_complement_sequence:
+                self.node['reverse_complement_codon_sequence'] = self.to_codon(self.reverse_complement_sequence, self.reading_frame)
+            return self.node['reverse_complement_codon_sequence']
+            
+        if 'reverse_complement_codon_sequence' not in self.node:
+            self.node['reverse_complement_codon_sequence'] = None
+            
+        return self.node['reverse_complement_codon_sequence']
+
+    @property
+    def reverse_complement_sequence(self):
+        if 'reverse complement sequence' not in self.node:
+            self.node['reverse complement sequence'] = ''.join([ expression['complement'][b] for b in list(self.sequence) ][::-1])
+        return self.node['reverse complement sequence']
+
+    @property
+    def reverse_complement_quality(self):
+        if 'reverse complement quality' not in self.node:
+            self.node['reverse complement quality'] = ''.join(self.quality[::-1])
+        return self.node['reverse complement sequence']
+
+    @property
+    def reading_frame(self):
+        if 'reading_frame' not in self.node:
+            if 'match' in self.node and self.node['match']:
+                if 'reading_frame' in self.node['match'][0]:
+                    self.node['reading_frame'] = self.node['match'][0]['reading_frame']
+                    
+        if 'reading_frame' not in self.node:
+            self.node['reading_frame'] = None
+        
+        return self.node['reading_frame']
+
+    def to_codon(self, sequence, offset):
+        length = len(sequence)
+        start = offset - 1
+        end = start + 3
+        amino = []
+        while(end <= length):
+            acid = sequence[start:end]
+            if 'N' in acid:
+                amino.append('X')
             else:
-                self.log.debug('connection established')
-        return self._connection
+                amino.append(expression['nucleic to amino'][acid])
+            start = end
+            end = start + 3
+        return ''.join(amino)
+
+    def expand(self):
+        if 'match' in self.node:
+            hits = []
+            for r in self.node['match']:
+                if 'hit' in r:
+                    match = expression['expand igblast hit'].search(r['hit'])
+                    if match:
+                        hit = match.groupdict()
+                        hit['hit'] = r['hit']
+                        for k in [
+                            'query_start',
+                            'query_end',
+                            'subject_start',
+                            'subject_end',
+                            'gap_openings',
+                            'gaps',
+                            'mismatches',
+                            'alignment_length'
+                        ]:
+                            try: hit[k] = int(hit[k])
+                            except ValueError as e:
+                                self.log.warning('could not parse value %s for %s as int', hit[k], k)
+                                hit[k] = None
+                                
+                        for k in [
+                            'percentage_identical',
+                            'bit_score',
+                            'evalue',
+                        ]: 
+                            try: hit[k] = float(hit[k])
+                            except ValueError:
+                                self.log.warning('could not parse value %s for %s as int', hit[k], k)
+                                hit[k] = None
+                        hits.append(hit)
+        self.node['match'] = hits
+
+    def compress(self):
+        for match in self.match:
+            try:
+                match['hit'] = expression['igblast compressed hit'].format(**match)
+            except KeyError as e:
+                self.log.error(e)
+                self.log.error(match)
+
+    def analyze(self):
+        for match in self.match:
+            reference = self.pipeline.reference_for(match['subject_id'])
+            if 'reading_frame' in reference:
+                match['subject_sequence'] = reference['sequence'][match['subject_start'] - 1:match['subject_end']]
+                if match['subject_strand'] == match['query_strand']:
+                    match['query_sequence'] = self.sequence[match['query_start'] - 1:match['query_end']]
+                else:
+                    match['query_sequence'] = self.reverse_complement_sequence[match['query_start'] - 1:match['query_end']]
+                match['reading_frame'] = 3 - (match['subject_start'] - reference['reading_frame'] - 1) % 3
+                match['amino_query_sequence'] = self.to_codon(match['query_sequence'], match['reading_frame'])
+                match['amino_subject_sequence'] = self.to_codon(match['subject_sequence'], match['reading_frame'])
+
+    def to_json(self):
+        def handler(o):
+            result = None
+            if isinstance(o, datetime):
+                result = o.isoformat()
+            if isinstance(o, ObjectId):
+                result = str(o)
+            if isinstance(o, set):
+                result = list(o)
+            return result
+
+        return json.dumps(self.node, sort_keys=False, ensure_ascii=False, indent=4, default=handler)
+
+    def __str__(self):
+        buffer = StringIO()
+        if self.reading_frame:
+            # print the coordinate system
+            if self.reading_frame > 1:
+                buffer.write('{: <{}} '.format(1, self.reading_frame - 1))
+            for index in range(self.reading_frame, self.length, 3):
+                buffer.write('{: <3} '.format(index))
+            buffer.write('\n')
+            
+            # print the sample nucleotide sequence
+            if self.reading_frame > 1:
+                buffer.write(self.reverse_complement_sequence[0:self.reading_frame - 1])
+                buffer.write(' ')
+            for index in range(self.reading_frame - 1, self.length, 3):
+                buffer.write(self.reverse_complement_sequence[index:index + 3])
+                buffer.write(' ')
+            buffer.write('\n')
+            
+            # print the sample codon sequence
+            if self.reading_frame > 1:
+                buffer.write('{: <{}} '.format(' ', self.reading_frame - 1))
+            for codon in self.reverse_complement_codon_sequence:
+                buffer.write(codon)
+                buffer.write('   ')
+            buffer.write('\n')
+            
+            for match in self.match:
+                if match['segment'] == 'D':
+                    reading_frame = 3 - (match['query_start'] - self.reading_frame - 1) % 3
+                    amino_subject_sequence = self.to_codon(match['subject_sequence'], reading_frame)
+                else:
+                    reading_frame = match['reading_frame']
+                    amino_subject_sequence = match['amino_subject_sequence']
+                    
+                # print the nucleotide sequence
+                mask = []
+                for index in range(match['query_start'] - 1, match['query_end']):
+                    if self.reverse_complement_sequence[index] == match['subject_sequence'][index - match['query_start'] + 1]:
+                        mask.append('-')
+                    else:
+                        mask.append(match['subject_sequence'][index - match['query_start'] + 1])
+                mask = ''.join(mask)
+                    
+                if match['query_start'] > 1:
+                    buffer.write('{: <{}} '.format(' ', int((match['query_start'] - self.reading_frame) / 3) - 1 + match['query_start']))
+                    
+                if reading_frame > 1:
+                    buffer.write(mask[0:reading_frame - 1])
+                    buffer.write(' ')
+                    
+                for index in range(reading_frame - 1, match['alignment_length'], 3):
+                    buffer.write(mask[index:index + 3])
+                    buffer.write(' ')
+                buffer.write('\n')
+
+                # print the sample codon sequence
+                if match['query_start'] > 1:
+                    buffer.write('{: <{}} '.format(' ', int((match['query_start'] - self.reading_frame) / 3) - 1 + match['query_start']))
+                if reading_frame > 1:
+                    buffer.write('{: <{}} '.format(' ', reading_frame - 1))
+                
+                for codon in amino_subject_sequence:
+                    buffer.write(codon)
+                    buffer.write('   ')
+                buffer.write('\n')
+                
+        buffer.seek(0)
+        return buffer.read()
+
+
+class Block(object):
+    def __init__(self, pipeline):
+        self.log = logging.getLogger('Block')
+        self.pipeline = pipeline
+        self.reset()
+
+    def __str__(self):
+        buffer = StringIO()
+        for sample in self.buffer:
+            buffer.write(str(sample))
+            buffer.write('\n')
+        buffer.seek(0)
+        return buffer.read()
 
     @property
-    def database(self):
-        if self.connection is not None:
-            return self.connection['somatic']
-        else:
-            return None
+    def buffer(self):
+        return self.node['buffer']
+
+    @property
+    def document(self):
+        return self.node['document']
+
+    @property
+    def lookup(self):
+        return self.node['lookup']
+
+    @property
+    def size(self):
+        return len(self.buffer)
+
+    @property
+    def empty(self):
+        return self.size == 0
 
     @property
     def full(self):
-        return not len(self.buffer) < self.buffer_size
+        return not self.size < expression['buffer size']
 
-    def expand(self, sample):
-        if 'match' in sample:
-            hits = []
-            for r in sample['match']:
-                match = expression['expand igblast hit'].search(r['hit'])
-                if match:
-                    hit = match.groupdict()
-                    hit['hit'] = r['hit']
-                    for k in [
-                        'query_start',
-                        'query_end',
-                        'subject_start',
-                        'subject_end',
-                        'gap_openings',
-                        'gaps',
-                        'mismatches',
-                        'alignment_length'
-                    ]:
-                        try: hit[k] = int(hit[k])
-                        except ValueError as e:
-                            self.log.warning('could not parse value %s for %s as int', hit[k], k)
-                            hit[k] = None
-                            
-                    for k in [
-                        'percentage_identical',
-                        'bit_score',
-                        'evalue',
-                    ]: 
-                        try: hit[k] = float(hit[k])
-                        except ValueError:
-                            self.log.warning('could not parse value %s for %s as int', hit[k], k)
-                            hit[k] = None
-                    hits.append(hit)
-        sample['match'] = hits
+    def reset(self):
+        self.node = {
+            'buffer': [],
+            'document': [],
+            'lookup': {}
+        }
 
-    def analyze(self, library):
-        collection = self.database[library]
-        cursor = collection.find()
-        for sample in cursor:
-            self.expand(sample)
-            del sample['_id']
-            print(to_json(sample))
-            
+    def add(self, sample):
+        self.buffer.append(sample)
+        self.lookup[sample.id] = sample
+        self.document.append(sample.node)
 
-    def populate(self, library):
-        collection = self.database[library]
-        while self.read_block():
-            self.search_igblast()
-            self.compress()
-            
-            batch = [ s.node for s in self.buffer ]
-            # print(to_json(batch))
-            result = collection.insert_many(batch)
-            self.count += len(self.buffer)
-            self.log.debug('%s so far', self.count)
+    def fill(self):
+        if self.read():
+            buffer = self.search()
+            if buffer:
+                self.parse_igblast(buffer)
+                for sample in self.buffer:
+                    sample.compress()
+                    sample.analyze()
+        return not self.empty
 
-    def compress(self):
-        for sample in self.buffer:
-            m = []
-            for match in sample.match:
-                try:
-                    m.append({ 'hit': expression['igblast compressed hit'].format(**match) })
-                except KeyError as e:
-                    self.log.error(e)
-                    self.log.error(match)
-            sample.match.clear()
-            sample.match.extend(m)
-
-    def read_block(self):
+    def read(self):
+        self.node = {
+            'buffer': [],
+            'document': [],
+            'lookup': {}
+        }
         state = None
-        self.buffer = []
-        self.lookup = {}
-        sample = Sample()
+        sample = Sample(self.pipeline)
         for line in sys.stdin:
             if line:
                 line = line.strip()
@@ -353,41 +598,30 @@ class Processor(object):
                     if line[0] == '@':
                         sample.id = line
                         state = 'id'
+                        
                 elif state == 'id':
                     sample.sequence = line
                     state = 'sequence'
+                    
                 elif state == 'sequence':
                     if line[0] == '+':
                         state = 'redundant'
+                        
                 elif state == 'redundant':
                     sample.quality = line
-                    self.buffer.append(sample)
-                    self.lookup[sample.id] = sample
+                    self.add(sample)
                     state = None
-                    
                     if self.full:
                         break
                     else:
-                        sample = Sample()
+                        sample = Sample(self.pipeline)
             else:
                 break
                 
-        return len(self.buffer) > 0
+        return not self.empty
 
-    def to_fasta(self):
-        fasta = []
-        for sample in self.buffer:
-            fasta.append('>{}'.format(sample.id))
-            begin = 0
-            end = 0
-            while end < sample.length:
-                end = min(begin + expression['fasta line length'], sample.length)
-                fasta.append(sample.sequence[begin:end])
-                begin = end
-        return fasta
-
-    def search_igblast(self):
-        fasta = self.to_fasta()
+    def search(self):
+        result = None
         process = Popen(
             args=expression['igblast command'],
             cwd='/Users/lg/code/somatic/igblast',
@@ -396,12 +630,26 @@ class Processor(object):
             stdout=PIPE,
             stderr=PIPE
         )
-        output, error = process.communicate(input='\n'.join(fasta).encode('utf8'))
+        output, error = process.communicate(input=self.to_fasta().read().encode('utf8'))
         if output:
-            buffer = StringIO(output.decode('utf8'))
-            self.parse_igblast_output(buffer)
+            result = StringIO(output.decode('utf8'))
+        return result
 
-    def parse_igblast_output(self, buffer):
+    def to_fasta(self):
+        buffer = StringIO()
+        for sample in self.buffer:
+            buffer.write('>{}\n'.format(sample.id))
+            begin = 0
+            end = 0
+            while end < sample.length:
+                end = min(begin + expression['fasta line length'], sample.length)
+                buffer.write(sample.sequence[begin:end])
+                buffer.write('\n')
+                begin = end
+        buffer.seek(0)
+        return buffer
+
+    def parse_igblast(self, buffer):
         state = 0
         sample = None
         for line in buffer:
@@ -474,6 +722,69 @@ class Processor(object):
                     state = 1
 
 
+class Pipeline(object):
+    def __init__(self):
+        self.log = logging.getLogger('Pipeline')
+        self.count = 0
+        self._connection = None
+
+    @property
+    def connection(self):
+        if self._connection is None:
+            try:
+                self._connection = MongoClient('mongodb://localhost')
+            except pymongo.errors.ConnectionFailure as e:
+                self.log.error('failed to establish connection %s', e)
+            else:
+                self.log.debug('connection established')
+        return self._connection
+
+    @property
+    def database(self):
+        if self.connection is not None:
+            return self.connection['somatic']
+        else:
+            return None
+
+    def reference_for(self, allele_name):
+        return self.database['reference'].find_one({'allele_name': allele_name})
+    
+
+    def rebuild(self):
+        index = [
+            {
+                'collection': 'reference',
+                'index': [
+                    { 'key': [('region', ASCENDING )], 'unique': False, 'name': 'region' },
+                    { 'key': [( 'allele_name', ASCENDING )], 'unique': True, 'name': 'allele_name' },
+                    { 'key': [( 'subgroup', ASCENDING )], 'unique': False, 'name': 'subgroup' },
+                    { 'key': [( 'gene_name', ASCENDING )], 'unique': False, 'name': 'gene_name' }
+                ]
+            }
+        ]
+        for table in index:
+            collection = self.database[table['collection']]
+            existing = collection.index_information()
+            for definition in table['index']:
+                print(definition)
+                if definition['name'] in existing:
+                    self.log.info('dropping index %s on collection %s', definition['name'], table['collection'])
+                    collection.drop_index(definition['name'])
+        
+                self.log.info('rebuilding index %s on collection %s', definition['name'], table['collection'])
+                collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
+
+    def populate(self, library):
+        block = Block(self)
+        collection = self.database[library]
+        while block.fill():
+            print(to_json(block.document))
+            print(str(block))
+            # result = collection.insert_many(block.document)
+            self.count += block.size
+            self.log.debug('%s so far', self.count)
+
+
 def decode_cli():
     env = {}
     
@@ -529,15 +840,10 @@ def decode_cli():
         required=True,
         help='library name to to put results in')
         
-    c = s.add_parser( 'analyze', help='analyze samples for library',
-        description='analyze'
+    c = s.add_parser( 'rebuild', help='rebuild indexes',
+        description='rebuild database indexes'
     )
-    c.add_argument(
-        '-l', '--library',
-        dest='library', 
-        metavar='NAME', 
-        required=True,
-        help='library name to analyze')
+    
     for k,v in vars(p.parse_args()).items():
         if v is not None:
             env[k] = v
@@ -565,12 +871,17 @@ def main():
         reference.to_auxiliary(env['region'])
             
     elif env['action'] == 'populate':
-        processor = Processor()
+        processor = Pipeline()
         processor.populate(env['library'])
 
     elif env['action'] == 'analyze':
-        processor = Processor()
+        processor = Pipeline()
         processor.analyze(env['library'])
+
+    elif env['action'] == 'rebuild':
+        processor = Pipeline()
+        processor.rebuild()
+        
 
 if __name__ == '__main__':
     main()
