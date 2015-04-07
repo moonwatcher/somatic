@@ -15,7 +15,19 @@ from bson.objectid import ObjectId
 from datetime import timedelta, datetime
 
 def to_json(node):
-    return json.dumps(node, sort_keys=False, indent=4)
+    def handler(o):
+        result = None
+        if isinstance(o, datetime):
+            result = o.isoformat()
+        if isinstance(o, ObjectId):
+            result = str(o)
+        if isinstance(o, set):
+            result = list(o)
+        if isinstance(o, Sequence):
+            result = o.node
+        return result
+
+    return json.dumps(node, sort_keys=False, ensure_ascii=False, indent=4, default=handler)
 
 log_levels = {
     'debug': logging.DEBUG,
@@ -99,13 +111,15 @@ expression = {
         'TGA':'*',
         'TAG':'*',
     },
-    'buffer size': 1,
+    'strand': True,
+    'buffer size': 32,
     'regions': ['V', 'D', 'J'],
     'fasta line length': 80,
     'igblast result start': re.compile('^# IGBLASTN '),
     'igblast query': re.compile('^# Query: (P:<query_id>.*)$'),
     'igblast hit table': re.compile('^# Hit table'),
     'igblast result end': re.compile('^# BLAST processed '),
+    'igblast reversed query': '# Note that your query represents the minus strand of a V gene and has been converted to the plus strand.',
     'nucleotide sequence': re.compile('^[atcgnATCGN]+$'),
     'expand igblast hit': re.compile(
         r"""
@@ -171,20 +185,122 @@ expression = {
         (?P<region>V|D|J)-REGION\|
         (?:(?P<start>[0-9]+)\.\.(?P<end>[0-9]+))?\s*\|
         (?P<length>[0-9]+)\snt\|
-        (?P<reading_frame>[123]|NR)\|
+        (?P<read_frame>[123]|NR)\|
         [^|]*\|
         [^|]*\|
         [^|]*\|
         [^|]*\|
         [^|]*\|
         [^|]*\|
-        (?:rev-compl)?\s*\|$
+        (?P<polarity>rev-compl)?\s*\|$
         """,
         re.VERBOSE
     ),
 }
 
-    
+
+class Sequence(object):
+    def __init__(self, node=None):
+        self.log = logging.getLogger('Sequence')
+        self._reverse = None
+        if node is None:
+            self.node = {
+                'nucleotide': None, 
+                'quality': None,
+                'read_frame': 0,
+                'strand': True
+            }
+        else:
+            self.node = node
+
+    def reset(self):
+        for k in ['codon']:
+            if k in self.node:
+                del self.node[k]
+        self._reverse = None
+
+    def clone(self):
+        return Sequence({
+            'nucleotide': self.nucleotide, 
+            'quality': self.quality,
+            'read_frame': self.read_frame,
+            'strand': self.strand
+        })
+
+    @property
+    def read_frame(self):
+        return self.node['read_frame']
+
+    @read_frame.setter
+    def read_frame(self, value):
+        self.node['read_frame'] = value
+        self.reset()
+
+    @property
+    def strand(self):
+        return self.node['strand']
+
+    @read_frame.setter
+    def strand(self, value):
+        self.node['strand'] = value
+        self.reset()
+
+    @property
+    def nucleotide(self):
+        return self.node['nucleotide']
+
+    @nucleotide.setter
+    def nucleotide(self, value):
+        self.node['nucleotide'] = value
+        self.reset()
+
+    @property
+    def quality(self):
+        if 'quality' not in self.node:
+            self.node['quality'] = None
+        return self.node['quality']
+
+    @quality.setter
+    def quality(self, value):
+        self.node['quality'] = value
+        self.reset()
+
+    @property
+    def codon(self):
+        if 'codon' not in self.node:
+            if self.nucleotide:
+                start = self.read_frame
+                end = start + 3
+                codon = []
+                while(not end > self.length):
+                    acid = self.nucleotide[start:end]
+                    if 'N' in acid:
+                        codon.append('X')
+                    else:
+                        codon.append(expression['nucleic to amino'][acid])
+                    start = end
+                    end = start + 3
+                self.node['codon'] = ''.join(codon)
+            else:
+                self.node['codon'] = ''
+        return self.node['codon']
+
+    @property
+    def length(self):
+        return len(self.nucleotide)
+
+    @property
+    def reverse(self):
+        if self._reverse is None:
+            self._reverse = Sequence({
+                'nucleotide': ''.join([ expression['complement'][b] for b in list(self.nucleotide) ][::-1]), 
+                'quality': ''.join(self.quality[::-1]),
+                'read_frame': (self.length - self.read_frame) % 3,
+                'strand': not self.strand
+            })
+        return self._reverse
+
+
 class Reference(object):
     def __init__(self):
         self.log = logging.getLogger('Reference')
@@ -229,7 +345,7 @@ class Reference(object):
                                     try:
                                         if k in ['start', 'end', 'length']:
                                             v = int(v)
-                                        elif k == 'reading_frame':
+                                        elif k == 'read_frame':
                                             if v == 'NR':
                                                 v = None
                                             else:
@@ -239,6 +355,15 @@ class Reference(object):
                                     else:
                                         if v is not None:
                                             sample[k] = v
+                                            
+                            sample['strand'] = True
+                            if 'polarity' in sample:
+                                if sample['polarity'] == 'rev-compl':
+                                    sample['strand'] = False
+                                    del sample['polarity']
+                                    
+                            if 'start' in sample: sample['start'] -= 1
+                            if 'read_frame' in sample: sample['read_frame'] -= 1 
                     else:
                         if expression['nucleotide sequence'].search(line):
                             sample['sequence'] += line.upper()
@@ -251,7 +376,7 @@ class Reference(object):
 
     def to_blast_fasta(self, region):
         collection = self.database['reference']
-        query = { 'region': region }
+        query = { 'region': region, 'strand': True }
         cursor = collection.find(query)
         for sample in cursor:
             print('>{}'.format(sample['allele_name']))
@@ -268,10 +393,10 @@ class Reference(object):
         query = { 'region': region }
         cursor = collection.find(query)
         for sample in cursor:
-            if 'reading_frame' in sample:
+            if 'read_frame' in sample:
                 print('{}\t{}\t{}H'.format(
                     sample['allele_name'], 
-                    sample['reading_frame'] - 1, 
+                    sample['read_frame'], 
                     sample['region'])
                 )
 
@@ -282,8 +407,13 @@ class Sample(object):
         self.pipeline = pipeline
         self.node = node
         
-        if self.node is None:
-            self.node = {}
+        if self.node is None: self.node = {}
+            
+        if 'sequence' in self.node:
+            self.sequence = Sequence(self.node['sequence'])
+        else:
+            self.sequence = Sequence()
+            self.node['sequence'] = self.sequence.node
 
     @property
     def id(self):
@@ -293,151 +423,99 @@ class Sample(object):
     def id(self, value):
         self.node['id'] = value
 
-    @property
-    def sequence(self):
-        return self.node['sequence']
-
-    @sequence.setter
-    def sequence(self, value):
-        self.node['sequence'] = value
+    def reverse(self):
+        if self.sequence:
+            self.sequence = self.sequence.reverse
+            self.node['sequence'] = self.sequence.node
 
     @property
-    def quality(self):
-        return self.node['sequence']
-
-    @quality.setter
-    def quality(self, value):
-        self.node['quality'] = value
-
-    @property
-    def length(self):
-        return len(self.node['sequence'])
-
-    @property
-    def match(self):
-        if 'match' not in self.node:
-            self.node['match'] = []
-        return self.node['match']
-
-    @property
-    def codon_sequence(self):
-        if 'codon_sequence' not in self.node:
-            if self.reading_frame and self.sequence:
-                self.node['codon_sequence'] = self.to_codon(self.sequence, self.reading_frame)
-            return self.node['codon_sequence']
-            
-        if 'codon_sequence' not in self.node:
-            self.node['codon_sequence'] = None
-            
-        return self.node['codon_sequence']
-
-    @property
-    def reverse_complement_codon_sequence(self):
-        if 'reverse_complement_codon_sequence' not in self.node:
-            if self.reading_frame and self.reverse_complement_sequence:
-                self.node['reverse_complement_codon_sequence'] = self.to_codon(self.reverse_complement_sequence, self.reading_frame)
-            return self.node['reverse_complement_codon_sequence']
-            
-        if 'reverse_complement_codon_sequence' not in self.node:
-            self.node['reverse_complement_codon_sequence'] = None
-            
-        return self.node['reverse_complement_codon_sequence']
-
-    @property
-    def reverse_complement_sequence(self):
-        if 'reverse complement sequence' not in self.node:
-            self.node['reverse complement sequence'] = ''.join([ expression['complement'][b] for b in list(self.sequence) ][::-1])
-        return self.node['reverse complement sequence']
-
-    @property
-    def reverse_complement_quality(self):
-        if 'reverse complement quality' not in self.node:
-            self.node['reverse complement quality'] = ''.join(self.quality[::-1])
-        return self.node['reverse complement sequence']
-
-    @property
-    def reading_frame(self):
-        if 'reading_frame' not in self.node:
-            if 'match' in self.node and self.node['match']:
-                if 'reading_frame' in self.node['match'][0]:
-                    self.node['reading_frame'] = self.node['match'][0]['reading_frame']
-                    
-        if 'reading_frame' not in self.node:
-            self.node['reading_frame'] = None
-        
-        return self.node['reading_frame']
-
-    def to_codon(self, sequence, offset):
-        length = len(sequence)
-        start = offset - 1
-        end = start + 3
-        amino = []
-        while(end <= length):
-            acid = sequence[start:end]
-            if 'N' in acid:
-                amino.append('X')
-            else:
-                amino.append(expression['nucleic to amino'][acid])
-            start = end
-            end = start + 3
-        return ''.join(amino)
+    def hit(self):
+        if 'hit' not in self.node:
+            self.node['hit'] = []
+        return self.node['hit']
 
     def expand(self):
-        if 'match' in self.node:
-            hits = []
-            for r in self.node['match']:
-                if 'hit' in r:
-                    match = expression['expand igblast hit'].search(r['hit'])
+        if 'hit' in self.node:
+            for hit in self.node['hit']:
+                if 'compressed hit' in hit:
+                    match = expression['expand igblast hit'].search(hit['compressed hit'])
                     if match:
-                        hit = match.groupdict()
-                        hit['hit'] = r['hit']
-                        for k in [
-                            'query_start',
-                            'query_end',
-                            'subject_start',
-                            'subject_end',
-                            'gap_openings',
-                            'gaps',
-                            'mismatches',
-                            'alignment_length'
-                        ]:
-                            try: hit[k] = int(hit[k])
-                            except ValueError as e:
-                                self.log.warning('could not parse value %s for %s as int', hit[k], k)
-                                hit[k] = None
-                                
-                        for k in [
-                            'percentage_identical',
-                            'bit_score',
-                            'evalue',
-                        ]: 
-                            try: hit[k] = float(hit[k])
-                            except ValueError:
-                                self.log.warning('could not parse value %s for %s as int', hit[k], k)
-                                hit[k] = None
-                        hits.append(hit)
-        self.node['match'] = hits
+                        parsed = match.groupdict()
+                        for k,v in parsed.items():
+                            if k in [
+                                'query_start',
+                                'query_end',
+                                'subject_start',
+                                'subject_end',
+                                'gap_openings',
+                                'gaps',
+                                'mismatches',
+                                'alignment_length'
+                            ]:
+                                try:
+                                    hit[k] = int(parsed[k])
+                                except ValueError as e:
+                                    self.log.warning('could not parse value %s for %s as int', parsed[k], k)
+                            elif k in [
+                                'percentage_identical',
+                                'bit_score',
+                                'evalue',
+                            ]:
+                                try:
+                                    hit[k] = float(parsed[k])
+                                except ValueError:
+                                    self.log.warning('could not parse value %s for %s as float', parsed[k], k)
+                            else:
+                                hit[k] = v
 
     def compress(self):
-        for match in self.match:
-            try:
-                match['hit'] = expression['igblast compressed hit'].format(**match)
-            except KeyError as e:
-                self.log.error(e)
-                self.log.error(match)
+        if 'hit' in self.node:
+            for hit in self.node['hit']:
+                try:
+                    hit['compressed hit'] = expression['igblast compressed hit'].format(**hit)
+                except KeyError as e:
+                    self.log.error('could not compress hit because %s was missing', e)
 
     def analyze(self):
-        for match in self.match:
-            reference = self.pipeline.reference_for(match['subject_id'])
-            if 'reading_frame' in reference:
-                match['subject_sequence'] = reference['sequence'][match['subject_start'] - 1:match['subject_end']]
-                if match['subject_strand'] == match['query_strand']:
-                    match['query_sequence'] = self.sequence[match['query_start'] - 1:match['query_end']]
+        picked = False
+        for hit in self.hit:
+            reference = self.pipeline.reference_for(hit['subject_id'])
+            framed = 'read_frame' in reference
+            reference_read_frame = reference['read_frame'] if framed else 0
+            if 'strain' in reference:
+                hit['strain'] = reference['strain']
+            if 'functionality' in reference:
+                if 'F' in reference['functionality']:
+                    hit['functionality'] = 'F'
+                if 'P' in reference['functionality']:
+                    hit['functionality'] = 'P'
+                if 'ORF' in reference['functionality']:
+                    hit['functionality'] = 'O'
+                
+            hit['subject'] = Sequence({
+                'nucleotide': reference['sequence'][hit['subject_start']:hit['subject_end']],
+                'strand': reference['strand'],
+                'read_frame': 2 - (hit['subject_start'] - reference_read_frame - 1) % 3
+            })
+            
+            hit['query'] = Sequence({
+                'nucleotide': self.sequence.nucleotide[hit['query_start']:hit['query_end']],
+                'strand': reference['strand'],
+                'read_frame': hit['subject'].read_frame
+            })
+            
+            if not picked and framed and hit['segment'] == 'V' and hit['functionality'] == 'F':
+                self.sequence.read_frame = (hit['query_start'] + hit['subject'].read_frame) % 3
+                
+        for hit in self.hit:
+            hit['query'].read_frame = 2 - (hit['query_start'] - self.sequence.read_frame - 1) % 3
+            if framed:
+                if hit['query'].read_frame == hit['subject'].read_frame:
+                    hit['in_frame'] = 'Y'
                 else:
-                    match['query_sequence'] = self.reverse_complement_sequence[match['query_start'] - 1:match['query_end']]
-                match['reading_frame'] = 3 - (match['subject_start'] - reference['reading_frame'] - 1) % 3
-                match['amino_query_sequence'] = self.to_codon(match['query_sequence'], match['reading_frame'])
-                match['amino_subject_sequence'] = self.to_codon(match['subject_sequence'], match['reading_frame'])
+                    hit['in_frame'] = 'N'
+            else:
+                hit['in_frame'] = '*'
 
     def to_json(self):
         def handler(o):
@@ -448,79 +526,126 @@ class Sample(object):
                 result = str(o)
             if isinstance(o, set):
                 result = list(o)
+            if isinstance(o, Sequence):
+                result = o.node
             return result
-
+            
         return json.dumps(self.node, sort_keys=False, ensure_ascii=False, indent=4, default=handler)
 
-    def __str__(self):
+    def to_alignment_diagram(self):
         buffer = StringIO()
-        if self.reading_frame:
+        if self.hit:
+            subject_length = max(max([ len(hit['subject_id']) for hit in self.hit ]), len('subject'))
+            alignment_offset = subject_length + 7
+            
+            # print a title
+            buffer.write(' ' * alignment_offset)
+            buffer.write(self.id)
+            buffer.write('\n')
+            
             # print the coordinate system
-            if self.reading_frame > 1:
-                buffer.write('{: <{}} '.format(1, self.reading_frame - 1))
-            for index in range(self.reading_frame, self.length, 3):
+            buffer.write('{: <{}} '.format('Subject', subject_length))
+            buffer.write('{: <{}} '.format('R', 1))
+            buffer.write('{: <{}} '.format('F', 1))
+            buffer.write('{: <{}} '.format('I', 1))
+            if self.sequence.read_frame > 0:
+                buffer.write('{: <{}} '.format(0, self.sequence.read_frame))
+            for index in range(self.sequence.read_frame, self.sequence.length, 3):
                 buffer.write('{: <3} '.format(index))
             buffer.write('\n')
             
             # print the sample nucleotide sequence
-            if self.reading_frame > 1:
-                buffer.write(self.reverse_complement_sequence[0:self.reading_frame - 1])
+            buffer.write(' ' * alignment_offset)
+            if self.sequence.read_frame > 0:
+                buffer.write(self.sequence.nucleotide[0:self.sequence.read_frame])
                 buffer.write(' ')
-            for index in range(self.reading_frame - 1, self.length, 3):
-                buffer.write(self.reverse_complement_sequence[index:index + 3])
+            for index in range(self.sequence.read_frame, self.sequence.length, 3):
+                buffer.write(self.sequence.nucleotide[index:index + 3])
+                buffer.write(' ')
+            buffer.write('\n')
+            
+            # print the sample quality sequence
+            buffer.write(' ' * alignment_offset)
+            if self.sequence.read_frame > 0:
+                buffer.write(self.sequence.quality[0:self.sequence.read_frame])
+                buffer.write(' ')
+            for index in range(self.sequence.read_frame, self.sequence.length, 3):
+                buffer.write(self.sequence.quality[index:index + 3])
                 buffer.write(' ')
             buffer.write('\n')
             
             # print the sample codon sequence
-            if self.reading_frame > 1:
-                buffer.write('{: <{}} '.format(' ', self.reading_frame - 1))
-            for codon in self.reverse_complement_codon_sequence:
+            buffer.write(' ' * alignment_offset)
+            if self.sequence.read_frame > 0:
+                buffer.write('{: <{}} '.format(' ', self.sequence.read_frame))
+            for codon in self.sequence.codon:
                 buffer.write(codon)
                 buffer.write('   ')
             buffer.write('\n')
             
-            for match in self.match:
-                if match['segment'] == 'D':
-                    reading_frame = 3 - (match['query_start'] - self.reading_frame - 1) % 3
-                    amino_subject_sequence = self.to_codon(match['subject_sequence'], reading_frame)
-                else:
-                    reading_frame = match['reading_frame']
-                    amino_subject_sequence = match['amino_subject_sequence']
+            for hit in self.hit:
+                buffer.write('{: <{}} '.format(hit['subject_id'], subject_length))
+                buffer.write('{: <{}} '.format(hit['segment'], 1))
+                buffer.write('{: <{}} '.format(hit['functionality'], 1))
+                buffer.write('{: <{}} '.format(hit['in_frame'], 1))
+                
+                subject = hit['subject'].clone()
+                subject.read_frame = hit['query'].read_frame
+                
+                hit_offset = 0
+                if hit['query_start'] > 0:
+                    if self.sequence.read_frame > 0:
+                        hit_offset = (int((hit['query_start'] - self.sequence.read_frame) / 3)) + hit['query_start'] + 1
+                    else:
+                        hit_offset = (int(hit['query_start'] / 3)) + hit['query_start']
+                    buffer.write(' ' * hit_offset)
                     
-                # print the nucleotide sequence
+                # nucleotide mask
                 mask = []
-                for index in range(match['query_start'] - 1, match['query_end']):
-                    if self.reverse_complement_sequence[index] == match['subject_sequence'][index - match['query_start'] + 1]:
+                for index,n in enumerate(subject.nucleotide):
+                    if n == hit['query'].nucleotide[index]: mask.append('-')
+                    else: mask.append(n)
+                nucleotide_mask = ''.join(mask)
+                
+                # print nucleotides
+                if subject.read_frame > 0:
+                    buffer.write(nucleotide_mask[0:subject.read_frame])
+                    buffer.write(' ')
+                    
+                for index in range(subject.read_frame, subject.length, 3):
+                    buffer.write(nucleotide_mask[index: index + 3])
+                    buffer.write(' ')
+                buffer.write('\n')
+                
+                # print codons sequence if anything is different
+                display = False
+                offset = int((hit['query_start'] - self.sequence.read_frame + subject.read_frame) / 3)
+                mask = []
+                for index,codon in enumerate(subject.codon):
+                    if codon == hit['query'].codon[index]:
                         mask.append('-')
                     else:
-                        mask.append(match['subject_sequence'][index - match['query_start'] + 1])
-                mask = ''.join(mask)
-                    
-                if match['query_start'] > 1:
-                    buffer.write('{: <{}} '.format(' ', int((match['query_start'] - self.reading_frame) / 3) - 1 + match['query_start']))
-                    
-                if reading_frame > 1:
-                    buffer.write(mask[0:reading_frame - 1])
-                    buffer.write(' ')
-                    
-                for index in range(reading_frame - 1, match['alignment_length'], 3):
-                    buffer.write(mask[index:index + 3])
-                    buffer.write(' ')
-                buffer.write('\n')
-
-                # print the sample codon sequence
-                if match['query_start'] > 1:
-                    buffer.write('{: <{}} '.format(' ', int((match['query_start'] - self.reading_frame) / 3) - 1 + match['query_start']))
-                if reading_frame > 1:
-                    buffer.write('{: <{}} '.format(' ', reading_frame - 1))
+                        mask.append(codon)
+                        display = True
+                codon_mask = ''.join(mask)
                 
-                for codon in amino_subject_sequence:
-                    buffer.write(codon)
-                    buffer.write('   ')
-                buffer.write('\n')
-                
+                if display:
+                    buffer.write(' ' * alignment_offset)
+                    if hit['query_start'] > 0:
+                        buffer.write(' ' * hit_offset)
+                        
+                    if subject.read_frame > 0:
+                        buffer.write('{: <{}} '.format(' ', subject.read_frame))
+                        
+                    for codon in mask:
+                        buffer.write(codon)
+                        buffer.write('   ')
+                    buffer.write('\n')
         buffer.seek(0)
         return buffer.read()
+
+    def __str__(self):
+        return self.to_alignment_diagram()
 
 
 class Block(object):
@@ -579,7 +704,7 @@ class Block(object):
             if buffer:
                 self.parse_igblast(buffer)
                 for sample in self.buffer:
-                    sample.compress()
+                    # sample.compress()
                     sample.analyze()
         return not self.empty
 
@@ -600,7 +725,7 @@ class Block(object):
                         state = 'id'
                         
                 elif state == 'id':
-                    sample.sequence = line
+                    sample.sequence.nucleotide = line
                     state = 'sequence'
                     
                 elif state == 'sequence':
@@ -608,7 +733,7 @@ class Block(object):
                         state = 'redundant'
                         
                 elif state == 'redundant':
-                    sample.quality = line
+                    sample.sequence.quality = line
                     self.add(sample)
                     state = None
                     if self.full:
@@ -641,9 +766,9 @@ class Block(object):
             buffer.write('>{}\n'.format(sample.id))
             begin = 0
             end = 0
-            while end < sample.length:
-                end = min(begin + expression['fasta line length'], sample.length)
-                buffer.write(sample.sequence[begin:end])
+            while end < sample.sequence.length:
+                end = min(begin + expression['fasta line length'], sample.sequence.length)
+                buffer.write(sample.sequence.nucleotide[begin:end])
                 buffer.write('\n')
                 begin = end
         buffer.seek(0)
@@ -656,15 +781,19 @@ class Block(object):
             line = line.strip()
             if state == 0 and line.startswith('# IGBLASTN '):
                 state = 1
-            elif state == 1 and  line.startswith('# Query: '):
+            elif state == 1 and line.startswith('# Query: '):
                 id = line[9:]
                 if id in self.lookup:
                     sample = self.lookup[id]
+                    state = 2
                 else:
-                    self.log.error('OH MY GOD!')
-                state = 2
+                    self.log.error('could not locate %s in buffer', id)
+                    state = 0
             elif state == 2 and line.startswith('# Hit table '):
                 state = 3
+            elif state == 2 and line.startswith(expression['igblast reversed query']):
+                sample.sequence.strand = False
+                sample.reverse()
             elif (state == 3 or state == 4) and not line.startswith('#'):
                 state = 4
                 match = expression['igblast hit'].search(line)
@@ -683,8 +812,8 @@ class Block(object):
                         'query_strand',
                         'subject_strand'  
                     ]:
-                        if hit[k] == 'plus': hit[k] = '+'
-                        elif hit[k] == 'minus': hit[k] = '-'
+                        if hit[k] == 'plus': hit[k] = True
+                        elif hit[k] == 'minus': hit[k] = False
                         else:
                             self.log.warning('could not parse value %s for %s as a strand', hit[k], k)
                             hit[k] = None
@@ -713,7 +842,10 @@ class Block(object):
                         except ValueError as e:
                             self.log.warning('could not parse value %s for %s as int', hit[k], k)
                             hit[k] = None
-                    sample.match.append(hit)
+                    if 'subject_start' in hit: hit['subject_start'] -= 1
+                    if 'query_start' in hit: hit['query_start'] -= 1
+                    if 'read_frame' in hit: hit['read_frame'] -= 1
+                    sample.hit.append(hit)
                     
             elif state == 4 and line.startswith('#'):
                 state = 0
@@ -748,7 +880,6 @@ class Pipeline(object):
 
     def reference_for(self, allele_name):
         return self.database['reference'].find_one({'allele_name': allele_name})
-    
 
     def rebuild(self):
         index = [
@@ -770,7 +901,7 @@ class Pipeline(object):
                 if definition['name'] in existing:
                     self.log.info('dropping index %s on collection %s', definition['name'], table['collection'])
                     collection.drop_index(definition['name'])
-        
+                    
                 self.log.info('rebuilding index %s on collection %s', definition['name'], table['collection'])
                 collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
 
@@ -778,11 +909,11 @@ class Pipeline(object):
         block = Block(self)
         collection = self.database[library]
         while block.fill():
-            print(to_json(block.document))
-            print(str(block))
+            # print(str(block))
+            # print(to_json(block.document))
             # result = collection.insert_many(block.document)
+            # self.log.debug('%s so far', self.count)
             self.count += block.size
-            self.log.debug('%s so far', self.count)
 
 
 def decode_cli():
@@ -818,7 +949,7 @@ def decode_cli():
         choices=expression['regions'],
         required=True,
         help='region to dump [ {} ]'.format(', '.join(expression['regions'])))
-
+        
     c = s.add_parser( 'to-auxiliary', help='dump auxiliary file for igblast',
         description='dump all samples for the region into an igblast auxiliary file'
     )
@@ -829,7 +960,7 @@ def decode_cli():
         choices=expression['regions'],
         required=True,
         help='region to dump [ {} ]'.format(', '.join(expression['regions'])))
-
+        
     c = s.add_parser( 'populate', help='populate samples for library',
         description='match each read in file to regions with igblast and store results in the library. takes read from stdin'
     )
@@ -848,7 +979,6 @@ def decode_cli():
         if v is not None:
             env[k] = v
     return env
-    
 
 def main():
     logging.basicConfig()
@@ -873,17 +1003,17 @@ def main():
     elif env['action'] == 'populate':
         processor = Pipeline()
         processor.populate(env['library'])
-
+        
     elif env['action'] == 'analyze':
         processor = Pipeline()
         processor.analyze(env['library'])
-
+        
     elif env['action'] == 'rebuild':
         processor = Pipeline()
         processor.rebuild()
-        
+
 
 if __name__ == '__main__':
     main()
 
-    
+
