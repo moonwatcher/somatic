@@ -2,7 +2,7 @@
 
 2. Choice of **JH** sets the reading frame for the sample.
 
-3. Pick the **JV** gene with the highest score and a minimum of 40bp and 70% identity. Do we want to filter on *functionality* or *in-frame*?
+3. Pick the **VH** gene with the highest score and a minimum of 40bp and 70% identity. Do we want to filter on *functionality* or *in-frame*?
 
 4. Penalize **DH** scores for overlaps with **VH** and **JH**.
 
