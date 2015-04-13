@@ -4,7 +4,7 @@
 
 3. Pick the **VH** gene with the highest score and a minimum of 40bp and 70% identity. Do we want to filter on *functionality* or *in-frame*?
 
-4. Penalize **DH** scores for overlaps with **VH** and **JH**.
+4. Penalize **DH** scores for overlaps with **VH** and **JH** and trim the hits of the overlap. At the moment the penalty is 0.5 * <overlap>.
 
 5. Pick a **DH** gene with the highest score that has at least 4bp match in a row.
 
