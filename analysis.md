@@ -14,4 +14,6 @@
 
 8. Annotate *hybrid* samples. Does than mean more than 1, non overlapping, **DH** matches?
 
-9. Annotate palindromic sequences on the ends of genes.
+9. Identify CDR3. Scan V region backwards for Cycstine. Scan J region for **TGG GG** in frame. 
+
+10. Annotate palindromic sequences on the ends of genes.
