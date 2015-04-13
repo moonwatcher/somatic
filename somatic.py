@@ -1164,17 +1164,30 @@ class Pipeline(object):
                     { 'key': [( 'subgroup', ASCENDING )], 'unique': False, 'name': 'reference subgroup' },
                     { 'key': [( 'gene name', ASCENDING )], 'unique': False, 'name': 'reference gene name' }
                 ]
+            },
+            {
+                'collection': 'sample',
+                'index': [
+                    { 'key': [( 'id', ASCENDING )], 'unique': True, 'name': 'sample id' },
+                    { 'key': [( 'in frame', ASCENDING )], 'unique': False, 'name': 'sample in frame' },
+                    { 'key': [( 'premature termination', ASCENDING )], 'unique': False, 'name': 'sample premature termination' },
+                    { 'key': [( 'library', ASCENDING )], 'unique': False, 'name': 'sample library' },
+                    { 'key': [( 'gapped', ASCENDING )], 'unique': False, 'name': 'sample gapped' },
+                    { 'key': [( 'valid', ASCENDING )], 'unique': False, 'name': 'sample valid' },
+                ]
             }
         ]
+        existing_collections = self.database.collection_names()
         for table in index:
             collection = self.database[table['collection']]
-            existing = collection.index_information()
+            if table['collection'] in existing_collections:
+                existing_indexes = collection.index_information()
+                for definition in table['index']:
+                    if definition['name'] in existing_indexes:
+                        self.log.info('dropping index %s on collection %s', definition['name'], table['collection'])
+                        collection.drop_index(definition['name'])
+                
             for definition in table['index']:
-                print(definition)
-                if definition['name'] in existing:
-                    self.log.info('dropping index %s on collection %s', definition['name'], table['collection'])
-                    collection.drop_index(definition['name'])
-                    
                 self.log.info('rebuilding index %s on collection %s', definition['name'], table['collection'])
                 collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
 
