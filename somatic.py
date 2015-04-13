@@ -1329,7 +1329,7 @@ def decode_cli():
     p.add_argument('--version', action='version', version='%(prog)s 0.1')
     
     # -- sub parsers for each action --
-    s = p.add_subparsers(dest='action')
+    s = p.add_subparsers(dest='action', title='pipeline operations', metavar='ACTION')
     c = s.add_parser( 'populate', help='populate samples for library',
         description='match each read in file to regions with igblast and store results in the library. takes read from stdin'
     )
