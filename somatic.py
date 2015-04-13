@@ -680,6 +680,7 @@ class Sample(object):
                     'region': 'VD junction',
                     'query': self.sequence.crop(start, end)
                 }
+        return True
 
     def _identify_d_j_junction(self):
         if 'DH' in self.region:
@@ -692,6 +693,20 @@ class Sample(object):
                     'region': 'VD junction',
                     'query': self.sequence.crop(start, end)
                 }
+        return True
+
+    def _identify_v_j_junction(self):
+        if 'DH' not in self.region:
+            if self.region['JH']['query start'] > self.region['VH']['query end']:
+                start = self.region['VH']['query end']
+                end = self.region['JH']['query start']
+                self.region['VJ junction'] = {
+                    'query start': start,
+                    'query end': end,
+                    'region': 'VJ junction',
+                    'query': self.sequence.crop(start, end)
+                }
+        return True
 
     def analyze(self):
         valid = not self.gapped
@@ -701,6 +716,7 @@ class Sample(object):
         valid = valid and self._pick_vh_region()
         valid = valid and self._check_for_aligned_frames()
         valid and self._pick_dh_region()
+        valid and self._identify_v_j_junction()
         valid and self._identify_v_d_junction()
         valid and self._identify_d_j_junction()
         valid and self._check_for_stop_codon()
