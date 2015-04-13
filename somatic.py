@@ -645,19 +645,12 @@ class Sample(object):
             end = self.region['JH']['query start'] + offset
         
         if start and end:
-            sequence = Sequence({
-                'nucleotide': self.sequence.nucleotide[start:end],
-                'strand': self.sequence.strand,
-                'read frame': 0
-            })
-            sequence.codon
             self.region['CDR3'] = {
                 'query start': start,
                 'query end': end,
                 'region': 'CDR3',
-                'query': sequence
+                'query': self.sequence.crop(start, end)
             }
-            
 
     def _check_for_stop_codon(self):
         if '*' in self.sequence.codon:
@@ -676,6 +669,30 @@ class Sample(object):
             self.node['in frame'] = False
         return True
 
+    def _identify_v_d_junction(self):
+        if 'DH' in self.region:
+            if self.region['VH']['query end'] < self.region['DH']['query start']:
+                start = self.region['VH']['query end']
+                end = self.region['DH']['query start']
+                self.region['VD junction'] = {
+                    'query start': start,
+                    'query end': end,
+                    'region': 'VD junction',
+                    'query': self.sequence.crop(start, end)
+                }
+
+    def _identify_d_j_junction(self):
+        if 'DH' in self.region:
+            if self.region['JH']['query start'] > self.region['DH']['query end']:
+                start = self.region['DH']['query end']
+                end = self.region['JH']['query start']
+                self.region['DJ junction'] = {
+                    'query start': start,
+                    'query end': end,
+                    'region': 'VD junction',
+                    'query': self.sequence.crop(start, end)
+                }
+
     def analyze(self):
         valid = not self.gapped
         valid = valid and self._complement_from_reference()
@@ -684,6 +701,8 @@ class Sample(object):
         valid = valid and self._pick_vh_region()
         valid = valid and self._check_for_aligned_frames()
         valid and self._pick_dh_region()
+        valid and self._identify_v_d_junction()
+        valid and self._identify_d_j_junction()
         valid and self._check_for_stop_codon()
         valid and self._identify_cdr3()
         self.valid = valid
