@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# Somatic V/D/J recombination analyzer
+# Author: Lior Galanti < lior.galanti@nyu.edu >
+# NYU Center for Genetics and System Biology 2015
+#     
+# somatic is free software; you can redistribute it and/or modify it under the terms of 
+# the GNU General Public License as published by the Free Software Foundation; 
+# either version 2 of the License, or (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along with this program.
+# If not, see <http://www.gnu.org/licenses/>.
+# 
+
 import sys
 import logging
 import re
@@ -203,7 +219,6 @@ expression = {
     ],
     'igblast compressed hit': '{region},{subject id},{query start},{query end},{subject start},{subject end},{gap openings},{gaps},{mismatch},{identical},{bit score},{evalue},{alignment length},{subject strand},{query strand}',
 }
-
 
 class Sequence(object):
     def __init__(self, node=None):
@@ -1434,8 +1449,6 @@ def main():
             
         pipeline.close()
 
-
 if __name__ == '__main__':
     main()
-
 
