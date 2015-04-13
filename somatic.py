@@ -23,12 +23,14 @@ import re
 import json
 import io
 
-from subprocess import Popen, PIPE
 from io import StringIO, BytesIO
-from pymongo import MongoClient, DESCENDING, ASCENDING
-from argparse import ArgumentParser
-from bson.objectid import ObjectId
 from datetime import timedelta, datetime
+from argparse import ArgumentParser
+from subprocess import Popen, PIPE
+
+from bson.objectid import ObjectId
+from pymongo.son_manipulator import SONManipulator
+from pymongo import MongoClient, DESCENDING, ASCENDING
 
 def to_json(node):
     def handler(o):
@@ -54,6 +56,267 @@ log_levels = {
 }
 
 expression = {
+    'interface': {
+        'global': {
+            'argument': [
+                'version', 
+                'verbosity'
+            ]
+        }, 
+        'instruction': {
+            'description': 'Lior Galanti lior.galanti@nyu.edu NYU Center for Genomics & Systems Biology'
+        }, 
+        'prototype': {
+            'alignment': {
+                'flag': [
+                    '-A', 
+                    '--alignment'
+                ], 
+                'parameter': {
+                    'action': 'store_true', 
+                    'dest': 'alignment', 
+                    'help': 'print alignment diagram'
+                }
+            }, 
+            'gapped': {
+                'flag': [
+                    '-G', 
+                    '--gapped'
+                ], 
+                'parameter': {
+                    'choices': [
+                        'Y', 
+                        'N'
+                    ], 
+                    'dest': 'gapped', 
+                    'help': 'gapped alignment'
+                }
+            }, 
+            'id': {
+                'flag': [
+                    '-d', 
+                    '--id'
+                ], 
+                'parameter': {
+                    'dest': 'id', 
+                    'help': 'sample id', 
+                    'metavar': 'ID'
+                }
+            }, 
+            'in frame': {
+                'flag': [
+                    '-F', 
+                    '--in-frame'
+                ], 
+                'parameter': {
+                    'choices': [
+                        'Y', 
+                        'N'
+                    ], 
+                    'dest': 'in frame', 
+                    'help': 'in frame alignment'
+                }
+            }, 
+            'json': {
+                'flag': [
+                    '-J', 
+                    '--json'
+                ], 
+                'parameter': {
+                    'action': 'store_true', 
+                    'dest': 'json', 
+                    'help': 'print json info'
+                }
+            }, 
+            'library': {
+                'flag': [
+                    '-l', 
+                    '--library'
+                ], 
+                'parameter': {
+                    'dest': 'library', 
+                    'help': 'library name', 
+                    'metavar': 'NAME', 
+                    'required': True
+                }
+            }, 
+            'path': {
+                'flag': [
+                    'path'
+                ], 
+                'parameter': {
+                    'help': 'file paths', 
+                    'metavar': 'PATH', 
+                    'nargs': '*'
+                }
+            }, 
+            'premature termination': {
+                'flag': [
+                    '-T', 
+                    '--premature-termination'
+                ], 
+                'parameter': {
+                    'choices': [
+                        'Y', 
+                        'N'
+                    ], 
+                    'dest': 'premature termination', 
+                    'help': 'premature termination alignment'
+                }
+            }, 
+            'region': {
+                'flag': [
+                    '-r', 
+                    '--region'
+                ], 
+                'parameter': {
+                    'choices': [
+                        'VH', 
+                        'DH', 
+                        'JH'
+                    ], 
+                    'dest': 'region', 
+                    'help': 'region'
+                }
+            }, 
+            'valid': {
+                'flag': [
+                    '-V', 
+                    '--valid'
+                ], 
+                'parameter': {
+                    'choices': [
+                        'Y', 
+                        'N'
+                    ], 
+                    'dest': 'valid', 
+                    'help': 'valid alignment'
+                }
+            }, 
+            'verbosity': {
+                'flag': [
+                    '-v', 
+                    '--verbosity'
+                ], 
+                'parameter': {
+                    'choices': [
+                        'debug', 
+                        'info', 
+                        'warning', 
+                        'error', 
+                        'critical'
+                    ], 
+                    'default': 'info', 
+                    'dest': 'verbosity', 
+                    'help': 'logging verbosity level', 
+                    'metavar': 'LEVEL'
+                }
+            }, 
+            'version': {
+                'flag': [
+                    '--version'
+                ], 
+                'parameter': {
+                    'action': 'version', 
+                    'version': '%(prog)s 1.0'
+                }
+            }
+        }, 
+        'section': {
+            'action': [
+                {
+                    'argument': [
+                        'library'
+                    ], 
+                    'instruction': {
+                        'description': 'match each read in file to regions with igblast and store results in the library. takes read from stdin', 
+                        'help': 'populate samples for library', 
+                        'name': 'populate'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'library', 
+                        'id', 
+                        'gapped', 
+                        'valid', 
+                        'in frame', 
+                        'premature termination'
+                    ], 
+                    'instruction': {
+                        'help': 'view sample alignment', 
+                        'name': 'view'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'library', 
+                        'id', 
+                        'gapped', 
+                        'valid', 
+                        'in frame', 
+                        'premature termination'
+                    ], 
+                    'instruction': {
+                        'help': 'view JSON sample record', 
+                        'name': 'info'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'library', 
+                        'json', 
+                        'alignment'
+                    ], 
+                    'instruction': {
+                        'help': 'view JSON sample record', 
+                        'name': 'simulate'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'path'
+                    ], 
+                    'instruction': {
+                        'help': 'load imgt reference sequences from fasta file', 
+                        'name': 'load-reference'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'region'
+                    ], 
+                    'instruction': {
+                        'help': 'dump reference sequences to fasta', 
+                        'name': 'to-blast-fasta'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'region'
+                    ], 
+                    'instruction': {
+                        'help': 'dump reference sequences to igblast auxiliary file', 
+                        'name': 'to-auxiliary'
+                    }
+                }, 
+                {
+                    'argument': [], 
+                    'instruction': {
+                        'help': 'rebuild database indexes', 
+                        'name': 'rebuild'
+                    }
+                }
+            ], 
+            'instruction': {
+                'description': '', 
+                'dest': 'action', 
+                'help': None, 
+                'metavar': 'ACTION', 
+                'title': 'pipeline operations'
+            }
+        }
+    },
     'complement': { 
         'A': 'T',
         'C': 'G',
@@ -127,7 +390,8 @@ expression = {
         'TGA':'*',
         'TAG':'*',
     },
-    'buffer size': 1,
+    'buffer size': 128,
+    'yes/no question': ['Y', 'N'],
     'regions': ['VH', 'DH', 'JH'],
     'fasta line length': 80,
     'igblast result start': re.compile('^# IGBLASTN '),
@@ -138,8 +402,8 @@ expression = {
     'nucleotide sequence': re.compile('^[atcgnATCGN]+$'),
     'minimum v identity': 0.7, 
     'minimum d identity': 0.7, 
-    'minimum j identity': 0.7, 
-    'minimum v alignment': 40, 
+    'minimum j identity': 0.8, 
+    'minimum v alignment': 45, 
     'minimum d alignment': 4, 
     'minimum j alignment': 30, 
     'd overlap penalty factor': 0.5, 
@@ -220,17 +484,93 @@ expression = {
     'igblast compressed hit': '{region},{subject id},{query start},{query end},{subject start},{subject end},{gap openings},{gaps},{mismatch},{identical},{bit score},{evalue},{alignment length},{subject strand},{query strand}',
 }
 
+class CommandLineParser(object):
+    def __init__(self, node):
+        self.node = node
+        self.parser = ArgumentParser(**self.node['instruction'])
+        self.load()
+
+    @property
+    def sectioned(self):
+        return 'section' in self.node and 'action' in self.node['section'] and self.node['section']['action']
+
+    def load(self):
+        def add_argument(parser, name):
+            node = self.node['prototype'][name]
+            parser.add_argument(*node['flag'], **node['parameter'])
+
+        # evaluate the type for each prototype
+        for argument in self.node['prototype'].values():
+            if 'type' in argument['parameter']:
+                argument['parameter']['type'] = eval(argument['parameter']['type'])
+                
+        # add global arguments
+        for argument in self.node['global']['argument']:
+            add_argument(self.parser, argument)
+            
+        if self.sectioned:
+            # Add individual command sections
+            sub = self.parser.add_subparsers(**self.node['section']['instruction'])
+            for action in self.node['section']['action']:
+                action_parser = sub.add_parser(**action['instruction'])
+                if 'argument' in action:
+                    for argument in action['argument']:
+                        add_argument(action_parser, argument)
+                        
+                # Add groups of arguments, if any.
+                if 'group' in action:
+                    for group in action['group']:
+                        group_parser = action_parser.add_argument_group(**group['instruction'])
+                        if 'argument' in group:
+                            for argument in group['argument']:
+                                add_argument(group_parser, argument)
+
+    def parse(self):
+        instruction = {}
+        arguments = vars(self.parser.parse_args())
+        for k,v in arguments.items():
+            if k is not None and v is not None:
+                instruction[k] = v
+                
+        if self.sectioned and 'action' not in instruction:
+            self.parser.print_help()
+            return None
+        else:
+            return instruction
+
+    def query(self, command):
+        query = {}
+        for k in [
+            'library',
+            'id'
+        ]:
+            if k in command:
+                query[k] = command[k]
+                
+        for k in [
+            'gapped',
+            'valid',
+            'in frame',
+            'premature termination'
+        ]:
+            if k in command:
+                if command[k] == 'Y':
+                    query[k] = True
+                elif command[k] == 'N':
+                    query[k] = False
+        return query
+
+
 class Sequence(object):
     def __init__(self, node=None):
         self.log = logging.getLogger('Sequence')
+        self.node = node
         self._reversed = None
-        if node is None:
+        if self.node is None:
             self.node = {
                 'read frame': 0,
                 'strand': True
             }
-        else:
-            self.node = node
 
     def __str__(self):
         buffer = StringIO()
@@ -409,14 +749,60 @@ class Sample(object):
         self.log = logging.getLogger('Sample')
         self.pipeline = pipeline
         self.node = node
+        self.initialize()
+
+    def initialize(self):
+        def transform_hit(node):
+            if 'query' in node and isinstance(node['query'], dict):
+                node['query'] = Sequence(node['query'])
+                
+            if 'subject' in node and isinstance(node['subject'], dict):
+                node['subject'] = Sequence(node['subject'])
+
+        if self.node is None:
+            self.node = {}
         
-        if self.node is None: self.node = {}
-            
-        if 'sequence' in self.node:
-            self.sequence = Sequence(self.node['sequence'])
+        if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
+            self.node['sequence'] = Sequence(self.node['sequence'])
         else:
-            self.sequence = Sequence()
-            self.node['sequence'] = self.sequence.node
+            self.node['sequence'] = Sequence()
+            
+        if 'hit' in self.node:
+            for hit in self.node['hit']:
+                transform_hit(hit)
+        else:
+            self.node['hit'] = []
+            
+        if 'region' in self.node:
+            for value in self.node['region'].values():
+                transform_hit(value)
+        else:
+            self.node['region'] = {}
+
+    @property
+    def document(self):
+        def transform_to_document(node):
+            if isinstance(node, list):
+                return [ transform_to_document(v) for v in node ]
+                
+            elif isinstance(node, dict):
+                for key, value in node.items():
+                    node[key] = transform_to_document(value)
+                return node
+                
+            elif isinstance(node, Sequence):
+                return node.node
+                
+            else: return node
+            
+        document = transform_to_document(self.node)
+        if document['hit']:
+            document['matched'] = True
+        else:
+            document['matched'] = False
+            del document['hit']
+            del document['region']
+        return document
 
     @property
     def id(self):
@@ -435,6 +821,10 @@ class Sample(object):
         self.node['library'] = value
 
     @property
+    def sequence(self):
+        return self.node['sequence']
+
+    @property
     def valid(self):
         return self.node['valid']
 
@@ -443,14 +833,10 @@ class Sample(object):
         self.node['valid'] = value
 
     def reverse(self):
-        if self.sequence:
-            self.sequence = self.sequence.reversed
-            self.node['sequence'] = self.sequence.node
+        self.node['sequence'] = self.node['sequence'].reversed
 
     @property
     def hit(self):
-        if 'hit' not in self.node:
-            self.node['hit'] = []
         return self.node['hit']
 
     @property
@@ -503,12 +889,19 @@ class Sample(object):
 
     @property
     def gapped(self):
-        if 'gapped' not in self.node:
-            self.node['gapped'] = False
-            for hit in self.hit:
-                if hit['gap openings'] > 0:
-                    self.node['gapped'] = True
-                    break
+        return self.node['gapped']
+
+    def _default_analysis_values(self):
+        self.node['gapped'] = False
+        self.node['valid'] = False
+        self.node['premature termination'] = False
+        self.node['in frame'] = False
+
+    def _check_for_gapped_alignment(self):
+        for hit in self.hit:
+            if hit['gap openings'] > 0:
+                self.node['gapped'] = True
+                break
         return self.node['gapped']
 
     def _complement_from_reference(self):
@@ -533,6 +926,7 @@ class Sample(object):
                 
                 self.region['JH'] = hit
                 hit['picked'] = True
+                # JH match sets the read frame for the sample sequence
                 self.sequence.read_frame = (hit['query start'] + hit['subject'].read_frame) % 3
                 picked = True
                 break
@@ -575,23 +969,27 @@ class Sample(object):
                 reference = self.pipeline.reference_for(hit['subject id'])
                     
                 h['overlap'] = 0
+                # check for overlap with VH
                 if self.region['VH']['query end'] > hit['query start']:
                     h['query start'] = self.region['VH']['query end']
                     overlap = h['query start'] - hit['query start']
                     h['subject start'] += overlap
                     h['overlap'] += overlap
                     
+                # check for overlap with JH
                 if hit['query end'] > self.region['JH']['query start']:
                     h['query end'] = self.region['JH']['query start']
                     overlap = hit['query end'] - h['query end']
                     h['subject end'] -= overlap
                     h['overlap'] += overlap
                     
+                # correct the score for the overlap and trim the sequences
                 h['score'] = hit['bit score'] - h['overlap'] * expression['d overlap penalty factor']
                 h['alignment length'] = h['query end'] - h['query start']
                 h['query'] = self.sequence.crop(h['query start'], h['query end'])
                 h['subject'] = reference.sequence.crop(h['subject start'], h['subject end'])
                 
+                # filter DH hits that match the criteria
                 if h['query end'] > h['query start']:
                     similar = 0
                     different = 0
@@ -605,12 +1003,12 @@ class Sample(object):
                         else:
                             different += 1
                             stretch = 0
-                        
                     h['identical'] = float(similar) / float(h['alignment length'])
                     if (longest >= expression['minimum d alignment'] and
                         h['identical'] >= expression['minimum d identity']):
                         possible.append(h)
-
+                        
+        # pick the highest preforming match
         if possible:
             possible.sort(reverse=True, key=lambda x: x['score'])
             self.region['DH'] = possible[0]
@@ -643,7 +1041,7 @@ class Sample(object):
                 
         if offset is not None:
             end = self.region['JH']['query start'] + offset
-        
+            
         if start and end:
             self.region['CDR3'] = {
                 'query start': start,
@@ -709,7 +1107,8 @@ class Sample(object):
         return True
 
     def analyze(self):
-        valid = not self.gapped
+        self._default_analysis_values()
+        valid = not self._check_for_gapped_alignment()
         valid = valid and self._complement_from_reference()
         valid = valid and self._pick_jh_region()
         valid = valid and self._assign_frame()
@@ -915,7 +1314,7 @@ class Block(object):
 
     @property
     def document(self):
-        return self.node['document']
+        return [ sample.document for sample in self.buffer ]
 
     @property
     def lookup(self):
@@ -936,14 +1335,12 @@ class Block(object):
     def reset(self):
         self.node = {
             'buffer': [],
-            'document': [],
             'lookup': {}
         }
 
     def add(self, sample):
         self.buffer.append(sample)
         self.lookup[sample.id] = sample
-        self.document.append(sample.node)
 
     def fill(self, library):
         if self.read():
@@ -1018,13 +1415,81 @@ class Block(object):
         return buffer
 
     def parse_igblast(self, buffer):
+        def parse_igblast_hit(line):
+            hit = None
+            match = expression['igblast hit'].search(line)
+            if match:
+                hit = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
+                if 'query polarity' in hit and hit['query polarity'] == 'reversed':
+                    if hit['subject strand'] == 'plus':
+                        hit['query strand'] = 'minus'
+                    else:
+                        hit['query strand'] = 'plus'
+                    del hit['query polarity']
+                else:
+                    hit['query strand'] = hit['subject strand']
+                    
+                for k in [
+                    'query strand',
+                    'subject strand'  
+                ]:
+                    if hit[k] == 'plus': hit[k] = True
+                    elif hit[k] == 'minus': hit[k] = False
+                    else:
+                        self.log.warning('could not parse value %s for %s as a strand', hit[k], k)
+                        hit[k] = None
+                        
+                for k in [
+                    'identical',
+                    'bit score',
+                    'evalue',
+                ]: 
+                    try: hit[k] = float(hit[k])
+                    except ValueError:
+                        self.log.warning('could not parse value %s for %s as int', hit[k], k)
+                        hit[k] = None
+                    
+                for k in [
+                    'subject end',
+                    'gap openings',
+                    'subject start',
+                    'mismatch',
+                    'query start',
+                    'alignment length',
+                    'gaps',
+                    'query end',
+                ]:
+                    try: hit[k] = int(hit[k])
+                    except ValueError as e:
+                        self.log.warning('could not parse value %s for %s as int', hit[k], k)
+                        hit[k] = None
+
+                # fix the region for heavy chain
+                if 'region' in hit: hit['region'] += 'H'
+                
+                if 'identical' in hit: hit['identical'] /= 100.0
+                if 'subject start' in hit: hit['subject start'] -= 1
+                if 'query start' in hit: hit['query start'] -= 1
+                if 'read frame' in hit: hit['read frame'] -= 1
+            return hit
+
         state = 0
         sample = None
+        
         for line in buffer:
             line = line.strip()
-            if state == 0 and line.startswith('# IGBLASTN '):
+            
+            if line.startswith('# IGBLASTN '):
+                # this is the start of a new record
+                if state == 2:
+                    self.log.warning('not results found for %s', sample.id)
+                    print('>{}'.format(sample.id))
+                    print(sample.sequence.nucleotide)
                 state = 1
+                sample = None
+                
             elif state == 1 and line.startswith('# Query: '):
+                # this is the query id for the record
                 id = line[9:]
                 if id in self.lookup:
                     sample = self.lookup[id]
@@ -1032,74 +1497,20 @@ class Block(object):
                 else:
                     self.log.error('could not locate %s in buffer', id)
                     state = 0
-            elif state == 2 and line.startswith('# Hit table '):
-                state = 3
+                    
             elif state == 2 and line.startswith(expression['igblast reversed query']):
+                # this means the hits will be for the reverse complement strand
                 sample.sequence.strand = False
                 sample.reverse()
-            elif (state == 3 or state == 4) and not line.startswith('#'):
-                state = 4
-                match = expression['igblast hit'].search(line)
-                if match:
-                    hit = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
-                    if 'query polarity' in hit and hit['query polarity'] == 'reversed':
-                        if hit['subject strand'] == 'plus':
-                            hit['query strand'] = 'minus'
-                        else:
-                            hit['query strand'] = 'plus'
-                        del hit['query polarity']
-                    else:
-                        hit['query strand'] = hit['subject strand']
-                        
-                    for k in [
-                        'query strand',
-                        'subject strand'  
-                    ]:
-                        if hit[k] == 'plus': hit[k] = True
-                        elif hit[k] == 'minus': hit[k] = False
-                        else:
-                            self.log.warning('could not parse value %s for %s as a strand', hit[k], k)
-                            hit[k] = None
-                            
-                    for k in [
-                        'identical',
-                        'bit score',
-                        'evalue',
-                    ]: 
-                        try: hit[k] = float(hit[k])
-                        except ValueError:
-                            self.log.warning('could not parse value %s for %s as int', hit[k], k)
-                            hit[k] = None
-                        
-                    for k in [
-                        'subject end',
-                        'gap openings',
-                        'subject start',
-                        'mismatch',
-                        'query start',
-                        'alignment length',
-                        'gaps',
-                        'query end',
-                    ]:
-                        try: hit[k] = int(hit[k])
-                        except ValueError as e:
-                            self.log.warning('could not parse value %s for %s as int', hit[k], k)
-                            hit[k] = None
-
-                    # fix the region for heavy chain
-                    if 'region' in hit: hit['region'] += 'H'
-                    
-                    if 'identical' in hit: hit['identical'] /= 100.0
-                    if 'subject start' in hit: hit['subject start'] -= 1
-                    if 'query start' in hit: hit['query start'] -= 1
-                    if 'read frame' in hit: hit['read frame'] -= 1
+                
+            elif state == 2 and line.startswith('# Hit table '):
+                # this means the hit table is on the next line
+                state = 3
+                
+            elif state == 3 and not line.startswith('#'):
+                hit = parse_igblast_hit(line)
+                if hit is not None:
                     sample.hit.append(hit)
-                    
-            elif state == 4 and line.startswith('#'):
-                state = 0
-                sample = None
-                if line.startswith('# IGBLASTN '):
-                    state = 1
 
     def view(self):
         for sample in self.buffer:
@@ -1301,22 +1712,24 @@ class Pipeline(object):
 
     def populate(self, library):
         block = Block(self)
-        collection = self.database[library]
+        collection = self.database['sample']
         while block.fill(library):
             result = collection.insert_many(block.document)
-            self.log.debug('%s so far', self.count)
             self.count += block.size
+            self.log.debug('%s so far', self.count)
 
     def view(self, query):
         collection = self.database['sample']
         cursor = collection.find(query)
-        for sample in cursor:
+        for node in cursor:
+            sample = Sample(self, node)
             sample.view()
 
     def info(self, query):
         collection = self.database['sample']
         cursor = collection.find(query)
-        for sample in cursor:
+        for node in cursor:
+            sample = Sample(self, node)
             sample.info()
 
     def simulate(self, library, json, alignment):
@@ -1325,177 +1738,44 @@ class Pipeline(object):
             block.simulate(json, alignment)
 
 
-def decode_cli():
-    env = {}
-    
-    # -- global arguments for all actions --
-    p = ArgumentParser()
-    p.add_argument(
-        '-v', '--verbosity',
-        metavar='LEVEL', 
-        dest='verbosity',
-        default='info',
-        help='logging verbosity level [default: %(default)s]', choices=log_levels.keys()
-    )
-    
-    # application version
-    p.add_argument('--version', action='version', version='%(prog)s 0.1')
-    
-    # -- sub parsers for each action --
-    s = p.add_subparsers(dest='action', title='pipeline operations', metavar='ACTION')
-    c = s.add_parser( 'populate', help='populate samples for library',
-        description='match each read in file to regions with igblast and store results in the library. takes read from stdin'
-    )
-    c.add_argument(
-        '-l', '--library',
-        dest='library', 
-        metavar='NAME', 
-        required=True,
-        help='library name to to put results in')
-        
-    c = s.add_parser( 'view', help='view alignment for samples',
-        description='display an alignment for samples'
-    )
-    c.add_argument(
-        '-l', '--library',
-        dest='library', 
-        metavar='NAME', 
-        required=True,
-        help='constraint library name')
-        
-    c.add_argument(
-        '-d', '--id',
-        dest='id', 
-        metavar='ID', 
-        help='constraint sample id')
-        
-    c = s.add_parser( 'info', help='view JSON records for samples',
-        description='display the JSON record of the each sample'
-    )
-    c.add_argument(
-        '-l', '--library',
-        dest='library', 
-        metavar='NAME', 
-        required=True,
-        help='constraint library name')
-        
-    c.add_argument(
-        '-d', '--id',
-        dest='id', 
-        metavar='ID', 
-        help='constraint sample id')
-        
-    c = s.add_parser( 'simulate', help='simulate sample analysis',
-        description='analyze records and print alignment and JSON records without saving to the database'
-    )
-    c.add_argument(
-        '-l', '--library',
-        dest='library', 
-        metavar='NAME', 
-        required=True,
-        help='constraint library name')
-
-    c.add_argument(
-        '-j', '--json',
-        dest='json', 
-        action='store_true',
-        help='emit json info')
-
-    c.add_argument(
-        '-a', '--alignment',
-        dest='alignment', 
-        action='store_true',
-        help='emit alignment diagram')
-
-    c = s.add_parser( 'load-reference', help='load imgt reference fasta',
-        description='Load reference sequences from imgt fasta files'
-    )
-    c.add_argument('path', metavar='PATH', nargs='*', help='list of files to load')
-    
-    c = s.add_parser( 'to-blast-fasta', help='dump a fasta file for igblast',
-        description='dump all samples for the region into a fasta file formatted for igblast'
-    )
-    c.add_argument(
-        '-r', '--region',
-        dest='region', 
-        metavar='REGION', 
-        choices=expression['regions'],
-        required=True,
-        help='region to dump [ {} ]'.format(', '.join(expression['regions'])))
-        
-    c = s.add_parser( 'to-auxiliary', help='dump auxiliary file for igblast',
-        description='dump all samples for the region into an igblast auxiliary file'
-    )
-    c.add_argument(
-        '-r', '--region',
-        dest='region', 
-        metavar='REGION', 
-        choices=expression['regions'],
-        required=True,
-        help='region to dump [ {} ]'.format(', '.join(expression['regions'])))
-        
-    c = s.add_parser( 'rebuild', help='rebuild indexes',
-        description='rebuild database indexes'
-    )
-    
-    for k,v in vars(p.parse_args()).items():
-        if v is not None:
-            env[k] = v
-            
-    if 'action' not in env:
-        p.print_help()
-        
-    return env
-
-def decode_query(env):
-    query = {}
-    for k in [
-        'library',
-        'id',
-        'gapped',
-        'valid',
-        'in frame',
-        'premature termination'
-    ]:
-        if k in env:
-            query[k] = env[k]
-    return query
-
 def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
     
-    env = decode_cli()
-    logging.getLogger().setLevel(log_levels[env['verbosity']])
+    cli = CommandLineParser(expression['interface'])
+    command = cli.parse()
+    action = command['action']
+    print(to_json(command))
     
-    if 'action' in env:
-        pipeline = Pipeline()
-        if env['action'] == 'load-reference':
-            for path in env['path']:
-                pipeline.populate_reference(path)
-                
-        elif env['action'] == 'to-blast-fasta':
-            pipeline.reference_to_blast_fasta(env['region'])
+    logging.getLogger().setLevel(log_levels[command['verbosity']])
+    
+    pipeline = Pipeline()
+    if action == 'load-reference':
+        for path in command['path']:
+            pipeline.populate_reference(path)
             
-        elif env['action'] == 'to-auxiliary':
-            pipeline.reference_to_auxiliary(env['region'])
-                
-        elif env['action'] == 'populate':
-            pipeline.populate(env['library'])
+    elif action == 'to-blast-fasta':
+        pipeline.reference_to_blast_fasta(command['region'])
+        
+    elif action == 'to-auxiliary':
+        pipeline.reference_to_auxiliary(command['region'])
             
-        elif env['action'] == 'view':
-            pipeline.view(decode_query(env))
-            
-        elif env['action'] == 'info':
-            pipeline.info(decode_query(env))
-            
-        elif env['action'] == 'simulate':
-            pipeline.simulate(env['library'], env['json'], env['alignment'])
-            
-        elif env['action'] == 'rebuild':
-            pipeline.rebuild()
-            
-        pipeline.close()
+    elif action == 'populate':
+        pipeline.populate(command['library'])
+        
+    elif action == 'view':
+        pipeline.view(cli.query(command))
+        
+    elif action == 'info':
+        pipeline.info(cli.query(command))
+        
+    elif action == 'simulate':
+        pipeline.simulate(command['library'], command['json'], command['alignment'])
+        
+    elif action == 'rebuild':
+        pipeline.rebuild()
+        
+    pipeline.close()
 
 if __name__ == '__main__':
     main()
