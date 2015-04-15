@@ -399,7 +399,7 @@ expression = {
     'igblast hit table': re.compile('^# Hit table'),
     'igblast result end': re.compile('^# BLAST processed '),
     'igblast reversed query': '# Note that your query represents the minus strand of a V gene and has been converted to the plus strand.',
-    'nucleotide sequence': re.compile('^[atcgnATCGN]+$'),
+    'nucleotide sequence': re.compile('^[atcgnyATCGNY]+$'),
     'minimum v identity': 0.7, 
     'minimum d identity': 0.7, 
     'minimum j identity': 0.8, 
@@ -410,7 +410,7 @@ expression = {
     'igblast hit': re.compile(
         r"""
         (?P<region>[VDJ])\t
-        (?:(?P<query_polarity>reversed)\|)?(?:[^,]+)\t
+        (?:reversed\|)?(?:[^,]+)\t
         (?P<subject_id>[^,]+)\t
         (?P<query_start>[^,]+)\t
         (?P<query_end>[^,]+)\t
@@ -473,6 +473,9 @@ expression = {
         '-germline_db_V', 'database/mouse_imgt_vh',
         '-germline_db_J', 'database/mouse_imgt_jh',
         '-germline_db_D', 'database/mouse_imgt_dh',
+        '-num_alignments_V', '5',
+        '-num_alignments_J', '5',
+        '-num_alignments_D', '5',
         '-organism', 'mouse',
         '-domain_system', 'imgt',
         '-query', '-',
@@ -678,7 +681,7 @@ class Sequence(object):
 
     @property
     def length(self):
-        if self.nucleotide:
+        if self.nucleotide is not None:
             return len(self.nucleotide)
         else:
             return None
@@ -704,17 +707,21 @@ class Reference(object):
         self.pipeline = pipeline
         self.node = node
         
-        if self.node is None: self.node = {}
-            
-        if 'sequence' in self.node:
-            self.sequence = Sequence(self.node['sequence'])
+        if self.node is None:
+            self.node = {}
+        
+        if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
+            self.node['sequence'] = Sequence(self.node['sequence'])
         else:
-            self.sequence = Sequence()
-            self.node['sequence'] = self.sequence.node
+            self.node['sequence'] = Sequence()
 
     @property
     def id(self):
         return self.node['allele name']
+
+    @property
+    def sequence(self):
+        return self.node['sequence']
 
     @property
     def region(self):
@@ -813,6 +820,14 @@ class Sample(object):
         self.node['id'] = value
 
     @property
+    def strand(self):
+        return self.node['strand']
+
+    @strand.setter
+    def strand(self, value):
+        self.node['strand'] = value
+
+    @property
     def library(self):
         return self.node['library']
 
@@ -832,9 +847,6 @@ class Sample(object):
     def valid(self, value):
         self.node['valid'] = value
 
-    def reverse(self):
-        self.node['sequence'] = self.node['sequence'].reversed
-
     @property
     def hit(self):
         return self.node['hit']
@@ -844,6 +856,13 @@ class Sample(object):
         if 'region' not in self.node:
             self.node['region'] = {}
         return self.node['region']
+
+    @property
+    def framed(self):
+        return self.node['framed']
+
+    def reverse(self):
+        self.node['sequence'] = self.node['sequence'].reversed
 
     def expand(self):
         if 'hit' in self.node:
@@ -887,82 +906,121 @@ class Sample(object):
                 except KeyError as e:
                     self.log.error('could not compress hit because %s was missing', e)
 
-    @property
-    def gapped(self):
-        return self.node['gapped']
+    def invalidate(self, message):
+        self.valid = False
+        self.node['error'] = message
+        self.log.warning('sample %s invalidated because %s', self.id, message)
+
+    def invalidate_hit(self, hit, message):
+        hit['valid'] = False
+        hit['error'] = message
+        self.log.warning('%dbp %s hit to %s on %s invalidated because %s', 
+        hit['alignment length'], hit['region'], hit['subject id'], self.id, message)
+
+    def _check_hit_strand(self, reference, hit):
+        # only DH regions are allowed to align to the oposite strand
+        if hit['region'] != 'DH' and hit['subject strand'] != reference.sequence.strand:
+            self.invalidate_hit(hit, 'hit aligns to the wrong strand')
+        return hit['valid']
+
+    def _set_frame_and_strand(self, hit):
+        self.node['framed'] = True
+        self.sequence.read_frame = (hit['query start'] + hit['subject'].read_frame) % 3
+        self.strand = hit['subject strand']
+        self._assign_frame()
+        self.log.debug('frame set for %s by %s', self.id, hit['subject id'])
 
     def _default_analysis_values(self):
-        self.node['gapped'] = False
-        self.node['valid'] = False
+        for hit in self.hit: hit['valid'] = True
+        self.node['framed'] = False
+        self.node['valid'] = True
         self.node['premature termination'] = False
         self.node['in frame'] = False
 
     def _check_for_gapped_alignment(self):
         for hit in self.hit:
             if hit['gap openings'] > 0:
-                self.node['gapped'] = True
-                break
-        return self.node['gapped']
+                hit['gapped'] = True
+                self.invalidate_hit(hit, 'hit contains a gapped alignment')
 
     def _complement_from_reference(self):
         for hit in self.hit:
             hit['picked'] = False
+            hit['query start'] -= 1
+            hit['query'] = self.sequence.crop(hit['query start'], hit['query end'])
+            
             reference = self.pipeline.reference_for(hit['subject id'])
+            
+            if hit['subject strand'] == reference.sequence.strand:
+                hit['subject start'] -= 1
+                hit['subject'] = reference.sequence.crop(hit['subject start'], hit['subject end'])
+            else:
+                hit['subject start'] = reference.sequence.length - hit['subject start']
+                hit['subject end'] = reference.sequence.length - hit['subject end'] + 1
+                hit['subject'] = reference.sequence.reversed.crop(hit['subject start'], hit['subject end'])
+
             hit['framed'] = reference.framed
             hit['functionality'] = reference.functionality
             if reference.strain:
                 hit['strain'] = reference.strain
-            hit['subject'] = reference.sequence.crop(hit['subject start'], hit['subject end'])
-            hit['query'] = self.sequence.crop(hit['query start'], hit['query end'])
-        return True
+                
+            self._check_hit_strand(reference, hit)
 
     def _pick_jh_region(self):
         picked = False
         for hit in self.hit:
-            if (hit['framed'] and 
+            if (hit['valid'] and
+                hit['framed'] and 
                 hit['region'] == 'JH' and 
                 hit['identical'] >=  expression['minimum j identity'] and
                 hit['alignment length'] >= expression['minimum j alignment']):
                 
                 self.region['JH'] = hit
                 hit['picked'] = True
-                # JH match sets the read frame for the sample sequence
-                self.sequence.read_frame = (hit['query start'] + hit['subject'].read_frame) % 3
+                
+                # JH match sets the read frame and strand for the sample
+                if not self.node['framed']: self._set_frame_and_strand(hit)
                 picked = True
                 break
+        # if not picked: self.invalidate('no satisfactory JH region match found')
         return picked
 
     def _assign_frame(self):
         for hit in self.hit:
-            hit['query'].read_frame = 2 - (hit['query start'] - self.sequence.read_frame - 1) % 3
-            if hit['framed']:
-                if hit['query'].read_frame == hit['subject'].read_frame:
-                    hit['in frame'] = 'Y'
+            if hit['valid']:
+                hit['query'].read_frame = 2 - (hit['query start'] - self.sequence.read_frame - 1) % 3
+                if hit['framed']:
+                    if hit['query'].read_frame == hit['subject'].read_frame:
+                        hit['in frame'] = 'Y'
+                    else:
+                        hit['in frame'] = 'N'
                 else:
-                    hit['in frame'] = 'N'
-            else:
-                hit['in frame'] = '*'
-        return True
+                    hit['in frame'] = '*'
 
     def _pick_vh_region(self):
         picked = False
         for hit in self.hit:
-            if (hit['framed'] and 
+            if (hit['valid'] and
+                hit['framed'] and 
                 hit['region'] == 'VH' and 
                 hit['identical'] >=  expression['minimum v identity'] and
                 hit['alignment length'] >= expression['minimum v alignment']):
                 
                 self.region['VH'] = hit
                 hit['picked'] = True
+
+                # if JH didn't set the frame and strand a VH match will
+                if not self.node['framed']: self._set_frame_and_strand(hit)
                 picked = True
                 break
+        # if not picked: self.invalidate('no satisfactory VH region match found')
         return picked
 
     def _pick_dh_region(self):
         picked = False
         possible = []
         for hit in self.hit:
-            if hit['region'] == 'DH':
+            if hit['valid'] and hit['region'] == 'DH':
                 h = {}
                 for k,v in hit.items():
                     if k not in ('query', 'subject'): h[k] = v
@@ -970,14 +1028,14 @@ class Sample(object):
                     
                 h['overlap'] = 0
                 # check for overlap with VH
-                if self.region['VH']['query end'] > hit['query start']:
+                if 'VH' in self.region and self.region['VH']['query end'] > hit['query start']:
                     h['query start'] = self.region['VH']['query end']
                     overlap = h['query start'] - hit['query start']
                     h['subject start'] += overlap
                     h['overlap'] += overlap
                     
                 # check for overlap with JH
-                if hit['query end'] > self.region['JH']['query start']:
+                if 'JH' in self.region and hit['query end'] > self.region['JH']['query start']:
                     h['query end'] = self.region['JH']['query start']
                     overlap = hit['query end'] - h['query end']
                     h['subject end'] -= overlap
@@ -987,8 +1045,12 @@ class Sample(object):
                 h['score'] = hit['bit score'] - h['overlap'] * expression['d overlap penalty factor']
                 h['alignment length'] = h['query end'] - h['query start']
                 h['query'] = self.sequence.crop(h['query start'], h['query end'])
-                h['subject'] = reference.sequence.crop(h['subject start'], h['subject end'])
-                
+
+                if h['subject strand'] == reference.sequence.strand:
+                    h['subject'] = reference.sequence.crop(h['subject start'], h['subject end'])
+                else:
+                    h['subject'] = reference.sequence.reversed.crop(h['subject start'], h['subject end'])
+                                    
                 # filter DH hits that match the criteria
                 if h['query end'] > h['query start']:
                     similar = 0
@@ -1015,40 +1077,45 @@ class Sample(object):
             for h in self.hit:
                 if h['region'] == 'DH' and h['subject id'] == self.region['DH']['subject id']:
                     h['picked'] = True
+            if not self.node['framed']: self._set_frame_and_strand(self.region['DH'])
             picked = True
+            
+        if not picked: self.log.debug('no DH region match passed quality assessment for %s', self.id)
+            
         return picked
 
     def _identify_cdr3(self):
-        start = None
-        end = None
-        
-        offset = None
-        # look for the most upstream cycteine on the VH region
-        for index,codon in enumerate(reversed(self.region['VH']['query'].codon)):
-            if codon == 'C':
-                offset = self.region['VH']['query'].read_frame + (len(self.region['VH']['query'].codon) - index - 1) * 3
-                break
-                
-        if offset is not None:
-            start = self.region['VH']['query start'] + offset
+        if 'VH' in self.region and 'JH' in self.region:
+            start = None
+            end = None
             
-        offset = None
-        # look for the most downstream tryptophan JH region
-        for index,codon in enumerate(self.region['JH']['query'].codon):
-            if codon == 'W':
-                offset = self.region['JH']['query'].read_frame + (index + 1) * 3
-                break
+            offset = None
+            # look for the most upstream cycteine on the VH region
+            for index,codon in enumerate(reversed(self.region['VH']['query'].codon)):
+                if codon == 'C':
+                    offset = self.region['VH']['query'].read_frame + (len(self.region['VH']['query'].codon) - index - 1) * 3
+                    break
+                    
+            if offset is not None:
+                start = self.region['VH']['query start'] + offset
                 
-        if offset is not None:
-            end = self.region['JH']['query start'] + offset
-            
-        if start and end:
-            self.region['CDR3'] = {
-                'query start': start,
-                'query end': end,
-                'region': 'CDR3',
-                'query': self.sequence.crop(start, end)
-            }
+            offset = None
+            # look for the most downstream tryptophan JH region
+            for index,codon in enumerate(self.region['JH']['query'].codon):
+                if codon == 'W':
+                    offset = self.region['JH']['query'].read_frame + (index + 1) * 3
+                    break
+                    
+            if offset is not None:
+                end = self.region['JH']['query start'] + offset
+                
+            if start and end:
+                self.region['CDR3'] = {
+                    'query start': start,
+                    'query end': end,
+                    'region': 'CDR3',
+                    'query': self.sequence.crop(start, end)
+                }
 
     def _check_for_stop_codon(self):
         if '*' in self.sequence.codon:
@@ -1058,17 +1125,16 @@ class Sample(object):
         return not self.node['premature termination']
 
     def _check_for_aligned_frames(self):
-        if self.region['JH'] and self.region['VH']:
+        if 'JH' in self.region and 'VH' in self.region:
             if self.region['VH']['in frame'] == 'Y' and self.region['JH']['in frame'] == 'Y':
                 self.node['in frame'] = True
             else:
                 self.node['in frame'] = False
         else:
             self.node['in frame'] = False
-        return True
 
     def _identify_v_d_junction(self):
-        if 'DH' in self.region:
+        if 'DH' in self.region and 'VH' in self.region:
             if self.region['VH']['query end'] < self.region['DH']['query start']:
                 start = self.region['VH']['query end']
                 end = self.region['DH']['query start']
@@ -1081,7 +1147,7 @@ class Sample(object):
         return True
 
     def _identify_d_j_junction(self):
-        if 'DH' in self.region:
+        if 'DH' in self.region and 'JH' in self.region:
             if self.region['JH']['query start'] > self.region['DH']['query end']:
                 start = self.region['DH']['query end']
                 end = self.region['JH']['query start']
@@ -1094,7 +1160,7 @@ class Sample(object):
         return True
 
     def _identify_v_j_junction(self):
-        if 'DH' not in self.region:
+        if 'DH' not in self.region and 'JH' in self.region and 'VH' in self.region:
             if self.region['JH']['query start'] > self.region['VH']['query end']:
                 start = self.region['VH']['query end']
                 end = self.region['JH']['query start']
@@ -1108,19 +1174,17 @@ class Sample(object):
 
     def analyze(self):
         self._default_analysis_values()
-        valid = not self._check_for_gapped_alignment()
-        valid = valid and self._complement_from_reference()
-        valid = valid and self._pick_jh_region()
-        valid = valid and self._assign_frame()
-        valid = valid and self._pick_vh_region()
-        valid = valid and self._check_for_aligned_frames()
-        valid and self._pick_dh_region()
-        valid and self._identify_v_j_junction()
-        valid and self._identify_v_d_junction()
-        valid and self._identify_d_j_junction()
-        valid and self._check_for_stop_codon()
-        valid and self._identify_cdr3()
-        self.valid = valid
+        if self.valid: self._check_for_gapped_alignment()
+        if self.valid: self._complement_from_reference()
+        if self.valid: self._pick_jh_region()
+        if self.valid: self._pick_vh_region()
+        if self.valid: self._check_for_aligned_frames()
+        if self.valid: self._pick_dh_region()
+        if self.valid: self._identify_v_j_junction()
+        if self.valid: self._identify_v_d_junction()
+        if self.valid: self._identify_d_j_junction()
+        if self.valid: self._check_for_stop_codon()
+        if self.valid: self._identify_cdr3()
 
     def to_json(self):
         def handler(o):
@@ -1163,128 +1227,130 @@ class Sample(object):
             return ''
 
     def to_alignment_diagram(self):
+        def print_gap(buffer, framed):
+            if framed: buffer.write(' ')
+
         if self.hit:
             buffer = StringIO()
-            subject_length = max(max([ len(hit['subject id']) for hit in self.hit ]), len('subject'))
-            alignment_offset = subject_length + 12
+            offset = dict()
+            offset['gene'] = max(max([len(hit['subject id']) for hit in self.hit if hit['valid']]), len('subject'))
+            offset['alignment'] = offset['gene'] + 14
+            offset['sample frame'] = self.sequence.read_frame
             
-            # print a title
-            buffer.write('{: <{}}{}'.format('Summary', alignment_offset, self.to_summary()))
+            # print a summary
+            buffer.write('{: <{}}{}'.format('summary', offset['alignment'], self.to_summary()))
             buffer.write('\n')
             
-            # print the coordinate system
-            buffer.write('{: <{}} '.format('Subject', subject_length))
-            buffer.write('{: <{}} '.format('R', 4))
-            buffer.write('{: <{}} '.format('F', 1))
-            buffer.write('{: <{}} '.format('I', 1))
-            buffer.write('{: <{}} '.format('P', 1))
-            if self.sequence.read_frame > 0:
-                buffer.write('{: <{}} '.format(0, self.sequence.read_frame))
-            for index in range(self.sequence.read_frame, self.sequence.length, 3):
-                buffer.write('{: <3} '.format(index))
+            # print a title
+            buffer.write('{: <{}} {: <4} {} {} {} {} '.format('gene', offset['gene'], 'R', 'F', 'I', 'P', 'S'))
+            
+            # print the sample coordinate system
+            if offset['sample frame'] > 0:
+                buffer.write('{: <{}}'.format(0, offset['sample frame']))
+                print_gap(buffer, self.framed)
+            
+            gap = 3 if self.framed else 6
+            for index in range(offset['sample frame'], self.sequence.length, gap):
+                buffer.write('{: <{}}'.format(index, gap))
+                print_gap(buffer, self.framed)
             buffer.write('\n')
             
             # print the sample nucleotide sequence
-            buffer.write(' ' * alignment_offset)
-            if self.sequence.read_frame > 0:
-                buffer.write(self.sequence.nucleotide[0:self.sequence.read_frame])
-                buffer.write(' ')
-            for index in range(self.sequence.read_frame, self.sequence.length, 3):
+            buffer.write(' ' * offset['alignment'])
+            if offset['sample frame'] > 0:
+                buffer.write(self.sequence.nucleotide[0:offset['sample frame']])
+                print_gap(buffer, self.framed)
+            for index in range(offset['sample frame'], self.sequence.length, 3):
                 buffer.write(self.sequence.nucleotide[index:index + 3])
-                buffer.write(' ')
+                print_gap(buffer, self.framed)
             buffer.write('\n')
             
             # print the sample quality sequence
-            buffer.write(' ' * alignment_offset)
-            if self.sequence.read_frame > 0:
-                buffer.write(self.sequence.quality[0:self.sequence.read_frame])
-                buffer.write(' ')
-            for index in range(self.sequence.read_frame, self.sequence.length, 3):
+            buffer.write(' ' * offset['alignment'])
+            if offset['sample frame'] > 0:
+                buffer.write(self.sequence.quality[0:offset['sample frame']])
+                print_gap(buffer, self.framed)
+            for index in range(offset['sample frame'], self.sequence.length, 3):
                 buffer.write(self.sequence.quality[index:index + 3])
-                buffer.write(' ')
+                print_gap(buffer, self.framed)
             buffer.write('\n')
             
-            # print the sample codon sequence
-            buffer.write(' ' * alignment_offset)
-            if self.sequence.read_frame > 0:
-                buffer.write('{: <{}} '.format(' ', self.sequence.read_frame))
-            for codon in self.sequence.codon:
-                buffer.write(codon)
-                buffer.write('   ')
-            buffer.write('\n')
+            if self.framed:
+                # print the sample codon sequence
+                buffer.write(' ' * offset['alignment'])
+                if offset['sample frame'] > 0:
+                    buffer.write(' ' * offset['sample frame'])
+                    print_gap(buffer, self.framed)
+                for codon in self.sequence.codon:
+                    buffer.write('{: <3}'.format(codon))
+                    print_gap(buffer, self.framed)
+                buffer.write('\n')
             
             for hit in self.hit:
-                buffer.write('{: <{}} '.format(hit['subject id'], subject_length))
-                buffer.write('{: <{}} '.format(hit['region'], 4))
-                buffer.write('{: <{}} '.format(hit['functionality'], 1))
-                buffer.write('{: <{}} '.format(hit['in frame'] if 'in frame' in hit else ' ', 1))
-                buffer.write('{: <{}} '.format('Y' if hit['picked'] else 'N', 1))
-                
-                subject = hit['subject'].clone()
-                subject.read_frame = hit['query'].read_frame
-                
-                hit_offset = 0
-                if hit['query start'] > 0:
-                    if self.sequence.read_frame > 0:
-                        hit_offset = (int((hit['query start'] - self.sequence.read_frame) / 3)) + hit['query start'] + 1
-                    else:
-                        hit_offset = (int(hit['query start'] / 3)) + hit['query start']
-                    buffer.write(' ' * hit_offset)
+                if hit['valid']:
+                    hit_offset = 0
+                    if hit['query start'] > 0:
+                        hit_offset = hit['query start']
+                        if self.framed:
+                            if offset['sample frame'] > 0:
+                                hit_offset += int((hit['query start'] - offset['sample frame']) / 3) + 1
+                            else:
+                                hit_offset += (int(hit['query start'] / 3))
+                            
+                    buffer.write('{: <{}} {: <4} {} {} {} {} '.format(hit['subject id'], offset['gene'], 
+                        hit['region'], 
+                        hit['functionality'],
+                        hit['in frame'] if 'in frame' in hit else ' ',
+                        'Y' if hit['picked'] else 'N',
+                        '+' if hit['subject strand'] else '-'))
                     
-                # nucleotide mask
-                try:
+                    subject = hit['subject'].clone()
+                    subject.read_frame = hit['query'].read_frame
+                    
+                    # print the hit nucleotide mask
                     mask = []
                     for index,n in enumerate(subject.nucleotide):
-                        if n == hit['query'].nucleotide[index]: mask.append('-')
-                        else: mask.append(n)
-                    nucleotide_mask = ''.join(mask)
-                except IndexError as e:
-                    print(e)
-                    print(to_json(hit))
-                    print(to_json(self.node))
-                    
-                # print nucleotides
-                if subject.read_frame > 0:
-                    buffer.write(nucleotide_mask[0:subject.read_frame])
-                    buffer.write(' ')
-                    
-                for index in range(subject.read_frame, subject.length, 3):
-                    buffer.write(nucleotide_mask[index: index + 3])
-                    buffer.write(' ')
-                buffer.write('\n')
-                
-                # print codons sequence if anything is different
-                display = False
-                offset = int((hit['query start'] - self.sequence.read_frame + subject.read_frame) / 3)
-                mask = []
-                for index,codon in enumerate(subject.codon):
-                    if codon == hit['query'].codon[index]:
-                        mask.append('-')
-                    else:
-                        mask.append(codon)
-                        display = True
-                codon_mask = ''.join(mask)
-                
-                if display:
-                    buffer.write(' ' * alignment_offset)
-                    if hit['query start'] > 0:
-                        buffer.write(' ' * hit_offset)
+                        mask.append('-' if n == hit['query'].nucleotide[index] else n)
+                    mask = ''.join(mask)
                         
+                    if hit['query start'] > 0: buffer.write(' ' * hit_offset)
                     if subject.read_frame > 0:
-                        buffer.write('{: <{}} '.format(' ', subject.read_frame))
+                        buffer.write(mask[0:subject.read_frame])
+                        print_gap(buffer, self.framed)
                         
-                    for codon in mask:
-                        buffer.write(codon)
-                        buffer.write('   ')
+                    for index in range(subject.read_frame, subject.length, 3):
+                        buffer.write(mask[index:index + 3])
+                        print_gap(buffer, self.framed)
                     buffer.write('\n')
+                    
+                    if self.framed:
+                        # print the codon mask
+                        display = False
+                        mask = []
+                        for index,c in enumerate(subject.codon):
+                            if c == hit['query'].codon[index]: mask.append('-')
+                            else:
+                                mask.append(c)
+                                display = True
+                        if display:
+                            buffer.write(' ' * offset['alignment'])
+                            if hit['query start'] > 0: buffer.write(' ' * hit_offset)
+                                
+                            if subject.read_frame > 0:
+                                buffer.write(' ' * subject.read_frame)
+                                print_gap(buffer, self.framed)
+                                
+                            for codon in mask:
+                                buffer.write('{: <3}'.format(codon))
+                                print_gap(buffer, self.framed)
+                            buffer.write('\n')
             buffer.seek(0)
             return buffer.read()
         else:
             return ''
 
     def view(self):
-        if self.valid:
-            print(self.to_alignment_diagram())
+        print(self.to_alignment_diagram())
 
     def info(self):
         print(self.to_json())
@@ -1359,27 +1425,28 @@ class Block(object):
         for line in sys.stdin:
             if line:
                 line = line.strip()
-                if state == None:
-                    if line[0] == '@':
-                        sample.id = line
-                        state = 'id'
+                if line:
+                    if state == None:
+                        if line[0] == '@':
+                            sample.id = line
+                            state = 'id'
+                            
+                    elif state == 'id':
+                        sample.sequence.nucleotide = line
+                        state = 'sequence'
                         
-                elif state == 'id':
-                    sample.sequence.nucleotide = line
-                    state = 'sequence'
-                    
-                elif state == 'sequence':
-                    if line[0] == '+':
-                        state = 'redundant'
-                        
-                elif state == 'redundant':
-                    sample.sequence.quality = line
-                    self.add(sample)
-                    state = None
-                    if self.full:
-                        break
-                    else:
-                        sample = Sample(self.pipeline)
+                    elif state == 'sequence':
+                        if line[0] == '+':
+                            state = 'redundant'
+                            
+                    elif state == 'redundant':
+                        sample.sequence.quality = line
+                        self.add(sample)
+                        state = None
+                        if self.full:
+                            break
+                        else:
+                            sample = Sample(self.pipeline)
             else:
                 break
                 
@@ -1420,24 +1487,13 @@ class Block(object):
             match = expression['igblast hit'].search(line)
             if match:
                 hit = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
-                if 'query polarity' in hit and hit['query polarity'] == 'reversed':
-                    if hit['subject strand'] == 'plus':
-                        hit['query strand'] = 'minus'
-                    else:
-                        hit['query strand'] = 'plus'
-                    del hit['query polarity']
+                if hit['subject strand'] == 'plus':
+                    hit['subject strand'] = True
+                elif hit['subject strand'] == 'minus':
+                    hit['subject strand'] = False
                 else:
-                    hit['query strand'] = hit['subject strand']
-                    
-                for k in [
-                    'query strand',
-                    'subject strand'  
-                ]:
-                    if hit[k] == 'plus': hit[k] = True
-                    elif hit[k] == 'minus': hit[k] = False
-                    else:
-                        self.log.warning('could not parse value %s for %s as a strand', hit[k], k)
-                        hit[k] = None
+                    self.log.warning('could not parse value %s for as a strand setting to plus', hit['subject strand'])
+                    hit['subject strand'] = True
                         
                 for k in [
                     'identical',
@@ -1467,10 +1523,8 @@ class Block(object):
                 # fix the region for heavy chain
                 if 'region' in hit: hit['region'] += 'H'
                 
+                # switch from % to fraction
                 if 'identical' in hit: hit['identical'] /= 100.0
-                if 'subject start' in hit: hit['subject start'] -= 1
-                if 'query start' in hit: hit['query start'] -= 1
-                if 'read frame' in hit: hit['read frame'] -= 1
             return hit
 
         state = 0
@@ -1482,9 +1536,7 @@ class Block(object):
             if line.startswith('# IGBLASTN '):
                 # this is the start of a new record
                 if state == 2:
-                    self.log.warning('not results found for %s', sample.id)
-                    print('>{}'.format(sample.id))
-                    print(sample.sequence.nucleotide)
+                    sample.invalidate('no alignment results found')
                 state = 1
                 sample = None
                 
@@ -1500,7 +1552,6 @@ class Block(object):
                     
             elif state == 2 and line.startswith(expression['igblast reversed query']):
                 # this means the hits will be for the reverse complement strand
-                sample.sequence.strand = False
                 sample.reverse()
                 
             elif state == 2 and line.startswith('# Hit table '):
@@ -1604,18 +1655,32 @@ class Pipeline(object):
 
     def populate_reference(self, path):
         def save_reference_sample(collection, sample):
-            if sample is not None and sample['sequence']:
-                sample['sequence'] = {
-                    'nucleotide': sample['sequence'],
-                    'strand': sample['strand'],
-                    'read frame': 0
-                }
-                del sample['strand']
-                if 'read frame' in sample:
-                    sample['sequence']['read frame'] = sample['read frame']
-                    del sample['read frame']
-                collection.save(sample)
+            if sample is not None:
                 
+                # fix the sequence structure
+                if 'sequence' in sample:
+                    if sample['sequence']:
+                        sample['sequence'] = {
+                            'nucleotide': sample['sequence'],
+                            'strand': True
+                        }
+                        
+                        # fix the read frame
+                        if 'read frame' in sample:
+                            sample['sequence']['read frame'] = sample['read frame']
+                            del sample['read frame']
+                            sample['framed'] = True
+                        else:
+                            sample['sequence']['read frame'] = 0
+                            sample['framed'] = False
+                    else:
+                        del sample['sequence']
+                        
+                if 'sequence' in sample:
+                    collection.save(sample)
+                else:
+                    self.log.error('refusing to save reference record %s with missing sequence', sample['id'])
+
         collection = self.database['reference']
         sample = None
         with io.open(path, 'rb') as fasta:
@@ -1653,19 +1718,14 @@ class Pipeline(object):
                             # fix the strand
                             sample['strand'] = True
                             if 'polarity' in sample:
-                                if sample['polarity'] == 'rev-compl':
-                                    sample['strand'] = False
-                                    del sample['polarity']
+                                if sample['polarity'] == 'rev-compl': sample['strand'] = False
+                                del sample['polarity']
                                     
                             # fix the start offset
                             if 'start' in sample: sample['start'] -= 1
                             
-                            # fix the read frame
-                            if 'read frame' in sample:
-                                sample['read frame'] -= 1 
-                                sample['framed'] = True
-                            else:
-                                sample['framed'] = False
+                            # fix the read frame offset to zero based
+                            if 'read frame' in sample: sample['read frame'] -= 1
                     else:
                         if expression['nucleotide sequence'].search(line):
                             sample['sequence'] += line.upper()
@@ -1678,17 +1738,18 @@ class Pipeline(object):
     def reference_to_blast_fasta(self, region):
         buffer = StringIO()
         collection = self.database['reference']
-        query = { 'region': region, 'sequence.strand': True }
+        query = { 'region': region }
         cursor = collection.find(query)
-        for sample in cursor:
+        for node in cursor:
+            reference = Reference(self, node)
             buffer.write('>')
-            buffer.write(sample['allele name'])
+            buffer.write(reference.id)
             buffer.write('\n')
             begin = 0
             end = 0
-            while end < sample['length']:
-                end = min(begin + expression['fasta line length'], sample['length'])
-                buffer.write(sample['sequence']['nucleotide'][begin:end])
+            while end < reference.sequence.length:
+                end = min(begin + expression['fasta line length'], reference.sequence.length)
+                buffer.write(reference.sequence.nucleotide[begin:end])
                 buffer.write('\n')
                 begin = end
         buffer.seek(0)
@@ -1697,15 +1758,16 @@ class Pipeline(object):
     def reference_to_auxiliary(self, region):
         buffer = StringIO()
         collection = self.database['reference']
-        query = { 'region': region, 'sequence.strand': True }
+        query = { 'region': region }
         cursor = collection.find(query)
-        for sample in cursor:
-            if sample['framed']:
-                buffer.write(sample['allele name'])
+        for node in cursor:
+            reference = Reference(self, node)
+            if reference.framed:
+                buffer.write(reference.id)
                 buffer.write('\t')
-                buffer.write(str(sample['sequence']['read frame']))
+                buffer.write(str(reference.sequence.read_frame))
                 buffer.write('\t')
-                buffer.write(sample['region'])
+                buffer.write(reference.region)
                 buffer.write('\n')
         buffer.seek(0)
         print(buffer.read())
@@ -1745,8 +1807,6 @@ def main():
     cli = CommandLineParser(expression['interface'])
     command = cli.parse()
     action = command['action']
-    print(to_json(command))
-    
     logging.getLogger().setLevel(log_levels[command['verbosity']])
     
     pipeline = Pipeline()
