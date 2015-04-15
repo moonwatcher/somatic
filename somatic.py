@@ -666,10 +666,11 @@ class Sequence(object):
             codon = []
             while(not end > self.length):
                 acid = self.nucleotide[start:end]
-                if 'N' in acid:
-                    codon.append('X')
-                else:
+                try:
                     codon.append(expression['nucleic to amino'][acid])
+                except KeyError as e:
+                    self.log.warning('could not resolve %s triplet to an amino acid', e)
+                    codon.append('X')
                 start = end
                 end = start + 3
             if codon:
