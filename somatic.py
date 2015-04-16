@@ -1299,10 +1299,10 @@ class Sample(object):
             }
             
             c = [ len(hit['subject id']) for hit in self.hit if hit['valid'] ]
-            if c: offselt['gene'] = max(max(c), offset['gene'])
+            if c: offset['gene'] = max(max(c), offset['gene'])
             
             c = [ len(s) for s in self.pipeline.strains ]
-            offset['strain'] = max(max(c), offselt['strain'])
+            offset['strain'] = max(max(c), offset['strain'])
             
             offset['alignment'] = offset['gene'] + offset['strain'] + 15
             offset['sample frame'] = self.sequence.read_frame
