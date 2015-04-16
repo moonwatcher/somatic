@@ -47,32 +47,6 @@ def to_json(node):
 
     return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
 
-def create_feature(codons):
-    def expand(motif, space=[ '' ]):
-        position = len(space[0])
-        if position < len(motif):
-            next = []
-            for option in motif[position]:
-                for element in space:
-                    next.append(element + option)
-            return expand(motif, next)
-        else:
-            return space
-
-    feature = { 'codon': {}, 'space': set() }
-    for c in codons:
-        feature['codon'][c] = { 'motif':[] }
-    for triplet,codon in feature['codon'].items():
-        for nucleotide in triplet:
-            motif = []
-            codon['motif'].append(motif)
-            for k,n in expression['iupac nucleic acid notation'].items():
-                if nucleotide in n['option']:
-                    motif.append(k)
-        codon['possible'] = expand(codon['motif'])
-        feature['space'] |= set(codon['possible'])
-    return feature
-
 log_levels = {
     'debug': logging.DEBUG,
     'info': logging.INFO,
@@ -81,7 +55,93 @@ log_levels = {
     'critical': logging.CRITICAL
 }
 
-expression = {
+configuration = {
+    'yes/no question': ['Y', 'N'],
+    'regions': ['VH', 'DH', 'JH'],
+    'expression': {
+        'expand hit': re.compile(
+            r"""
+            (?P<region>VH|DH|JH),
+            (?P<subject_id>[^,]+),
+            (?P<query_start>[^,]+),
+            (?P<query_end>[^,]+),
+            (?P<subject_start>[^,]+),
+            (?P<subject_end>[^,]+),
+            (?P<gap_openings>[^,]+),
+            (?P<gaps>[^,]+),
+            (?P<mismatch>[^,]+),
+            (?P<identical>[^,]+),
+            (?P<bit_score>[^,]+),
+            (?P<evalue>[^,]+),
+            (?P<alignment_length>[^,]+),
+            (?P<subject_strand>[^,]),
+            (?P<query_strand>[^,])
+            """,
+            re.VERBOSE
+        ),
+        'igblast compressed hit': '{region},{subject id},{query start},{query end},{subject start},{subject end},{gap openings},{gaps},{mismatch},{identical},{bit score},{evalue},{alignment length},{subject strand},{query strand}',
+        'igblast hit': re.compile(
+            r"""
+            (?P<region>[VDJ])\t
+            (?:reversed\|)?(?:[^,]+)\t
+            (?P<subject_id>[^,]+)\t
+            (?P<query_start>[^,]+)\t
+            (?P<query_end>[^,]+)\t
+            (?P<subject_start>[^,]+)\t
+            (?P<subject_end>[^,]+)\t
+            (?P<gap_openings>[^,]+)\t
+            (?P<gaps>[^,]+)\t
+            (?P<mismatch>[^,]+)\t
+            (?P<identical>[^,]+)\t
+            (?P<bit_score>[^,]+)\t
+            (?P<evalue>[^,]+)\t
+            (?P<alignment_length>[^,]+)\t
+            (?P<subject_strand>[^,]+)
+            """,
+            re.VERBOSE
+        ),
+        'igblast reversed query': '# Note that your query represents the minus strand of a V gene and has been converted to the plus strand.',
+        'imgt fasta header': re.compile(
+            r"""
+            ^>
+            (?P<imgt_accession>[^|]*)\|
+            (?P<allele_name>(?P<gene_name>(?P<subgroup>[^-]+)[^\*]+)\*[0-9]+)\|
+            (?P<organism_name>[^|_]*)(?:_(?P<strain>[^|]+))?\|
+            (?P<functionality>[\[\(]?(?:F|ORF|P)[\]\)]?)\|
+            (?P<region>V|D|J)-REGION\|
+            (?:(?P<start>[0-9]+)\.\.(?P<end>[0-9]+))?\s*\|
+            (?P<length>[0-9]+)\snt\|
+            (?P<read_frame>[123]|NR)\|
+            [^|]*\|
+            [^|]*\|
+            [^|]*\|
+            [^|]*\|
+            [^|]*\|
+            [^|]*\|
+            (?P<polarity>rev-compl)?\s*\|$
+            """,
+            re.VERBOSE
+        ),
+        'nucleotide sequence': re.compile('^[atcgnyATCGNY]+$')
+    },
+    'command': {
+        'igblast command': [
+            'igblastn',
+            '-germline_db_V', 'database/mouse_imgt_vh',
+            '-germline_db_J', 'database/mouse_imgt_jh',
+            '-germline_db_D', 'database/mouse_imgt_dh',
+            '-num_alignments_V', '5',
+            '-num_alignments_J', '5',
+            '-num_alignments_D', '5',
+            '-organism', 'mouse',
+            '-domain_system', 'imgt',
+            '-query', '-',
+            '-auxiliary_data', 'optional_file/mouse_gl.aux',
+            '-show_translation',
+            '-outfmt',
+            '7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand',
+        ],
+    },
     'interface': {
         'global': {
             'argument': [
@@ -443,101 +503,17 @@ expression = {
         'TGA':'*',
         'TAG':'*',
     },
-    'buffer size': 128,
-    'yes/no question': ['Y', 'N'],
-    'regions': ['VH', 'DH', 'JH'],
-    'fasta line length': 80,
-    'igblast result start': re.compile('^# IGBLASTN '),
-    'igblast query': re.compile('^# Query: (P:<query_id>.*)$'),
-    'igblast hit table': re.compile('^# Hit table'),
-    'igblast result end': re.compile('^# BLAST processed '),
-    'igblast reversed query': '# Note that your query represents the minus strand of a V gene and has been converted to the plus strand.',
-    'nucleotide sequence': re.compile('^[atcgnyATCGNY]+$'),
-    'minimum v identity': 0.7, 
-    'minimum d identity': 0.7, 
-    'minimum j identity': 0.8, 
-    'minimum v alignment': 45, 
-    'minimum d alignment': 4, 
-    'minimum j alignment': 30, 
-    'd overlap penalty factor': 0.5, 
-    'igblast hit': re.compile(
-        r"""
-        (?P<region>[VDJ])\t
-        (?:reversed\|)?(?:[^,]+)\t
-        (?P<subject_id>[^,]+)\t
-        (?P<query_start>[^,]+)\t
-        (?P<query_end>[^,]+)\t
-        (?P<subject_start>[^,]+)\t
-        (?P<subject_end>[^,]+)\t
-        (?P<gap_openings>[^,]+)\t
-        (?P<gaps>[^,]+)\t
-        (?P<mismatch>[^,]+)\t
-        (?P<identical>[^,]+)\t
-        (?P<bit_score>[^,]+)\t
-        (?P<evalue>[^,]+)\t
-        (?P<alignment_length>[^,]+)\t
-        (?P<subject_strand>[^,]+)
-        """,
-        re.VERBOSE
-    ),
-    'imgt fasta header': re.compile(
-        r"""
-        ^>
-        (?P<imgt_accession>[^|]*)\|
-        (?P<allele_name>(?P<gene_name>(?P<subgroup>[^-]+)[^\*]+)\*[0-9]+)\|
-        (?P<organism_name>[^|_]*)(?:_(?P<strain>[^|]+))?\|
-        (?P<functionality>[\[\(]?(?:F|ORF|P)[\]\)]?)\|
-        (?P<region>V|D|J)-REGION\|
-        (?:(?P<start>[0-9]+)\.\.(?P<end>[0-9]+))?\s*\|
-        (?P<length>[0-9]+)\snt\|
-        (?P<read_frame>[123]|NR)\|
-        [^|]*\|
-        [^|]*\|
-        [^|]*\|
-        [^|]*\|
-        [^|]*\|
-        [^|]*\|
-        (?P<polarity>rev-compl)?\s*\|$
-        """,
-        re.VERBOSE
-    ),
-    'expand hit': re.compile(
-        r"""
-        (?P<region>VH|DH|JH),
-        (?P<subject_id>[^,]+),
-        (?P<query_start>[^,]+),
-        (?P<query_end>[^,]+),
-        (?P<subject_start>[^,]+),
-        (?P<subject_end>[^,]+),
-        (?P<gap_openings>[^,]+),
-        (?P<gaps>[^,]+),
-        (?P<mismatch>[^,]+),
-        (?P<identical>[^,]+),
-        (?P<bit_score>[^,]+),
-        (?P<evalue>[^,]+),
-        (?P<alignment_length>[^,]+),
-        (?P<subject_strand>[^,]),
-        (?P<query_strand>[^,])
-        """,
-        re.VERBOSE
-    ),
-    'igblast command': [
-        'igblastn',
-        '-germline_db_V', 'database/mouse_imgt_vh',
-        '-germline_db_J', 'database/mouse_imgt_jh',
-        '-germline_db_D', 'database/mouse_imgt_dh',
-        '-num_alignments_V', '5',
-        '-num_alignments_J', '5',
-        '-num_alignments_D', '5',
-        '-organism', 'mouse',
-        '-domain_system', 'imgt',
-        '-query', '-',
-        '-auxiliary_data', 'optional_file/mouse_gl.aux',
-        '-show_translation',
-        '-outfmt',
-        '7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand',
-    ],
-    'igblast compressed hit': '{region},{subject id},{query start},{query end},{subject start},{subject end},{gap openings},{gaps},{mismatch},{identical},{bit score},{evalue},{alignment length},{subject strand},{query strand}',
+    'constant': {
+        'buffer size': 128,
+        'fasta line length': 80,
+        'minimum v identity': 0.7, 
+        'minimum d identity': 0.7, 
+        'minimum j identity': 0.8, 
+        'minimum v alignment': 45, 
+        'minimum d alignment': 4, 
+        'minimum j alignment': 30, 
+        'd overlap penalty factor': 0.5
+    }
 }
 
 class CommandLineParser(object):
@@ -643,6 +619,10 @@ class Sequence(object):
         buffer.seek(0)
         return buffer.read()
 
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
     def reset(self):
         for k in ['codon']:
             if k in self.node: del self.node[k]
@@ -723,10 +703,10 @@ class Sequence(object):
             while(not end > self.length):
                 acid = self.nucleotide[start:end]
                 try:
-                    codon.append(expression['nucleic to amino'][acid])
+                    codon.append(self.configuration['nucleic to amino'][acid])
                 except KeyError as e:
                     self.log.debug('could not resolve %s triplet to an amino acid', e)
-                    if acid in self.pipeline.stop_repertuar:
+                    if acid in self.configuration['stop codon repertuar']:
                         self.log.debug('%s is potentially a stop codon', acid)
                         codon.append('*')
                     else:
@@ -751,7 +731,7 @@ class Sequence(object):
     def reversed(self):
         if self._reversed is None and self.nucleotide:
             reversed = {
-                'nucleotide': ''.join([ expression['complement'][b] for b in list(self.nucleotide) ][::-1]), 
+                'nucleotide': ''.join([ self.configuration['complement'][b] for b in list(self.nucleotide) ][::-1]), 
                 'read frame': (self.length - self.read_frame) % 3,
                 'strand': not self.strand
             }
@@ -775,6 +755,10 @@ class Reference(object):
             self.node['sequence'] = Sequence(self.pipeline, self.node['sequence'])
         else:
             self.node['sequence'] = Sequence(self.pipeline)
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
 
     @property
     def id(self):
@@ -818,6 +802,10 @@ class Sample(object):
         self.pipeline = pipeline
         self.node = node
         self.initialize()
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
 
     def initialize(self):
         def transform_hit(node):
@@ -929,7 +917,7 @@ class Sample(object):
         if 'hit' in self.node:
             for hit in self.node['hit']:
                 if 'compressed hit' in hit:
-                    match = expression['expand hit'].search(hit['compressed hit'])
+                    match = self.configuration['expression']['expand hit'].search(hit['compressed hit'])
                     if match:
                         parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
                         for k,v in parsed.items():
@@ -963,7 +951,7 @@ class Sample(object):
         if 'hit' in self.node:
             for hit in self.node['hit']:
                 try:
-                    hit['compressed hit'] = expression['igblast compressed hit'].format(**hit)
+                    hit['compressed hit'] = self.configuration['expression']['igblast compressed hit'].format(**hit)
                 except KeyError as e:
                     self.log.error('could not compress hit because %s was missing', e)
 
@@ -1033,8 +1021,8 @@ class Sample(object):
             if (hit['valid'] and
                 hit['framed'] and 
                 hit['region'] == 'JH' and 
-                hit['identical'] >=  expression['minimum j identity'] and
-                hit['alignment length'] >= expression['minimum j alignment']):
+                hit['identical'] >=  self.configuration['constant']['minimum j identity'] and
+                hit['alignment length'] >= self.configuration['constant']['minimum j alignment']):
                 
                 self.region['JH'] = hit
                 hit['picked'] = True
@@ -1064,8 +1052,8 @@ class Sample(object):
             if (hit['valid'] and
                 hit['framed'] and 
                 hit['region'] == 'VH' and 
-                hit['identical'] >=  expression['minimum v identity'] and
-                hit['alignment length'] >= expression['minimum v alignment']):
+                hit['identical'] >=  self.configuration['constant']['minimum v identity'] and
+                hit['alignment length'] >= self.configuration['constant']['minimum v alignment']):
                 
                 self.region['VH'] = hit
                 hit['picked'] = True
@@ -1103,7 +1091,7 @@ class Sample(object):
                     h['overlap'] += overlap
                     
                 # correct the score for the overlap and trim the sequences
-                h['score'] = hit['bit score'] - h['overlap'] * expression['d overlap penalty factor']
+                h['score'] = hit['bit score'] - h['overlap'] * self.configuration['d overlap penalty factor']
                 h['alignment length'] = h['query end'] - h['query start']
                 h['query'] = self.sequence.crop(h['query start'], h['query end'])
 
@@ -1127,8 +1115,8 @@ class Sample(object):
                             different += 1
                             stretch = 0
                     h['identical'] = float(similar) / float(h['alignment length'])
-                    if (longest >= expression['minimum d alignment'] and
-                        h['identical'] >= expression['minimum d identity']):
+                    if (longest >= self.configuration['constant']['minimum d alignment'] and
+                        h['identical'] >= self.configuration['constant']['minimum d identity']):
                         possible.append(h)
                         
         # pick the highest preforming match
@@ -1447,6 +1435,10 @@ class Block(object):
         return buffer.read()
 
     @property
+    def configuration(self):
+        return self.pipeline.configuration
+
+    @property
     def buffer(self):
         return self.node['buffer']
 
@@ -1468,7 +1460,7 @@ class Block(object):
 
     @property
     def full(self):
-        return not self.size < expression['buffer size']
+        return not self.size < self.configuration['constant']['buffer size']
 
     def reset(self):
         self.node = {
@@ -1527,7 +1519,7 @@ class Block(object):
     def search(self):
         result = None
         process = Popen(
-            args=expression['igblast command'],
+            args=self.configuration['command']['igblast command'],
             cwd='/Users/lg/code/somatic/igblast',
             env=None,
             stdin=PIPE,
@@ -1546,7 +1538,7 @@ class Block(object):
             begin = 0
             end = 0
             while end < sample.sequence.length:
-                end = min(begin + expression['fasta line length'], sample.sequence.length)
+                end = min(begin + self.configuration['constant']['fasta line length'], sample.sequence.length)
                 buffer.write(sample.sequence.nucleotide[begin:end])
                 buffer.write('\n')
                 begin = end
@@ -1556,7 +1548,7 @@ class Block(object):
     def parse_igblast(self, buffer):
         def parse_igblast_hit(line):
             hit = None
-            match = expression['igblast hit'].search(line)
+            match = self.configuration['expression']['igblast hit'].search(line)
             if match:
                 hit = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
                 if hit['subject strand'] == 'plus':
@@ -1622,7 +1614,7 @@ class Block(object):
                     self.log.error('could not locate %s in buffer', id)
                     state = 0
                     
-            elif state == 2 and line.startswith(expression['igblast reversed query']):
+            elif state == 2 and line.startswith(self.configuration['expression']['igblast reversed query']):
                 # this means the hits will be for the reverse complement strand
                 sample.reverse()
                 
@@ -1652,24 +1644,26 @@ class Block(object):
 class Pipeline(object):
     def __init__(self):
         self.log = logging.getLogger('Pipeline')
+        self.configuration = configuration
         self.count = 0
         self._connection = None
         self._reference_sequence = {}
         self._stop_codon_feature = None
         self._strains = None
+        
+        self.configuration['complement'] = {}
+        for k,v in self.configuration['iupac nucleic acid notation'].items():
+            self.configuration['complement'][k] = v['reverse']
+        
+        stop = [ k for k,v in self.configuration['nucleic to amino'].items() if v == '*' ]
+        motif = self.motif_for(stop)
+        self.configuration['stop codon repertuar'] = motif['space']
 
     @property
     def strains(self):
         if self._strains == None:
             self._strains = list(self.database['reference'].distinct('strain'))
         return self._strains
-
-    @property
-    def stop_repertuar(self):
-        if self._stop_codon_feature is None:
-            stop = [ k for k,v in expression['nucleic to amino'].items() if v == '*' ]
-            self._stop_codon_feature = create_feature(stop)
-        return self._stop_codon_feature['space']
 
     @property
     def connection(self):
@@ -1692,6 +1686,32 @@ class Pipeline(object):
     def close(self):
         if self._connection is not None:
             self._connection.close()
+
+    def motif_for(self, codons):
+        def expand(motif, space=[ '' ]):
+            position = len(space[0])
+            if position < len(motif):
+                next = []
+                for option in motif[position]:
+                    for element in space:
+                        next.append(element + option)
+                return expand(motif, next)
+            else:
+                return space
+    
+        feature = { 'codon': {}, 'space': set() }
+        for c in codons:
+            feature['codon'][c] = { 'motif':[] }
+        for triplet,codon in feature['codon'].items():
+            for nucleotide in triplet:
+                motif = []
+                codon['motif'].append(motif)
+                for k,n in configuration['iupac nucleic acid notation'].items():
+                    if nucleotide in n['option']:
+                        motif.append(k)
+            codon['possible'] = expand(codon['motif'])
+            feature['space'] |= set(codon['possible'])
+        return feature
 
     def reference_for(self, id):
         if id not in self._reference_sequence:
@@ -1780,7 +1800,7 @@ class Pipeline(object):
                             
                         # initialize a new sample
                         sample = { 'id': line, 'sequence': '' }
-                        match = expression['imgt fasta header'].search(line)
+                        match = self.configuration['expression']['imgt fasta header'].search(line)
                         if match:
                             parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
                             for k,v in parsed.items():
@@ -1814,7 +1834,7 @@ class Pipeline(object):
                             # fix the read frame offset to zero based
                             if 'read frame' in sample: sample['read frame'] -= 1
                     else:
-                        if expression['nucleotide sequence'].search(line):
+                        if self.configuration['expression']['nucleotide sequence'].search(line):
                             sample['sequence'] += line.upper()
                 else:
                     break
@@ -1835,7 +1855,7 @@ class Pipeline(object):
             begin = 0
             end = 0
             while end < reference.sequence.length:
-                end = min(begin + expression['fasta line length'], reference.sequence.length)
+                end = min(begin + self.configuration['constant']['fasta line length'], reference.sequence.length)
                 buffer.write(reference.sequence.nucleotide[begin:end])
                 buffer.write('\n')
                 begin = end
@@ -1891,7 +1911,7 @@ def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
     
-    cli = CommandLineParser(expression['interface'])
+    cli = CommandLineParser(configuration['interface'])
     command = cli.parse()
     action = command['action']
     logging.getLogger().setLevel(log_levels[command['verbosity']])
