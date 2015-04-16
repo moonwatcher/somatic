@@ -47,6 +47,32 @@ def to_json(node):
 
     return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
 
+def create_feature(codons):
+    def expand(motif, space=[ '' ]):
+        position = len(space[0])
+        if position < len(motif):
+            next = []
+            for option in motif[position]:
+                for element in space:
+                    next.append(element + option)
+            return expand(motif, next)
+        else:
+            return space
+
+    feature = { 'codon': {}, 'space': set() }
+    for c in codons:
+        feature['codon'][c] = { 'motif':[] }
+    for triplet,codon in feature['codon'].items():
+        for nucleotide in triplet:
+            motif = []
+            codon['motif'].append(motif)
+            for k,n in expression['iupac nucleic acid notation'].items():
+                if nucleotide in n['option']:
+                    motif.append(k)
+        codon['possible'] = expand(codon['motif'])
+        feature['space'] |= set(codon['possible'])
+    return feature
+
 log_levels = {
     'debug': logging.DEBUG,
     'info': logging.INFO,
@@ -317,12 +343,39 @@ expression = {
             }
         }
     },
+    'iupac nucleic acid notation': {
+        'A': {  'reverse': 'T',  'option':[ 'A' ],                  'name': 'Adenine' },
+        'C': {  'reverse': 'G',  'option':[ 'C' ],                  'name': 'Cytosine' },
+        'G': {  'reverse': 'C',  'option':[ 'G' ],                  'name': 'Guanine' },
+        'T': {  'reverse': 'A',  'option':[ 'T' ],                  'name': 'Thymine' },
+        'R': {  'reverse': 'Y',  'option':[ 'G', 'A' ],             'name': 'Purine' },
+        'Y': {  'reverse': 'R',  'option':[ 'T', 'C' ],             'name': 'Pyrimidine' },
+        'K': {  'reverse': 'M',  'option':[ 'G', 'T' ],             'name': 'Keto' },
+        'M': {  'reverse': 'K',  'option':[ 'A', 'C' ],             'name': 'Amino' },
+        'S': {  'reverse': 'S',  'option':[ 'G', 'C' ],             'name': 'Strong bonds' },
+        'W': {  'reverse': 'W',  'option':[ 'A', 'T' ],             'name': 'Weak bonds' },
+        'B': {  'reverse': 'V',  'option':[ 'G', 'T', 'C' ],        'name': 'Not A' },
+        'D': {  'reverse': 'H',  'option':[ 'G', 'A', 'T' ],        'name': 'Not C' },
+        'H': {  'reverse': 'D',  'option':[ 'A', 'C', 'T' ],        'name': 'Not G' },
+        'V': {  'reverse': 'B',  'option':[ 'G', 'C', 'A' ],        'name': 'Not T' },
+        'N': {  'reverse': 'N',  'option':[ 'A', 'G', 'C', 'T' ],   'name': 'Any' }
+    },
     'complement': { 
         'A': 'T',
         'C': 'G',
         'G': 'C',
         'T': 'A',
-        'N': 'N' 
+        'R': 'Y',
+        'Y': 'R',
+        'K': 'M',
+        'M': 'K',
+        'S': 'S',
+        'W': 'W',
+        'B': 'V',
+        'D': 'G',
+        'H': 'C',
+        'V': 'A',
+        'N': 'N'
     }, 
     'nucleic to amino': {
         'GCT':'A',
@@ -565,8 +618,9 @@ class CommandLineParser(object):
 
 
 class Sequence(object):
-    def __init__(self, node=None):
+    def __init__(self, pipeline, node=None):
         self.log = logging.getLogger('Sequence')
+        self.pipeline = pipeline 
         self.node = node
         self._reversed = None
         if self.node is None:
@@ -574,6 +628,8 @@ class Sequence(object):
                 'read frame': 0,
                 'strand': True
             }
+        elif 'codon' in self.node:
+            del self.node['codon']
 
     def __str__(self):
         buffer = StringIO()
@@ -600,7 +656,7 @@ class Sequence(object):
         }
         if 'quality' in self.node:
             clone['quality'] = self.quality
-        return Sequence(clone)
+        return Sequence(self.pipeline, clone)
 
     def crop(self, start, end):
         cropped = {
@@ -610,7 +666,7 @@ class Sequence(object):
         }
         if 'quality' in self.node:
             cropped['quality'] = self.quality[start:end]
-        return Sequence(cropped)
+        return Sequence(self.pipeline, cropped)
 
     @property
     def read_frame(self):
@@ -669,8 +725,12 @@ class Sequence(object):
                 try:
                     codon.append(expression['nucleic to amino'][acid])
                 except KeyError as e:
-                    self.log.warning('could not resolve %s triplet to an amino acid', e)
-                    codon.append('X')
+                    self.log.debug('could not resolve %s triplet to an amino acid', e)
+                    if acid in self.pipeline.stop_repertuar:
+                        self.log.debug('%s is potentially a stop codon', acid)
+                        codon.append('*')
+                    else:
+                        codon.append('X')
                 start = end
                 end = start + 3
             if codon:
@@ -698,7 +758,7 @@ class Sequence(object):
             if 'quality' in self.node:
                 reversed['quality'] = self.quality[::-1]
                 
-            self._reversed = Sequence(reversed)
+            self._reversed = Sequence(self.pipeline, reversed)
         return self._reversed
 
 
@@ -712,9 +772,9 @@ class Reference(object):
             self.node = {}
         
         if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
-            self.node['sequence'] = Sequence(self.node['sequence'])
+            self.node['sequence'] = Sequence(self.pipeline, self.node['sequence'])
         else:
-            self.node['sequence'] = Sequence()
+            self.node['sequence'] = Sequence(self.pipeline)
 
     @property
     def id(self):
@@ -762,18 +822,18 @@ class Sample(object):
     def initialize(self):
         def transform_hit(node):
             if 'query' in node and isinstance(node['query'], dict):
-                node['query'] = Sequence(node['query'])
+                node['query'] = Sequence(self.pipeline, node['query'])
                 
             if 'subject' in node and isinstance(node['subject'], dict):
-                node['subject'] = Sequence(node['subject'])
+                node['subject'] = Sequence(self.pipeline, node['subject'])
 
         if self.node is None:
             self.node = {}
         
         if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
-            self.node['sequence'] = Sequence(self.node['sequence'])
+            self.node['sequence'] = Sequence(self.pipeline, self.node['sequence'])
         else:
-            self.node['sequence'] = Sequence()
+            self.node['sequence'] = Sequence(self.pipeline)
             
         if 'hit' in self.node:
             for hit in self.node['hit']:
@@ -1234,8 +1294,9 @@ class Sample(object):
         if self.hit:
             buffer = StringIO()
             offset = dict()
+            offset['strain'] = max(max([ len(s) for s in self.pipeline.strains ]), len('strain'))
             offset['gene'] = max(max([len(hit['subject id']) for hit in self.hit if hit['valid']]), len('subject'))
-            offset['alignment'] = offset['gene'] + 14
+            offset['alignment'] = offset['gene'] + offset['strain'] + 15
             offset['sample frame'] = self.sequence.read_frame
             
             # print a summary
@@ -1243,7 +1304,7 @@ class Sample(object):
             buffer.write('\n')
             
             # print a title
-            buffer.write('{: <{}} {: <4} {} {} {} {} '.format('gene', offset['gene'], 'R', 'F', 'I', 'P', 'S'))
+            buffer.write('{: <{}} {: <{}} {: <4} {} {} {} {} '.format('gene', offset['gene'], 'strain', offset['strain'], 'R', 'F', 'I', 'P', 'S'))
             
             # print the sample coordinate system
             if offset['sample frame'] > 0:
@@ -1298,7 +1359,9 @@ class Sample(object):
                             else:
                                 hit_offset += (int(hit['query start'] / 3))
                             
-                    buffer.write('{: <{}} {: <4} {} {} {} {} '.format(hit['subject id'], offset['gene'], 
+                    buffer.write('{: <{}} {: <{}} {: <4} {} {} {} {} '.format(
+                        hit['subject id'], offset['gene'], 
+                        '' if 'strain' not in hit else hit['strain'], offset['strain'], 
                         hit['region'], 
                         hit['functionality'],
                         hit['in frame'] if 'in frame' in hit else ' ',
@@ -1584,6 +1647,21 @@ class Pipeline(object):
         self.count = 0
         self._connection = None
         self._reference_sequence = {}
+        self._stop_codon_feature = None
+        self._strains = None
+
+    @property
+    def strains(self):
+        if self._strains == None:
+            self._strains = list(self.database['reference'].distinct('strain'))
+        return self._strains
+
+    @property
+    def stop_repertuar(self):
+        if self._stop_codon_feature is None:
+            stop = [ k for k,v in expression['nucleic to amino'].items() if v == '*' ]
+            self._stop_codon_feature = create_feature(stop)
+        return self._stop_codon_feature['space']
 
     @property
     def connection(self):
