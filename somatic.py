@@ -1091,7 +1091,7 @@ class Sample(object):
                     h['overlap'] += overlap
                     
                 # correct the score for the overlap and trim the sequences
-                h['score'] = hit['bit score'] - h['overlap'] * self.configuration['d overlap penalty factor']
+                h['score'] = hit['bit score'] - h['overlap'] * self.configuration['constant']['d overlap penalty factor']
                 h['alignment length'] = h['query end'] - h['query start']
                 h['query'] = self.sequence.crop(h['query start'], h['query end'])
 
