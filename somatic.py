@@ -1299,7 +1299,7 @@ class Sample(object):
             }
             
             c = [ len(hit['subject id']) for hit in self.hit if hit['valid'] ]
-            if c: offselt['gene'] = max(max(c), offselt['gene'])
+            if c: offselt['gene'] = max(max(c), offset['gene'])
             
             c = [ len(s) for s in self.pipeline.strains ]
             offset['strain'] = max(max(c), offselt['strain'])
