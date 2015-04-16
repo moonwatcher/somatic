@@ -1293,9 +1293,17 @@ class Sample(object):
 
         if self.hit:
             buffer = StringIO()
-            offset = dict()
-            offset['strain'] = max(max([ len(s) for s in self.pipeline.strains ]), len('strain'))
-            offset['gene'] = max(max([len(hit['subject id']) for hit in self.hit if hit['valid']]), len('subject'))
+            offset = {
+                'gene': len('gene'),
+                'strain': len('strain')
+            }
+            
+            c = [ len(hit['subject id']) for hit in self.hit if hit['valid'] ]
+            if c: offselt['gene'] = max(max(c), offselt['gene'])
+            
+            c = [ len(s) for s in self.pipeline.strains ]
+            offset['strain'] = max(max(c), offselt['strain'])
+            
             offset['alignment'] = offset['gene'] + offset['strain'] + 15
             offset['sample frame'] = self.sequence.read_frame
             
