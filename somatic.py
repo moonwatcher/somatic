@@ -59,15 +59,71 @@ log_levels = {
 }
 
 configuration = {
-    'query': {
+    'diagram': {
+        'prototype': {
+            'name': {
+                'format': lambda x: x,
+                'title': 'name',
+                'width': 'auto',
+                'value': 'subject id'
+            },
+            'strain': {
+                'format': lambda x: x,
+                'title': 'strain',
+                'width': 'auto',
+                'value': 'strain',
+            },
+            'region': {
+                'format': lambda x: x,
+                'title': 'R',
+                'width': 'auto',
+                'value': 'region',
+            },
+            'functionality': {
+                'format': lambda x: x,
+                'title': 'F',
+                'width': 1,
+                'value': 'functionality',
+            },
+            'in frame': {
+                'format': lambda x: '*' if x else ' ',
+                'title': 'I',
+                'width': 1,
+                'value': 'in frame',
+            },
+            'picked': {
+                'format': lambda x: '*' if x else ' ',
+                'title': 'P',
+                'width': 1,
+                'value': 'picked',
+            },
+            'strand': {
+                'format': lambda x: '+' if x else '-',
+                'title': 'S',
+                'width': 1,
+                'value': 'subject strand',
+            }            
+        }
+    },
+    'profile': {
         'default': {
             'sample': {
                 'valid': True,
                 'productive': True,
             },
             'diagram': {
-                'valid': True,
-                'picked': True
+                'track': {
+                    'valid': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'strain',
+                    'strand',
+                    'functionality',
+                    'in frame',
+                    'picked',
+                ]
             },
         },
         'productive': {
@@ -76,8 +132,17 @@ configuration = {
                 'productive': True,
             },
             'diagram': {
-                'valid': True,
-                'picked': True
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'strain',
+                    'functionality',
+                    'strand',
+                ]
             },
         },
         'productive.dropped': {
@@ -86,18 +151,38 @@ configuration = {
                 'productive': True,
             },
             'diagram': {
-                'valid': True,
-                'picked': False
+                'track': {
+                    'valid': True,
+                    'picked': False
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'strain',
+                    'strand',
+                    'functionality',
+                    'in frame',
+                ]
             },
         },
-        'psudo': {
+        'pseudo': {
             'sample': {
                 'valid': True,
                 'productive': False,
             },
             'diagram': {
-                'valid': True,
-                'picked': True
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'strain',
+                    'strand',
+                    'functionality',
+                    'in frame',
+                ]
             },
         },
         'premature': {
@@ -106,8 +191,18 @@ configuration = {
                 'premature': True,
             },
             'diagram': {
-                'valid': True,
-                'picked': True
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'strain',
+                    'strand',
+                    'functionality',
+                    'in frame',
+                ]
             },
         },
         'inframe': {
@@ -116,8 +211,17 @@ configuration = {
                 'in frame': True,
             },
             'diagram': {
-                'valid': True,
-                'picked': True
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'strain',
+                    'strand',
+                    'functionality',
+                ]
             },
         },
         'outframe': {
@@ -126,8 +230,17 @@ configuration = {
                 'in frame': False,
             },
             'diagram': {
-                'valid': True,
-                'picked': True
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'strain',
+                    'strand',
+                    'functionality',
+                ]
             },
         },
     },
@@ -399,16 +512,25 @@ configuration = {
                     'help': 'region'
                 }
             }, 
-            'named query': {
+            'profile': {
                 'flag': [
-                    '-n', 
-                    '--named-query'
+                    '-p', 
+                    '--profile'
                 ], 
                 'parameter': {
                     'default': 'default',
+                    'choices': [
+                        'default',
+                        'productive',
+                        'productive.dropped',
+                        'psudo',
+                        'premature',
+                        'inframe',
+                        'outframe',
+                    ],
                     'metavar': 'NAME',
-                    'dest': 'named query', 
-                    'help': 'named query'
+                    'dest': 'profile', 
+                    'help': 'profile is one of default, productive, productive.dropped, psudo, premature, inframe, outframe'
                 }
             }, 
             'valid': {
@@ -470,6 +592,17 @@ configuration = {
                 }, 
                 {
                     'argument': [
+                        'library'
+                    ], 
+                    'instruction': {
+                        'description': 'remove all samples for the provided library name', 
+                        'help': 'drop samples of a given library', 
+                        'name': 'drop'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'profile',
                         'library', 
                         'id', 
                         'gapped', 
@@ -479,7 +612,6 @@ configuration = {
                         'limit',
                         'skip',
                         'productive',
-                        'named query'
                     ], 
                     'instruction': {
                         'help': 'view sample alignment', 
@@ -488,6 +620,7 @@ configuration = {
                 }, 
                 {
                     'argument': [
+                        'profile',
                         'library', 
                         'id', 
                         'gapped', 
@@ -497,7 +630,6 @@ configuration = {
                         'limit',
                         'skip',
                         'productive',
-                        'named query'
                     ], 
                     'instruction': {
                         'help': 'view JSON sample record', 
@@ -1040,6 +1172,285 @@ class Reference(object):
         return result
 
 
+class Diagram(object):
+    def __init__(self, pipeline, sample, profile):
+        self.log = logging.getLogger('Diagram')
+        self.pipeline = pipeline
+        self.sample = sample
+        self.node = {
+            'track offset': {},
+            'width': {},
+            'query': {},
+            'track': [],
+            'pattern': {
+                'width': 0,
+                'title': [],
+                'phrase': [],
+                'feature': [],
+            },
+        }
+
+        if profile in self.configuration['profile'] and 'diagram' in self.configuration['profile'][profile]:
+            p = self.configuration['profile'][profile]['diagram']
+        else:
+            p = self.configuration['profile']['default']['diagram']
+            
+        for k,v in p['track'].items():
+            self.query[k] = v
+        
+        for track in sample.hit:
+            if all([k in track and track[k] == v for k,v in self.query.items()]):
+                self.track.append(track)
+
+        for track in sample.region.values():
+            if track['subject id'] in set(['CDR3', 'V-J', 'V-D', 'D-J']):
+                if 'uuid' not in track:
+                    track['uuid'] = str(uuid.uuid4())
+                self.track.append(track)
+            
+        for k in p['feature']:
+            if k in self.configuration['diagram']['prototype']:
+                feature = dict(self.configuration['diagram']['prototype'][k])
+                if feature['width'] == 'auto':
+                    feature['width'] = 0
+                    for track in self.track:
+                        if feature['value'] in track:
+                            feature['width'] = max(feature['width'], len(track[feature['value']]))
+                self.pattern['feature'].append(feature)
+                self.pattern['phrase'].append('{{: <{:}}}'.format(feature['width']))
+                self.pattern['title'].append(feature['title'])
+                self.pattern['width'] += max(feature['width'], len(feature['title']))
+        self.pattern['width'] += (len(self.pattern['phrase']) - 1)
+        self.pattern['phrase'] = ' '.join(self.pattern['phrase'])
+        self.width['sample read frame'] = self.sample.sequence.read_frame
+        self.width['table'] = self.pattern['width']
+        self.width['table padding'] = 2
+        self.width['diagram start'] = self.width['table'] + self.width['table padding']
+        
+        
+        for track in self.track:
+            self.node['track offset'][track['uuid']] = self._find_track_offset(track)
+                
+        
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
+    @property
+    def track(self):
+        return self.node['track']
+
+    @property
+    def pattern(self):
+        return self.node['pattern']
+
+    @property
+    def query(self):
+        return self.node['query']
+
+    @property
+    def framed(self):
+        return self.sample.framed
+
+    @property
+    def gap(self):
+        return ' ' if self.sample.framed else ''
+
+    @property
+    def width(self):
+        return self.node['width']
+
+    def format_track_features(self, track):
+        values = []
+        for feature in self.pattern['feature']:
+            if feature['value'] in track:
+                values.append(feature['format'](track[feature['value']]))
+            else:
+                values.append('')
+        return self.pattern['phrase'].format(*values)
+
+    def _draw_summary(self, buffer):
+        b = []
+        b.append(self.sample.id)
+        for r in ('VH', 'DH', 'JH'):
+            if r in self.sample.region:
+                b.append('{} : {}'.format(r, self.sample.region[r]['subject id']))
+        
+        if self.sample.productive:
+            b.append('productive')
+        else:
+            if self.sample.framed:
+                b.append('in frame' if self.sample.in_frame else 'out of frame')
+                
+            if self.sample.premature:
+                b.append('premature')
+        b.append('Q : {:.4}'.format(self.sample.head['average phred']))
+        
+        buffer.write(' | '.join(b))
+        buffer.write('\n')
+
+    def _draw_track_title(self, buffer):
+        buffer.write(self.pattern['phrase'].format(*(self.pattern['title'])))
+
+    def _draw_coordinates(self, buffer):
+        buffer.write(' ' * self.width['diagram start'])
+        if self.width['sample read frame'] > 0:
+            buffer.write('{: <{}}'.format(0, self.width['sample read frame']))
+            buffer.write(self.gap)
+            
+        for index in range(self.width['sample read frame'], self.sample.sequence.length, 3):
+            buffer.write('{: <3}'.format(index))
+            buffer.write(self.gap)
+        buffer.write('\n')
+
+    def _draw_nucleotide_sequence(self, buffer):
+        buffer.write(' ' * self.width['diagram start'])
+        if self.width['sample read frame'] > 0:
+            buffer.write(self.sample.sequence.nucleotide[0:self.width['sample read frame']])
+            buffer.write(self.gap)
+        for index in range(self.width['sample read frame'], self.sample.sequence.length, 3):
+            buffer.write(self.sample.sequence.nucleotide[index:index + 3])
+            buffer.write(self.gap)
+        buffer.write('\n')
+
+    def _draw_quality_sequence(self, buffer):
+        buffer.write(' ' * self.width['diagram start'])
+        if self.width['sample read frame'] > 0:
+            buffer.write(self.sample.sequence.quality[0:self.width['sample read frame']])
+            buffer.write(self.gap)
+        for index in range(self.width['sample read frame'], self.sample.sequence.length, 3):
+            buffer.write(self.sample.sequence.quality[index:index + 3])
+            buffer.write(self.gap)
+        buffer.write('\n')
+
+    def _draw_codon_sequence(self, buffer):
+        if self.sample.framed:
+            buffer.write(' ' * self.width['diagram start'])
+            if self.width['sample read frame'] > 0:
+                buffer.write(' ' * self.width['sample read frame'])
+                buffer.write(self.gap)
+            for codon in self.sample.sequence.codon:
+                buffer.write('{: <3}'.format(codon))
+                buffer.write(self.gap)
+            buffer.write('\n')
+
+    def _draw_track_without_subject(self, buffer, track):
+        offset = self.node['track offset'][track['uuid']]
+        if 'subject' not in track and 'query' in track:
+            if offset > 0:
+                buffer.write(' ' * offset)
+            if track['query'].read_frame > 0:
+                buffer.write('-' * track['query'].read_frame)
+                # buffer.write(track['query'].nucleotide[0:track['query'].read_frame])
+                buffer.write(self.gap)
+                
+            for index in range(track['query'].read_frame, track['query'].length, 3):
+                buffer.write('-' * len(track['query'].nucleotide[index:index + 3]))
+                # buffer.write(track['query'].nucleotide[index:index + 3])
+                buffer.write(self.gap)
+            buffer.write('\n')
+            
+            if 'palindrome' in track and 'P' in track['palindrome']:
+                buffer.write(' ' * self.width['diagram start'])
+                if offset > 0: buffer.write(' ' * offset)
+                if track['query'].read_frame > 0:
+                    buffer.write(track['palindrome'][0:track['query'].read_frame])
+                    buffer.write(self.gap)
+                    
+                for index in range(track['query'].read_frame, track['query'].length, 3):
+                    buffer.write(track['palindrome'][index:index + 3])
+                    buffer.write(self.gap)
+                buffer.write('\n')
+                
+            if False and self.sample.framed and track['query'].codon:
+                buffer.write(' ' * self.width['diagram start'])
+                if offset > 0: buffer.write(' ' * offset)
+                    
+                if track['query'].read_frame > 0:
+                    buffer.write(' ' * track['query'].read_frame)
+                    buffer.write(self.gap)
+                    
+                for codon in track['query'].codon:
+                    buffer.write('{: <3}'.format(codon))
+                    buffer.write(self.gap)
+                buffer.write('\n')
+
+    def _draw_track_with_subject(self, buffer, track):
+        offset = self.node['track offset'][track['uuid']]
+        if 'subject' in track and 'query' in track:
+            subject = track['subject'].clone()
+            subject.read_frame = track['query'].read_frame
+            
+            mask = []
+            for index,n in enumerate(subject.nucleotide):
+                mask.append('-' if n == track['query'].nucleotide[index] else n)
+            mask = ''.join(mask)
+                
+            if offset > 0: buffer.write(' ' * offset)
+            if subject.read_frame > 0:
+                buffer.write(mask[0:subject.read_frame])
+                buffer.write(self.gap)
+                
+            for index in range(subject.read_frame, subject.length, 3):
+                buffer.write(mask[index:index + 3])
+                buffer.write(self.gap)
+            buffer.write('\n')
+            
+            if self.sample.framed and subject.codon:
+                display = False
+                mask = []
+                for index,c in enumerate(subject.codon):
+                    if c == track['query'].codon[index]: mask.append('-')
+                    else:
+                        mask.append(c)
+                        display = True
+                if display:
+                    buffer.write(' ' * self.width['diagram start'])
+                    if offset > 0: buffer.write(' ' * offset)
+                        
+                    if subject.read_frame > 0:
+                        buffer.write(' ' * subject.read_frame)
+                        buffer.write(self.gap)
+                        
+                    for codon in mask:
+                        buffer.write('{: <3}'.format(codon))
+                        buffer.write(self.gap)
+                    buffer.write('\n')
+
+    def _find_track_offset(self, track):
+        result = 0
+        if track['query start'] > 0:
+            result = track['query start']
+            if self.sample.framed:
+                if self.width['sample read frame'] > 0:
+                    result += int((track['query start'] - self.width['sample read frame']) / 3) + 1
+                else:
+                    result += (int(track['query start'] / 3))
+        return result
+
+    def _draw_track(self, buffer, track):
+        buffer.write(self.format_track_features(track))
+        buffer.write(' ' * self.width['table padding'])
+        self._draw_track_without_subject(buffer, track)
+        self._draw_track_with_subject(buffer, track)
+
+    def draw(self):
+        buffer = StringIO()
+        buffer.write('\n')
+        self._draw_track_title(buffer)
+        buffer.write(' ' * self.width['table padding'])
+        self._draw_summary(buffer)
+        self._draw_coordinates(buffer)
+        self._draw_nucleotide_sequence(buffer)
+        self._draw_quality_sequence(buffer)
+        self._draw_codon_sequence(buffer)
+        for track in self.track:
+            self._draw_track(buffer, track)
+        buffer.seek(0)
+        return buffer.read()
+
+
 class Sample(object):
     def __init__(self, pipeline, node=None, id=None, library=None):
         self.log = logging.getLogger('Sample')
@@ -1205,189 +1616,6 @@ class Sample(object):
     def productive(self):
         return self.head['productive']
 
-    def diagram(self, named='default'):
-        def print_gap(buffer, framed):
-            if framed: buffer.write(' ')
-
-        diagram = { 'query': {}, 'hit': [] }
-        if named is not None and named in self.configuration['query']:
-            for k,v in self.configuration['query'][named]['diagram'].items():
-                diagram['query'][k] = v
-                
-        for hit in self.hit:
-            if all([k in hit and hit[k] == v for k,v in diagram['query'].items()]):
-               diagram['hit'].append(hit)
-               
-        for region in [ 'CDR3', 'V-D', 'D-J', 'V-J' ]: 
-            if region in self.region:
-                diagram['hit'].append(self.region[region])
-            
-        if diagram['hit']:
-            buffer = StringIO()
-            buffer.write('\n')
-            
-            # calculate offsets
-            offset = { 'gene': len('gene'), 'strain': len('strain') }
-            c = [ len(hit['subject id']) for hit in diagram['hit'] ]
-            if c: offset['gene'] = max(max(c), offset['gene'])
-            c = [ len(s) for s in self.pipeline.strains ]
-            offset['strain'] = max(max(c), offset['strain'])
-            offset['alignment'] = offset['gene'] + offset['strain'] + 15
-            offset['sample frame'] = self.sequence.read_frame
-            
-            # print a summary
-            buffer.write('{: <{}}{}'.format('summary', offset['alignment'], self.to_summary()))
-            buffer.write('\n')
-            
-            # print a title
-            buffer.write('{: <{}} {: <{}} {: <4} {} {} {} {} '.format(
-                'gene', offset['gene'], 'strain', offset['strain'], 'R', 'F', 'I', 'P', 'S'))
-            
-            # print the sample coordinate system
-            if offset['sample frame'] > 0:
-                buffer.write('{: <{}}'.format(0, offset['sample frame']))
-                print_gap(buffer, self.framed)
-            
-            gap = 3 if self.framed else 6
-            for index in range(offset['sample frame'], self.sequence.length, gap):
-                buffer.write('{: <{}}'.format(index, gap))
-                print_gap(buffer, self.framed)
-            buffer.write('\n')
-            
-            # print the sample nucleotide sequence
-            buffer.write(' ' * offset['alignment'])
-            if offset['sample frame'] > 0:
-                buffer.write(self.sequence.nucleotide[0:offset['sample frame']])
-                print_gap(buffer, self.framed)
-            for index in range(offset['sample frame'], self.sequence.length, 3):
-                buffer.write(self.sequence.nucleotide[index:index + 3])
-                print_gap(buffer, self.framed)
-            buffer.write('\n')
-            
-            # print the sample quality sequence
-            buffer.write(' ' * offset['alignment'])
-            if offset['sample frame'] > 0:
-                buffer.write(self.sequence.quality[0:offset['sample frame']])
-                print_gap(buffer, self.framed)
-            for index in range(offset['sample frame'], self.sequence.length, 3):
-                buffer.write(self.sequence.quality[index:index + 3])
-                print_gap(buffer, self.framed)
-            buffer.write('\n')
-            
-            if self.framed:
-                # print the sample codon sequence
-                buffer.write(' ' * offset['alignment'])
-                if offset['sample frame'] > 0:
-                    buffer.write(' ' * offset['sample frame'])
-                    print_gap(buffer, self.framed)
-                for codon in self.sequence.codon:
-                    buffer.write('{: <3}'.format(codon))
-                    print_gap(buffer, self.framed)
-                buffer.write('\n')
-            
-            for hit in diagram['hit']:
-                hit_offset = 0
-                if hit['query start'] > 0:
-                    hit_offset = hit['query start']
-                    if self.framed:
-                        if offset['sample frame'] > 0:
-                            hit_offset += int((hit['query start'] - offset['sample frame']) / 3) + 1
-                        else:
-                            hit_offset += (int(hit['query start'] / 3))
-                        
-                buffer.write('{: <{}} {: <{}} {: <4} {} {} {} {} '.format(
-                    hit['subject id'], offset['gene'], 
-                    ' ' if 'strain' not in hit else hit['strain'], offset['strain'], 
-                    hit['region'], 
-                    ' ' if 'functionality' not in hit else hit['functionality'],
-                    ' ' if 'in frame' not in hit else ('Y' if hit['in frame'] else 'N'),
-                    'Y' if hit['picked'] else 'N',
-                    '+' if hit['subject strand'] else '-'))
-                
-                if 'subject' not in hit:
-                    if 'query' in hit:
-                        if hit['query start'] > 0: buffer.write(' ' * hit_offset)
-                        if hit['query'].read_frame > 0:
-                            buffer.write('-' * hit['query'].read_frame)
-                            # buffer.write(hit['query'].nucleotide[0:hit['query'].read_frame])
-                            print_gap(buffer, self.framed)
-                            
-                        for index in range(hit['query'].read_frame, hit['query'].length, 3):
-                            buffer.write('-' * len(hit['query'].nucleotide[index:index + 3]))
-                            # buffer.write(hit['query'].nucleotide[index:index + 3])
-                            print_gap(buffer, self.framed)
-                        buffer.write('\n')
-                        
-                        if 'palindrome' in hit and 'P' in hit['palindrome']:
-                            buffer.write(' ' * offset['alignment'])
-                            if hit['query start'] > 0: buffer.write(' ' * hit_offset)
-                            if hit['query'].read_frame > 0:
-                                buffer.write(hit['palindrome'][0:hit['query'].read_frame])
-                                print_gap(buffer, self.framed)
-                                
-                            for index in range(hit['query'].read_frame, hit['query'].length, 3):
-                                buffer.write(hit['palindrome'][index:index + 3])
-                                print_gap(buffer, self.framed)
-                            buffer.write('\n')
-                            
-                        if False and self.framed and hit['query'].codon:
-                            buffer.write(' ' * offset['alignment'])
-                            if hit['query start'] > 0: buffer.write(' ' * hit_offset)
-                                
-                            if hit['query'].read_frame > 0:
-                                buffer.write(' ' * hit['query'].read_frame)
-                                print_gap(buffer, self.framed)
-                                
-                            for codon in hit['query'].codon:
-                                buffer.write('{: <3}'.format(codon))
-                                print_gap(buffer, self.framed)
-                            buffer.write('\n')
-                else:
-                    subject = hit['subject'].clone()
-                    subject.read_frame = hit['query'].read_frame
-                    
-                    # print the hit nucleotide mask
-                    mask = []
-                    for index,n in enumerate(subject.nucleotide):
-                        mask.append('-' if n == hit['query'].nucleotide[index] else n)
-                    mask = ''.join(mask)
-                        
-                    if hit['query start'] > 0: buffer.write(' ' * hit_offset)
-                    if subject.read_frame > 0:
-                        buffer.write(mask[0:subject.read_frame])
-                        print_gap(buffer, self.framed)
-                        
-                    for index in range(subject.read_frame, subject.length, 3):
-                        buffer.write(mask[index:index + 3])
-                        print_gap(buffer, self.framed)
-                    buffer.write('\n')
-                    
-                    if self.framed and subject.codon:
-                        # print the codon mask
-                        display = False
-                        mask = []
-                        for index,c in enumerate(subject.codon):
-                            if c == hit['query'].codon[index]: mask.append('-')
-                            else:
-                                mask.append(c)
-                                display = True
-                        if display:
-                            buffer.write(' ' * offset['alignment'])
-                            if hit['query start'] > 0: buffer.write(' ' * hit_offset)
-                                
-                            if subject.read_frame > 0:
-                                buffer.write(' ' * subject.read_frame)
-                                print_gap(buffer, self.framed)
-                                
-                            for codon in mask:
-                                buffer.write('{: <3}'.format(codon))
-                                print_gap(buffer, self.framed)
-                            buffer.write('\n')
-            buffer.seek(0)
-            return buffer.read()
-        else:
-            return ''
-
     def add_hit(self, hit):
         if hit is not None:
             if 'uuid' not in hit: hit['uuid'] = str(uuid.uuid4())
@@ -1507,8 +1735,9 @@ class Sample(object):
                 self.head['region'].append(region)
         self.head['region'] = list(set(self.head['region']))
 
-    def view(self, named):
-        print(self.diagram(named))
+    def view(self, profile):
+        diagram = Diagram(self.pipeline, self, profile)
+        print(diagram.draw())
 
     def info(self):
         print(self.to_json())
@@ -1848,7 +2077,7 @@ class Sample(object):
                     'subject id': 'D-J',
                     'query start': start,
                     'query end': end,
-                    'region': 'V-D',
+                    'region': 'D-J',
                     'query': self.sequence.crop(start, end)
                 }
                 self._check_palindrome(junction, self.region['DH']['query'], self.region['JH']['query'])
@@ -2193,8 +2422,8 @@ class Pipeline(object):
 
     def build_query(self, override, limit, skip, named):
         query = {}
-        if named is not None and named in self.configuration['query']:
-            for k,v in self.configuration['query'][named]['sample'].items():
+        if named is not None and named in self.configuration['profile']:
+            for k,v in self.configuration['profile'][named]['sample'].items():
                 query['head.{}'.format(k)] = v
                 
         if override:
@@ -2341,17 +2570,21 @@ class Pipeline(object):
         buffer.seek(0)
         print(buffer.read())
 
-    def populate(self, library, strain, drop):
-        block = Block(self)
-        collection = self.database['sample']
-        if drop:
+    def drop_library(self, library):
+        if library:
+            collection = self.database['sample']
             try:
                 result = collection.delete_many({ 'head.library': library })
                 if result:
                     self.log.info('dropped %d samples from %s', result.deleted_count, library)
             except BulkWriteError as e:
                 self.log.critical(e.details)
-                raise SystemExit()
+
+    def populate(self, library, strain, drop):
+        block = Block(self)
+        collection = self.database['sample']
+        if drop:
+            self.drop_library(library)
 
         while block.fill(library, strain):
             try:
@@ -2362,10 +2595,11 @@ class Pipeline(object):
             self.count += block.size
             self.log.info('%s so far', self.count)
 
-    def view(self, query=None, limit=None, skip=None, named='default'):
-        q = self.build_query(query, limit, skip, named)
-        collection = self.database['sample']
+    def view(self, query=None, limit=None, skip=None, profile='default'):
+        q = self.build_query(query, limit, skip, profile)
         self.log.debug('Query is \n{}'.format(to_json(q)))
+        
+        collection = self.database['sample']
         cursor = collection.find(q)
         if limit is not None:
             cursor.limit(limit)
@@ -2374,7 +2608,7 @@ class Pipeline(object):
             
         for node in cursor:
             sample = Sample(self, node)
-            sample.view(named)
+            sample.view(profile)
         cursor.close()
 
     def info(self, query, limit=None, skip=None, named='default'):
@@ -2422,19 +2656,22 @@ def main():
         elif cmd.action == 'populate':
             pipeline.populate(cmd.instruction['library'], cmd.instruction['strain'], cmd.instruction['drop'])
             
+        elif cmd.action == 'drop':
+            pipeline.drop_library(cmd.instruction['library'])
+            
         elif cmd.action == 'view':
             pipeline.view(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
-                cmd.instruction['named query'])
+                cmd.instruction['profile'])
             
         elif cmd.action == 'info':
             pipeline.info(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
-                cmd.instruction['named query'])
+                cmd.instruction['profile'])
             
         elif cmd.action == 'simulate':
             pipeline.simulate(
