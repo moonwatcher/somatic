@@ -661,12 +661,31 @@ configuration = {
                         'productive',
                     ], 
                     'instruction': {
+                        'help': 'print sample fasta stream', 
+                        'name': 'fasta'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'profile',
+                        'library', 
+                        'id', 
+                        'gapped', 
+                        'valid', 
+                        'in frame', 
+                        'premature',
+                        'limit',
+                        'skip',
+                        'productive',
+                    ], 
+                    'instruction': {
                         'help': 'view JSON sample record', 
                         'name': 'info'
                     }
                 }, 
                 {
                     'argument': [
+                        'profile',
                         'library', 
                         'strain',
                         'json', 
@@ -1621,6 +1640,18 @@ class Sample(object):
     @property
     def productive(self):
         return self.head['productive']
+    
+    @property
+    def fasta(self):
+        buffer = []
+        buffer.append('>' + self.id)
+        begin = 0
+        end = 0
+        while end < self.sequence.length:
+            end = min(begin + self.configuration['constant']['fasta line length'], self.sequence.length)
+            buffer.append(self.sequence.nucleotide[begin:end])
+            begin = end
+        return '\n'.join(buffer)
 
     def add_hit(self, hit):
         if hit is not None:
@@ -1744,7 +1775,7 @@ class Sample(object):
         diagram = Diagram(self.pipeline, self, profile)
         print(diagram.draw())
 
-    def info(self):
+    def info(self, profile):
         print(self.to_json())
 
     def invalidate(self, message):
@@ -2410,18 +2441,18 @@ class Block(object):
                 if hit is not None:
                     sample.add_hit(hit)
 
-    def view(self):
+    def view(self, profile):
         for sample in self.buffer:
-            sample.view()
+            sample.view(profile)
 
-    def info(self):
+    def info(self, prpfile):
         for sample in self.buffer:
-            sample.info()
+            sample.info(profile)
 
-    def simulate(self, json, alignment):
+    def simulate(self, json, alignment, profile):
         for sample in self.buffer:
-            if json: sample.info()
-            if alignment: sample.view()
+            if json: sample.info(profile)
+            if alignment: sample.view(profile)
 
 
 class Pipeline(object):
@@ -2690,6 +2721,22 @@ class Pipeline(object):
             self.count += block.size
             self.log.info('%s so far', self.count)
 
+    def fasta(self, query=None, limit=None, skip=None, profile='default'):
+        q = self.build_query(query, limit, skip, profile)
+        self.log.debug('Query is \n{}'.format(to_json(q)))
+        
+        collection = self.database['sample']
+        cursor = collection.find(q)
+        if limit is not None:
+            cursor.limit(limit)
+        if skip is not None:
+            cursor.skip(skip)
+            
+        for node in cursor:
+            sample = Sample(self, node)
+            print(sample.fasta)
+        cursor.close()
+
     def view(self, query=None, limit=None, skip=None, profile='default'):
         q = self.build_query(query, limit, skip, profile)
         self.log.debug('Query is \n{}'.format(to_json(q)))
@@ -2706,8 +2753,8 @@ class Pipeline(object):
             sample.view(profile)
         cursor.close()
 
-    def info(self, query, limit=None, skip=None, named='default'):
-        q = self.build_query(query, limit, skip, named)
+    def info(self, query, limit=None, skip=None, profile='default'):
+        q = self.build_query(query, limit, skip, profile)
         collection = self.database['sample']
         self.log.debug('Query is \n{}'.format(to_json(q)))
         cursor = collection.find(q)
@@ -2718,13 +2765,13 @@ class Pipeline(object):
             
         for node in cursor:
             sample = Sample(self, node)
-            sample.info()
+            sample.info(profile)
         cursor.close()
 
-    def simulate(self, library, strain, json, alignment):
+    def simulate(self, library, strain, json, alignment, profile):
         block = Block(self)
         while block.fill(library, strain):
-            block.simulate(json, alignment)
+            block.simulate(json, alignment, profile)
 
     def execute(self, cmd):
         if cmd.action == 'load-reference':
@@ -2753,6 +2800,13 @@ class Pipeline(object):
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
             
+        elif cmd.action == 'fasta':
+            self.fasta(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+            
         elif cmd.action == 'info':
             self.info(
                 cmd.query,
@@ -2765,7 +2819,8 @@ class Pipeline(object):
                 cmd.instruction['library'], 
                 cmd.instruction['strain'], 
                 cmd.instruction['json'], 
-                cmd.instruction['alignment'])
+                cmd.instruction['alignment'],
+                cmd.instruction['profile'])
             
         elif cmd.action == 'rebuild':
             self.rebuild()
