@@ -46,6 +46,8 @@ def to_json(node):
             result = list(o)
         if isinstance(o, Sequence):
             result = o.node
+        if isinstance(o, Sample):
+            result = o.head
         return result
 
     return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
@@ -97,6 +99,12 @@ configuration = {
                 'width': 1,
                 'value': 'picked',
             },
+            'gapped': {
+                'format': lambda x: '*' if x else ' ',
+                'title': 'G',
+                'width': 1,
+                'value': 'gapped',
+            },
             'strand': {
                 'format': lambda x: '+' if x else '-',
                 'title': 'S',
@@ -122,6 +130,7 @@ configuration = {
                     'strand',
                     'functionality',
                     'in frame',
+                    'gapped',
                     'picked',
                 ]
             },
@@ -247,6 +256,7 @@ configuration = {
     'yes/no question': ['Y', 'N'],
     'regions': ['VH', 'DH', 'JH'],
     'expression': {
+        'gapped sequence': re.compile('^\s+Query_[0-9]+\s+(?P<offset>[0-9]+)\s+(?P<sequence>[ATCGN-]+)\s+[0-9]+$'),
         'expand hit': re.compile(
             r"""
             (?P<region>VH|DH|JH),
@@ -328,8 +338,28 @@ configuration = {
                 '-query', '-',
                 '-auxiliary_data', 'optional_file/mouse_gl.aux',
                 '-show_translation',
+                '-num_threads', '8',
                 '-outfmt',
                 '7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand',
+            ]
+        },
+        'igblast.gapped': {
+            'cwd': '/Users/lg/code/somatic/igblast',
+            'arguments': [
+                'igblastn',
+                '-germline_db_V', 'database/mouse_imgt_vh',
+                '-germline_db_J', 'database/mouse_imgt_jh',
+                '-germline_db_D', 'database/mouse_imgt_dh',
+                '-num_alignments_V', '7',
+                '-num_alignments_J', '3',
+                '-num_alignments_D', '5',
+                '-organism', 'mouse',
+                '-domain_system', 'imgt',
+                '-query', '-',
+                '-auxiliary_data', 'optional_file/mouse_gl.aux',
+                '-show_translation',
+                '-num_threads', '8',
+                '-outfmt', '4',
             ]
         } 
     },
@@ -469,8 +499,7 @@ configuration = {
                 'parameter': {
                     'dest': 'library', 
                     'help': 'library name', 
-                    'metavar': 'NAME', 
-                    'required': True
+                    'metavar': 'NAME'
                 }
             }, 
             'path': {
@@ -709,23 +738,6 @@ configuration = {
         'V': {  'reverse': 'B',  'option':[ 'G', 'C', 'A' ],        'name': 'Not T' },
         'N': {  'reverse': 'N',  'option':[ 'A', 'G', 'C', 'T' ],   'name': 'Any' }
     },
-    'complement': { 
-        'A': 'T',
-        'C': 'G',
-        'G': 'C',
-        'T': 'A',
-        'R': 'Y',
-        'Y': 'R',
-        'K': 'M',
-        'M': 'K',
-        'S': 'S',
-        'W': 'W',
-        'B': 'V',
-        'D': 'G',
-        'H': 'C',
-        'V': 'A',
-        'N': 'N'
-    }, 
     'nucleic to amino': {
         'GCT':'A',
         'GCC':'A',
@@ -834,7 +846,6 @@ configuration = {
         {
             'collection': 'sample',
             'index': [
-                # { 'key': [( 'head.sha1', ASCENDING )], 'unique': True, 'name': 'sample sha1' },
                 { 'key': [( 'head.id', ASCENDING ), ( 'head.library', ASCENDING )], 'unique': True, 'name': 'sample in library' },
                 { 'key': [( 'head.id', ASCENDING )], 'unique': False, 'name': 'sample id' },
                 { 'key': [( 'head.framed', ASCENDING )], 'unique': False, 'name': 'sample framed' },
@@ -1484,9 +1495,6 @@ class Sample(object):
         if not self.library:
             raise InvalidSampleError('sample must have a library')
         
-        if not self.sha1:
-            raise InvalidSampleError('sample must have a valid checksum')
-        
         if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
             self.node['sequence'] = Sequence(self.pipeline, self.node['sequence'])
         else:
@@ -1510,12 +1518,6 @@ class Sample(object):
     @property
     def configuration(self):
         return self.pipeline.configuration
-
-    @property
-    def sha1(self):
-        if 'sha1' not in self.head:
-            self.head['id sha1'] = hashlib.sha1('{} {}'.format(self.id, self.library).encode('utf-8')).hexdigest()
-        return self.head['id sha1']
 
     @property
     def document(self):
@@ -1605,6 +1607,10 @@ class Sample(object):
         return self.head['framed']
 
     @property
+    def gapped(self):
+        return self.head['gapped']
+
+    @property
     def in_frame(self):
         return self.head['in frame']
 
@@ -1681,7 +1687,6 @@ class Sample(object):
         if self.valid: self._check_productive()
         if self.valid: self._index_regions()
         if self.valid: self._calculate_statistics()
-        
 
     def to_json(self):
         def handler(o):
@@ -1696,7 +1701,7 @@ class Sample(object):
                 result = o.node
             return result
             
-        return json.dumps(self.node, sort_keys=False, ensure_ascii=False, indent=4, default=handler)
+        return json.dumps(self.document, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
 
     def to_summary(self):
         if self.hit:
@@ -2153,20 +2158,27 @@ class Block(object):
         }
 
     def add(self, sample):
-        if sample is not None and sample.sequence.length > 0:
-            if sample.id not in self.lookup:
-                self.buffer.append(sample)
-                self.lookup[sample.id] = sample
-            else:
-                self.log.error('%s already present', sample.id)
+        #if sample is not None and sample.sequence.length > 0:
+        if sample.id not in self.lookup:
+            self.buffer.append(sample)
+            self.lookup[sample.id] = sample
+        else:
+            self.log.error('%s already present', sample.id)
 
     def fill(self, library, strain):
+        gapped = False
         if self.read(library):
             buffer = self.search()
             if buffer:
                 self.parse_igblast(buffer)
                 for sample in self.buffer:
                     sample.analyze(strain)
+                    if sample.gapped:
+                        gapped = True
+            if gapped:
+                buffer = self.search_gapped()
+                if buffer:
+                    self.parse_igblast_gapped(buffer)
         return not self.empty
 
     def read(self, library):
@@ -2219,21 +2231,102 @@ class Block(object):
         if output: result = StringIO(output.decode('utf8'))
         return result
 
-    def to_fasta(self):
+    def search_gapped(self):
+        result = None
+        command = self.configuration['command']['igblast.gapped']
+        process = Popen(
+            args=command['arguments'],
+            cwd=command['cwd'],
+            env=None,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=PIPE
+        )
+        fasta = self.to_fasta({'gapped': True})
+        fasta.seek(0)
+        output, error = process.communicate(input=fasta.read().encode('utf8'))
+        if output: result = StringIO(output.decode('utf8'))
+        return result
+
+    def to_fasta(self, query=None):
         buffer = StringIO()
         for sample in self.buffer:
-            buffer.write('>')
-            buffer.write(sample.id)
-            buffer.write('\n')
-            begin = 0
-            end = 0
-            while end < sample.sequence.length:
-                end = min(begin + self.configuration['constant']['fasta line length'], sample.sequence.length)
-                buffer.write(sample.sequence.nucleotide[begin:end])
+            if query is None or all([k in sample.head and sample.head[k] == v for k,v in query.items()]):
+                buffer.write('>')
+                buffer.write(sample.id)
                 buffer.write('\n')
-                begin = end
+                begin = 0
+                end = 0
+                while end < sample.sequence.length:
+                    end = min(begin + self.configuration['constant']['fasta line length'], sample.sequence.length)
+                    buffer.write(sample.sequence.nucleotide[begin:end])
+                    buffer.write('\n')
+                    begin = end
         buffer.seek(0)
         return buffer
+
+    def parse_igblast_gapped(self, buffer):
+        buffer.seek(0)
+        results = []
+        state = 0
+        for line in buffer:
+            if state == 0 and line[0:6] == 'Query=':
+                record = {
+                    'id': line.strip()[6:].strip() ,
+                    'sequence': '',
+                }
+                record['sample'] = self.lookup[record['id']]
+                state = 1
+                
+            elif state == 1 and line[0:10] == 'Alignments':
+                state = 2
+            elif state == 2:
+                match = configuration['expression']['gapped sequence'].search(line)
+                if match:
+                    g = match.groupdict()
+                    if 'offset' not in record:
+                        record['offset'] = int(g['offset']) - 1
+                    record['sequence'] += g['sequence']
+                else:
+                    if line[0:6] == 'Lambda':
+                        state = 0
+                        results.append(record)
+                        
+        for record in results:
+            one = (' ' * record['offset']) + record['sequence']
+            two = record['sample'].sequence.nucleotide
+            o = 0
+            t = 0
+            r = []
+            while o < len(one) or t < len(two):
+                if not(o < len(one)):
+                  r.append(two[t])
+                  o += 1
+                  t += 1
+                elif not(o < len(two)):
+                  r.append(one[o])
+                  o += 1
+                  t += 1
+                elif one[o] == ' ':
+                  r.append(two[t])
+                  o += 1
+                  t += 1
+                elif one[o] == '-':
+                  r.append('-')
+                  o += 1
+                elif two[t] == '-':
+                  r.append('-')
+                  t += 1
+                else:
+                    if one[o] == two[t]:
+                        r.append(one[o])
+                        o += 1
+                        t += 1
+                    else:
+                        r.append('*')
+                        o += 1
+                        t += 1
+            record['sample'].head['gapped sequence'] = ''.join(r)
 
     def parse_igblast(self, buffer):
         def parse_igblast_hit(line):
@@ -2283,7 +2376,7 @@ class Block(object):
 
         state = 0
         sample = None
-        
+        buffer.seek(0)
         for line in buffer:
             line = line.strip()
             
@@ -2581,6 +2674,8 @@ class Pipeline(object):
                 self.log.critical(e.details)
 
     def populate(self, library, strain, drop):
+        if not library:
+            raise ValueError('must specify a library to populate') 
         block = Block(self)
         collection = self.database['sample']
         if drop:
@@ -2631,6 +2726,50 @@ class Pipeline(object):
         while block.fill(library, strain):
             block.simulate(json, alignment)
 
+    def execute(self, cmd):
+        if cmd.action == 'load-reference':
+            for path in cmd.instruction['path']:
+                self.populate_reference(path)
+                
+        elif cmd.action == 'to-blast-fasta':
+            self.reference_to_blast_fasta(cmd.instruction['region'])
+            
+        elif cmd.action == 'to-auxiliary':
+            self.reference_to_auxiliary(cmd.instruction['region'])
+                
+        elif cmd.action == 'populate':
+            self.populate(
+                cmd.instruction['library'],
+                cmd.instruction['strain'],
+                cmd.instruction['drop'])
+            
+        elif cmd.action == 'drop':
+            self.drop_library(cmd.instruction['library'])
+            
+        elif cmd.action == 'view':
+            self.view(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+            
+        elif cmd.action == 'info':
+            self.info(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+            
+        elif cmd.action == 'simulate':
+            self.simulate(
+                cmd.instruction['library'], 
+                cmd.instruction['strain'], 
+                cmd.instruction['json'], 
+                cmd.instruction['alignment'])
+            
+        elif cmd.action == 'rebuild':
+            self.rebuild()
+
 
 def main():
     logging.basicConfig()
@@ -2642,48 +2781,20 @@ def main():
     else:
         logging.getLogger().setLevel(log_levels[cmd.instruction['verbosity']])
         pipeline = Pipeline()
+        try:
+            pipeline.execute(cmd)
+
+        except ValueError as e:
+            self.log.critical(e)
+            sys.exit(1)
+        except(KeyboardInterrupt, SystemExit) as e:
+            pipeline.close()
+            sys.exit(1)
         
-        if cmd.action == 'load-reference':
-            for path in cmd.instruction['path']:
-                pipeline.populate_reference(path)
-                
-        elif cmd.action == 'to-blast-fasta':
-            pipeline.reference_to_blast_fasta(cmd.instruction['region'])
+    pipeline.close()
+    sys.exit(0)
             
-        elif cmd.action == 'to-auxiliary':
-            pipeline.reference_to_auxiliary(cmd.instruction['region'])
-                
-        elif cmd.action == 'populate':
-            pipeline.populate(cmd.instruction['library'], cmd.instruction['strain'], cmd.instruction['drop'])
             
-        elif cmd.action == 'drop':
-            pipeline.drop_library(cmd.instruction['library'])
-            
-        elif cmd.action == 'view':
-            pipeline.view(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-            
-        elif cmd.action == 'info':
-            pipeline.info(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-            
-        elif cmd.action == 'simulate':
-            pipeline.simulate(
-                cmd.instruction['library'], 
-                cmd.instruction['strain'], 
-                cmd.instruction['json'], 
-                cmd.instruction['alignment'])
-            
-        elif cmd.action == 'rebuild':
-            pipeline.rebuild()
-            
-        pipeline.close()
 
 if __name__ == '__main__':
     main()
