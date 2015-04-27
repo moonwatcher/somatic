@@ -686,6 +686,22 @@ configuration = {
                         'valid', 
                         'in frame', 
                         'premature',
+                        'productive',
+                    ], 
+                    'instruction': {
+                        'help': 'count sample alignment', 
+                        'name': 'count'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'profile',
+                        'library', 
+                        'id', 
+                        'gapped', 
+                        'valid', 
+                        'in frame', 
+                        'premature',
                         'limit',
                         'skip',
                         'productive',
@@ -2503,7 +2519,6 @@ class Pipeline(object):
     def __init__(self):
         self.log = logging.getLogger('Pipeline')
         self.configuration = configuration
-        self.count = 0
         self._connection = None
         self._reference_sequence = {}
         self._stop_codon_feature = None
@@ -2588,10 +2603,10 @@ class Pipeline(object):
         else:
             return None
 
-    def build_query(self, override, limit, skip, named):
+    def build_query(self, override, profile):
         query = {}
-        if named is not None and named in self.configuration['profile']:
-            for k,v in self.configuration['profile'][named]['sample'].items():
+        if profile is not None and profile in self.configuration['profile']:
+            for k,v in self.configuration['profile'][profile]['sample'].items():
                 query['head.{}'.format(k)] = v
                 
         if override:
@@ -2749,6 +2764,7 @@ class Pipeline(object):
                 self.log.critical(e.details)
 
     def populate(self, library, strain, drop):
+        count = 0
         if not library:
             raise ValueError('must specify a library to populate') 
         block = Block(self)
@@ -2762,11 +2778,11 @@ class Pipeline(object):
             except BulkWriteError as e:
                 self.log.critical(e.details)
                 raise SystemExit()
-            self.count += block.size
-            self.log.info('%s so far', self.count)
+            count += block.size
+            self.log.info('%s so far', count)
 
     def fasta(self, query=None, limit=None, skip=None, profile='default'):
-        q = self.build_query(query, limit, skip, profile)
+        q = self.build_query(query, profile)
         self.log.debug('Query is \n{}'.format(to_json(q)))
         
         collection = self.database['sample']
@@ -2782,7 +2798,7 @@ class Pipeline(object):
         cursor.close()
 
     def view(self, query=None, limit=None, skip=None, profile='default'):
-        q = self.build_query(query, limit, skip, profile)
+        q = self.build_query(query, profile)
         self.log.debug('Query is \n{}'.format(to_json(q)))
         
         collection = self.database['sample']
@@ -2798,7 +2814,7 @@ class Pipeline(object):
         cursor.close()
 
     def info(self, query, limit=None, skip=None, profile='default'):
-        q = self.build_query(query, limit, skip, profile)
+        q = self.build_query(query, profile)
         collection = self.database['sample']
         self.log.debug('Query is \n{}'.format(to_json(q)))
         cursor = collection.find(q)
@@ -2811,6 +2827,13 @@ class Pipeline(object):
             sample = Sample(self, node)
             sample.info(profile)
         cursor.close()
+
+    def count(self, query=None, profile='default'):
+        q = self.build_query(query, profile)
+        self.log.debug('Query is \n{}'.format(to_json(q)))
+        
+        collection = self.database['sample']
+        print(collection.count(q))
 
     def simulate(self, library, strain, json, alignment, profile):
         block = Block(self)
@@ -2843,6 +2866,9 @@ class Pipeline(object):
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
+            
+        elif cmd.action == 'count':
+            self.count(cmd.query, cmd.instruction['profile'])
             
         elif cmd.action == 'fasta':
             self.fasta(
