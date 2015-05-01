@@ -135,6 +135,8 @@ configuration = {
             },
         },
         'default': {
+            'accession': {
+            },
             'reference': {
                 'head.verified': True,
             },
@@ -383,9 +385,47 @@ configuration = {
         ),
         'nucleotide sequence': re.compile('^[ACGTRYKMSWBDHVN]+$', re.IGNORECASE)
     },
-    'accession header': {
-        'imgt': re.compile(r'^>(?P<accession_number>[^ ]+) (?P<description>.*)$'),
-        'ncbi': re.compile(r'^>gi\|[0-9]+\|[a-z]+\|(?P<accession_number>[^\.]+)+\.(?P<accession_version>[0-9]+)\|(?P<description>.*)$'),
+    'fasta header': {
+        'imgt accession': re.compile(
+            r"""
+            ^>
+            (?P<accession_number>[^ ]+)\s
+            (?P<description>.*)$
+            """,
+            re.VERBOSE
+        ),
+        'ncbi accession': re.compile(
+            r"""
+            ^>gi\|
+            [0-9]+\|
+            [a-z]+\|
+            (?P<accession_number>[^\.]+)+
+            \.(?P<accession_version>[0-9]+)\|
+            (?P<description>.*)$
+            """,
+            re.VERBOSE
+        ),
+        'imgt reference': re.compile(
+            r"""
+            ^>
+            (?P<accession>[^|]*)\|
+            (?P<allele_name>(?P<gene_name>(?P<subgroup>[^-]+)[^\*]+)\*[0-9]+)\|
+            (?P<organism_name>[^|_]*)(?:_(?P<strain>[^|]+))?\|
+            (?P<functionality>[\[\(]?(?:F|ORF|P)[\]\)]?)\|
+            (?P<region>V|D|J)-REGION\|
+            (?:(?P<start>[0-9]+)\.\.(?P<end>[0-9]+))?\s*\|
+            (?P<length>[0-9]+)\snt\|
+            (?P<read_frame>[123]|NR)\|
+            [^|]*\|
+            [^|]*\|
+            [^|]*\|
+            [^|]*\|
+            [^|]*\|
+            [^|]*\|
+            (?P<polarity>rev-compl)?\s*\|$
+            """,
+            re.VERBOSE
+        ),
     },
     'strain': {
         'mus musculus': [
@@ -874,7 +914,12 @@ configuration = {
                     }
                 }, 
                 {
-                    'argument': [],
+                    'argument': [
+                        'format',
+                        'profile',
+                        'strain',
+                        'id', 
+                    ],
                     'instruction': {
                         'help': 'dump accession sequences to fasta', 
                         'name': 'accession-fasta'
@@ -1070,12 +1115,23 @@ configuration = {
     },
     'table': [
         {
+            'collection': 'accession',
+            'index': [
+                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'accession id' },
+                { 'key': [( 'head.organism name', ASCENDING )], 'unique': False, 'name': 'accession organism name' },
+                { 'key': [( 'head.strain', ASCENDING )], 'unique': False, 'name': 'accession strain' },
+                { 'key': [( 'head.format', ASCENDING )], 'unique': False, 'name': 'accession format' },
+            ]
+        },
+        {
             'collection': 'reference',
             'index': [
-                { 'key': [( 'allele name', ASCENDING )], 'unique': True, 'name': 'reference allele name' },
-                { 'key': [( 'region', ASCENDING )], 'unique': False, 'name': 'reference region' },
-                { 'key': [( 'subgroup', ASCENDING )], 'unique': False, 'name': 'reference subgroup' },
-                { 'key': [( 'gene name', ASCENDING )], 'unique': False, 'name': 'reference gene name' },
+                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'reference id' },
+                { 'key': [( 'head.accession', ASCENDING )], 'unique': False, 'name': 'reference accession' },
+                { 'key': [( 'head.organism name', ASCENDING )], 'unique': False, 'name': 'reference organism name' },
+                { 'key': [( 'head.region', ASCENDING )], 'unique': False, 'name': 'reference region' },
+                { 'key': [( 'head.verified', ASCENDING )], 'unique': False, 'name': 'reference verified' },
+                { 'key': [( 'head.functionality', ASCENDING )], 'unique': False, 'name': 'reference functionality' },
             ]
         },
         {
@@ -1096,6 +1152,34 @@ configuration = {
     ]
 
 }
+
+def transform_to_document(node):
+    if isinstance(node, list):
+        return [ transform_to_document(v) for v in node ]
+        
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            node[key] = transform_to_document(value)
+        return node
+        
+    elif isinstance(node, Sample):
+        return node.document
+        
+    elif isinstance(node, Reference):
+        return node.document
+        
+    elif isinstance(node, Accession):
+        return node.document
+        
+    elif isinstance(node, Sequence):
+        return node.document
+        
+    else: return node
+    
+
+def simplify(value):
+    if value: return value.lower()
+    else: return None
 
 class InvalidSampleError(Exception):
     def __init__(self, message):
@@ -1160,7 +1244,9 @@ class CommandLineParser(object):
         for k in [
             'library',
             'id',
-            'region'
+            'region',
+            'format',
+            'strain'
         ]:
             if k in self.instruction:
                 v = self.instruction[k]
@@ -1174,7 +1260,8 @@ class CommandLineParser(object):
             'productive',
         ]:
             if k in self.instruction:
-                if self.instruction[k] is not None:
+                v = self.instruction[k]
+                if v is not None:
                     if v == 'Y': query[k] = True
                     elif v == 'N': query[k] = False
         return query
@@ -1201,6 +1288,10 @@ class Sequence(object):
         return buffer.read()
 
     @property
+    def valid(self):
+        return self.length > 0
+
+    @property
     def configuration(self):
         return self.pipeline.configuration
 
@@ -1217,10 +1308,7 @@ class Sequence(object):
 
     def reset(self):
         if self.node is None:
-            self.node = {
-                'read frame': 0,
-                'strand': True
-            }
+            self.node = { 'read frame': 0, 'strand': True }
         for k in ['codon', 'phred']:
             if k in self.node: del self.node[k]
         self._reversed = None
@@ -1268,7 +1356,7 @@ class Sequence(object):
         if 'nucleotide' in self.node:
             return self.node['nucleotide']
         else:
-            return None
+            return ''
 
     @nucleotide.setter
     def nucleotide(self, value):
@@ -1282,7 +1370,7 @@ class Sequence(object):
         if 'quality' in self.node:
             return self.node['quality']
         else:
-            return None
+            return ''
 
     @quality.setter
     def quality(self, value):
@@ -1344,10 +1432,7 @@ class Sequence(object):
 
     @property
     def length(self):
-        if self.nucleotide is not None:
-            return len(self.nucleotide)
-        else:
-            return None
+        return len(self.nucleotide)
 
     @property
     def reversed(self):
@@ -1364,9 +1449,9 @@ class Sequence(object):
         return self._reversed
 
 
-class Reference(object):
+class Accession(object):
     def __init__(self, pipeline, node=None):
-        self.log = logging.getLogger('Reference')
+        self.log = logging.getLogger('Accession')
         self.pipeline = pipeline
         self.node = node
         
@@ -1377,6 +1462,21 @@ class Reference(object):
             self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
             self.body['sequence'] = Sequence(self.pipeline)
+
+    def __str__(self):
+        buffer = []
+        buffer.append(self.id if self.id else 'unknown id')
+        buffer.append(self.stain if self.strain else 'unknown strain')
+        buffer.append('{} nucleotides'.format(self.length))
+        return '[ {} ]'.fomrat(', '.join(buffer))
+
+    @property
+    def valid(self):
+        return self.id is not None and self.sequence.valid
+
+    @property
+    def document(self):
+        return transform_to_document(self.node)
 
     @property
     def head(self):
@@ -1392,7 +1492,105 @@ class Reference(object):
 
     @property
     def id(self):
-        return self.head['id']
+        if 'id' in self.head:
+            return self.head['id']
+        else:
+            return None
+
+    @id.setter
+    def id(self, value):
+        self.head['id'] = value
+        if self.head['id'] == '':
+            del self.head['id']
+
+    @property
+    def sequence(self):
+        return self.body['sequence']
+
+    @property
+    def length(self):
+        return self.sequence.length
+
+    @property
+    def strain(self):
+        if 'strain' in self.head:
+            return self.head['strain']
+        else:
+            return None
+    @strain.setter
+    def strain(self, value):
+        self.head['strain'] = value
+        if self.head['strain'] == '':
+            del self.head['strain']
+
+
+class Reference(object):
+    def __init__(self, pipeline, node=None):
+        self.log = logging.getLogger('Reference')
+        self.pipeline = pipeline
+        self.node = node
+        
+        if self.node is None:
+            self.node = { 
+                'head': {
+                    'confirmed genomoic dna': True,
+                    'identified genomoic dna': True,
+                },
+                'body': {
+                    'accession strand': True,
+                }
+            }
+        
+        if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
+            self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
+        else:
+            self.body['sequence'] = Sequence(self.pipeline)
+
+    def __str__(self):
+        buffer = []
+        buffer.append(self.id if self.id else 'unknown id')
+        buffer.append(self.region if self.region else 'unknown region')
+        buffer.append(self.strain if self.strain else 'unknown strain')
+        if 'accession' in self.head:
+            buffer.append(self.head['accession'])
+        if 'accession strand' in self.body:
+            buffer.append('+' if self.body['accession strand'] else '-')
+            
+        buffer.append('{} nucleotides'.format(self.length))
+        return '[ {} ]'.format(', '.join(buffer))
+
+    @property
+    def valid(self):
+        return self.id is not None and self.sequence.valid
+
+    @property
+    def document(self):
+        return transform_to_document(self.node)
+
+    @property
+    def head(self):
+        return self.node['head']
+
+    @property
+    def body(self):
+        return self.node['body']
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
+    @property
+    def id(self):
+        if 'id' in self.head:
+            return self.head['id']
+        else:
+            return None
+
+    @id.setter
+    def id(self, value):
+        self.head['id'] = value
+        if self.head['id'] == '':
+            del self.head['id']
 
     @property
     def sequence(self):
@@ -1400,7 +1598,16 @@ class Reference(object):
 
     @property
     def region(self):
-        return self.head['region']
+        if 'region' in self.head:
+            return self.head['region']
+        else:
+            return None
+
+    @region.setter
+    def strain(self, value):
+        self.head['strain'] = value
+        if self.head['strain'] == '':
+            del self.head['strain']
 
     @property
     def strain(self):
@@ -1409,9 +1616,15 @@ class Reference(object):
         else:
             return None
 
+    @region.setter
+    def region(self, value):
+        self.head['region'] = value
+        if self.head['region'] == '':
+            del self.head['region']
+
     @property
-    def strand(self):
-        return self.body['strand']
+    def length(self):
+        return self.sequence.length
 
     @property
     def framed(self):
@@ -2719,7 +2932,7 @@ class Pipeline(object):
         self.log = logging.getLogger('Pipeline')
         self.configuration = configuration
         self._connection = None
-        self._reference_sequence = {}
+        self._reference = {}
         self._accession = {}
         self._stop_codon_feature = None
         self._strains = None
@@ -2792,15 +3005,15 @@ class Pipeline(object):
         return feature
 
     def reference_for(self, id):
-        if id not in self._reference_sequence:
+        if id not in self._reference:
             node = self.database['reference'].find_one({'head.id': id})
             if node:
                 reference = Reference(self, node)
-                self._reference_sequence[id] = reference
+                self._reference[id] = reference
             else:
-                self._reference_sequence[id] = None
-        if id in self._reference_sequence:
-            return self._reference_sequence[id]
+                self._reference[id] = None
+        if id in self._reference:
+            return self._reference[id]
         else:
             return None
 
@@ -2808,13 +3021,78 @@ class Pipeline(object):
         if id not in self._accession:
             node = self.database['accession'].find_one({'head.id': id})
             if node:
-                self._accession[id] = node
+                self._accession[id] = Accession(self, node)
             else:
                 self._accession[id] = None
         if id in self._accession:
             return self._accession[id]
         else:
             return None
+
+    def save_accession(self, accession):
+        if accession is not None:
+            if accession.valid:
+                existing = self.accession_for(accession.id)
+                if existing:
+                    accession.node['_id'] = existing.node['_id']
+                    self.log.debug('existing accession found for %s', accession.id)
+                if 'description' in accession.body:
+                    accession.body['description'] = accession.body['description'].strip()
+                    accession.body['simple description'] = simplify(accession.body['description'])
+                    for pattern in self.configuration['strain'][accession.head['organism name']]:
+                        if pattern['expression'].search(accession.body['simple description']):
+                            accession.strain = pattern['name']
+                            break
+
+                self.database['accession'].save(accession.document)
+                if accession.id in self._accession:
+                    del self._accession[accession.id]
+            else:
+                self.log.error('refusing to save invalid accession %s', str(accession))
+
+    def map_reference(self, reference):
+        if reference is not None:
+            accession = self.accession_for(reference.head['accession'])
+            if accession is not None:
+                r = reference.sequence
+                a = accession.sequence.crop(reference.body['start'], reference.body['end'])
+                if not reference.body['accession strand']: a = a.reversed
+                if r.nucleotide != a.nucleotide:
+                    print(str(reference))
+                    print(r.nucleotide)
+                    print(a.nucleotide)
+            else:
+                self.log.error('accession %s is missing', reference.head['accession'])
+                    
+    def save_reference(self, reference):
+        if reference is not None:
+            if reference.valid:
+                existing = self.reference_for(reference.id)
+                if existing:
+                    reference.node['_id'] = existing.node['_id']
+                    self.log.debug('existing reference found for %s', reference.id)
+                    
+                for k in (
+                    'functionality',
+                    'region',
+                    'strain',
+                    'organism name',
+                    'accession'
+                ):
+                    if k in reference.body:
+                        reference.head[k] = reference.body[k]
+                        del reference.body[k]
+                if reference.head['confirmed genomoic dna'] and reference.head['identified genomoic dna']:
+                    reference.head['verified'] = True
+                else:
+                    reference.head['verified'] = False
+                    
+                self.map_reference(reference)
+                self.database['reference'].save(reference.document)
+                if reference.id in self._reference:
+                    del self._reference[reference.id]
+            else:
+                self.log.error('refusing to save invalid reference %s', str(reference))
 
     def build_query(self, override, profile, kind='sample'):
         query = {}
@@ -2843,151 +3121,62 @@ class Pipeline(object):
                 self.log.info('building index %s on collection %s', definition['name'], table['collection'])
                 collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
 
-    def describe(self, section):
-        if section is not None:
-            if section == '':
-                pass
-    
-
-    def search_blat(self):
-        result = None
-        command = self.configuration['command']['blat']
-        process = Popen(
-            args=command['arguments'],
-            cwd=command['cwd'],
-            env=None,
-            stdin=PIPE,
-            stdout=PIPE,
-            stderr=PIPE
-        )
-        output, error = process.communicate(input=self.to_fasta().read().encode('utf8'))
-        if output: result = StringIO(output.decode('utf8'))
-        return result
-
-    def populate_accession(self, format):
-        def save_accession_record(collection, accession):
-            if accession is not None:
-                accession['organism name'] = 'mus musculus'
-                if 'description' in accession:
-                    accession['simple description'] = accession['description'].lower()
-                    for pattern in self.configuration['strain']['mus musculus']:
-                        if pattern['expression'].search(accession['simple description']):
-                            accession['strain'] = pattern['name']
-                            break
-                        
-                # fix the sequence structure
-                if 'sequence' in accession:
-                    if accession['sequence']:
-                        accession['sequence'] = {
-                            'nucleotide': accession['sequence'],
-                            'strand': True,
-                            'read frame': 0
-                        }
-                    else:
-                        del accession['sequence']
-                        
-                if 'sequence' in accession:
-                    record = { 'head': { 'id': accession['accession number'] }, 'body': accession }
-                    for k in (
-                        'strain',
-                        'organism name',
-                        'format'
-                    ):
-                        if k in accession:
-                            record['head'][k] = accession[k]
-                            del accession[k]
-                    collection.save(record)
-                else:
-                    self.log.error('refusing to save accession record %s with missing sequence', accession['accession number'])
-
-        if format in self.configuration['accession header']:
-            parser = self.configuration['accession header'][format]
+    def populate_accession(self, format, organism='mus musculus'):
+        f = '{} accession'.format(format)
+        if f in self.configuration['fasta header']:
+            parser = self.configuration['fasta header'][f]
         else:
             self.log.critical('unknown fasta header format %s', format)
             raise SystemExit(1)
             
-        collection = self.database['accession']
         accession = None
         for line in sys.stdin:
-            if line is None: break
-            else:
+            if line is not None:
                 line = line.strip()
                 if line:
                     if line[0] == '>':
                         # at the start of a new record save the completed one
-                        save_accession_record(collection, accession)
+                        self.save_accession(accession)
                         
                         # initialize a new accession
-                        accession = { 'header': line, 'sequence': '', 'format': format }
+                        accession = Accession(self)
+                        accession.body['header'] = line
+                        accession.head['format'] = format
+                        accession.head['organism name'] = organism
                         match = parser.search(line)
                         if match:
                             parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
                             for k,v in parsed.items():
-                                if v: accession[k] = v
+                                if v: accession.body[k] = v
+                            accession.id = accession.body['accession number']
                     else:
                         if self.configuration['expression']['nucleotide sequence'].search(line):
-                            accession['sequence'] += line.upper()
+                            accession.sequence.nucleotide += line.upper()
+            else: break
         # save the last one
-        save_accession_record(collection, accession)
+        self.save_accession(accession)
 
     def populate_reference(self, path):
-        def save_reference_record(collection, reference):
-            if reference is not None:
-                # fix the sequence structure
-                if 'sequence' in reference:
-                    if reference['sequence']:
-                        reference['sequence'] = { 'nucleotide': reference['sequence'], 'strand': True }
-                        
-                        # fix the read frame
-                        reference['sequence']['read frame'] = reference['read frame']
-                        del reference['read frame']
-                    else:
-                        del reference['sequence']
-                        
-                if 'sequence' in reference:
-                    record = { 'head': { 'id': reference['allele name'] }, 'body': reference }
-                    for k in (
-                        'framed',
-                        'functionality',
-                        'region',
-                        'strain',
-                        'organism name',
-                        'confirmed genomoic dna',
-                        'identified genomoic dna',
-                        'accession'
-                    ):
-                        if k in reference:
-                            record['head'][k] = reference[k]
-                            del reference[k]
-                    if record['head']['confirmed genomoic dna'] and record['head']['identified genomoic dna']:
-                        record['head']['verified'] = True
-                    else:
-                        record['head']['verified'] = False
-                    
-                    if self.accession_for(record['head']['accession']) is None:
-                        self.log.error('accession %s is missing', record['head']['accession'])
-                    collection.save(record)
-                else:
-                    self.log.error('refusing to save reference record %s with missing sequence', reference['id'])
-
-        collection = self.database['reference']
+        f = '{} reference'.format('imgt')
+        if f in self.configuration['fasta header']:
+            parser = self.configuration['fasta header'][f]
+        else:
+            self.log.critical('unknown fasta header format %s', format)
+            raise SystemExit(1)
+            
         reference = None
         with io.open(path, 'rb') as fasta:
             for line in fasta:
-                if line:
+                if line is not None:
                     line = line.strip().decode('utf8')
                     if line[0] == '>':
                         # at the start of a new record save the completed one
-                        save_reference_record(collection, reference)
+                        self.save_reference(reference)
                             
                         # initialize a new reference
-                        reference = {
-                            'imgt meta': line,
-                            'sequence': '',
-                            'confirmed genomoic dna': True,
-                            'identified genomoic dna': True,
-                        }
-                        match = self.configuration['expression']['imgt fasta header'].search(line)
+                        reference = Reference(self)
+                        reference.body['header'] = line
+                        match = parser.search(line)
                         if match:
                             parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
                             for k,v in parsed.items():
@@ -3002,10 +3191,10 @@ class Pipeline(object):
                                                 v = int(v)
                                         elif k == 'functionality':
                                             if '(' in v:
-                                                reference['confirmed genomoic dna'] = False
+                                                reference.head['confirmed genomoic dna'] = False
                                                 v = v.strip('()')
                                             elif '[' in v:
-                                                reference['identified genomoic dna'] = False
+                                                reference.head['identified genomoic dna'] = False
                                                 v = v.strip('[]')
                                             if v == 'ORF': v = 'O'
                                         elif k == 'organism name':
@@ -3014,56 +3203,60 @@ class Pipeline(object):
                                     except ValueError as e:
                                         self.log.error('unable to decode %s as int for %s', v, k)
                                     else:
-                                        if v: reference[k] = v
+                                        if v: reference.body[k] = v
                                             
                             # fix the region for heavy chain
-                            reference['region'] += 'H'
+                            reference.body['region'] += 'H'
                             
                             # fix the accession strand
-                            reference['accession strand'] = True
-                            if 'polarity' in reference:
-                                if reference['polarity'] == 'rev-compl':
-                                    reference['accession strand'] = False
-                                del reference['polarity']
+                            if 'polarity' in reference.body:
+                                if reference.body['polarity'] == 'rev-compl':
+                                    reference.body['accession strand'] = False
+                                del reference.body['polarity']
                                     
                             # fix the start offset to zero based
-                            if 'start' in reference: reference['start'] -= 1
+                            if 'start' in reference.body: reference.body['start'] -= 1
                             
                             # fix the read frame offset to zero based
-                            if 'read frame' in reference:
-                                reference['read frame'] -= 1
-                                reference['framed'] = True
+                            if 'read frame' in reference.body:
+                                reference.head['framed'] = True
+                                reference.body['read frame'] -= 1
                             else:
-                                reference['framed'] = False
-                                reference['read frame'] = 0
+                                reference.head['framed'] = False
+                                reference.body['read frame'] = 0
+                                
+                            reference.sequence.read_frame = reference.body['read frame']
+                            del reference.body['read frame']
+                            reference.id = reference.body['allele name']
                     else:
                         if self.configuration['expression']['nucleotide sequence'].search(line):
-                            reference['sequence'] += line.upper()
-                else:
-                    break
+                            reference.sequence.nucleotide += line.upper()
+                else: break
                     
             # save the last one if it has a sequence
-            save_reference_record(collection, reference)
+            self.save_reference(reference)
 
-    def accession_to_fasta(self):
+    def accession_to_fasta(self, query, profile):
+        q = self.build_query(query, profile, 'accession')
+        print(q)
         buffer = StringIO()
         collection = self.database['accession']
-        cursor = collection.find()
+        cursor = collection.find(q)
         for node in cursor:
-            buffer.write(node['body']['header'])
+            accession = Accession(self, node)
+            buffer.write(accession.body['header'])
             buffer.write('\n')
-            sequence = Sequence(self,node['body']['sequence'])
             begin = 0
             end = 0
-            while end < sequence.length:
-                end = min(begin + self.configuration['constant']['fasta line length'], sequence.length)
-                buffer.write(sequence.nucleotide[begin:end])
+            while end < accession.length:
+                end = min(begin + self.configuration['constant']['fasta line length'], accession.length)
+                buffer.write(accession.sequence.nucleotide[begin:end])
                 buffer.write('\n')
                 begin = end
         buffer.seek(0)
         print(buffer.read())
 
-    def reference_to_blast_fasta(self, query, profile):
+    def reference_to_fasta(self, query, profile):
         q = self.build_query(query, profile, 'reference')
         buffer = StringIO()
         collection = self.database['reference']
@@ -3075,8 +3268,8 @@ class Pipeline(object):
             buffer.write('\n')
             begin = 0
             end = 0
-            while end < reference.sequence.length:
-                end = min(begin + self.configuration['constant']['fasta line length'], reference.sequence.length)
+            while end < reference.length:
+                end = min(begin + self.configuration['constant']['fasta line length'], reference.length)
                 buffer.write(reference.sequence.nucleotide[begin:end])
                 buffer.write('\n')
                 begin = end
@@ -3099,6 +3292,21 @@ class Pipeline(object):
                 buffer.write('\n')
         buffer.seek(0)
         print(buffer.read())
+
+    def search_blat(self):
+        result = None
+        command = self.configuration['command']['blat']
+        process = Popen(
+            args=command['arguments'],
+            cwd=command['cwd'],
+            env=None,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=PIPE
+        )
+        output, error = process.communicate(input=self.to_fasta().read().encode('utf8'))
+        if output: result = StringIO(output.decode('utf8'))
+        return result
 
     def drop_library(self, library):
         if library:
@@ -3199,14 +3407,14 @@ class Pipeline(object):
             self.populate_accession(cmd.instruction['format'])
             
         if cmd.action == 'accession-fasta':
-            self.accession_to_fasta()
+            self.accession_to_fasta(cmd.query, cmd.instruction['profile'])
             
         if cmd.action == 'ref-populate':
             for path in cmd.instruction['path']:
                 self.populate_reference(path)
                 
         elif cmd.action == 'ref-fasta':
-            self.reference_to_blast_fasta(cmd.query, cmd.instruction['profile'])
+            self.reference_to_fasta(cmd.query, cmd.instruction['profile'])
             
         elif cmd.action == 'ref-igblast-aux':
             self.reference_to_auxiliary(cmd.query, cmd.instruction['profile'])
