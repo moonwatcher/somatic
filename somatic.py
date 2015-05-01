@@ -114,10 +114,33 @@ configuration = {
         }
     },
     'profile': {
+        'b6~': {
+            'reference': {
+                'head.verified': True,
+                'head.organism name': 'mus musculus',
+                '$or': [ { 'head.strain': { '$ne': 'C57BL/6' } }, { 'head.strain': { '$exists': False } } ]
+            },
+        },
+        'b6': {
+            'reference': {
+                'head.verified': True,
+                'head.organism name': 'mus musculus',
+                'head.strain': 'C57BL/6'
+            },
+        },
+        'mouse': {
+            'reference': {
+                'head.verified': True,
+                'head.organism name': 'mus musculus',
+            },
+        },
         'default': {
+            'reference': {
+                'head.verified': True,
+            },
             'sample': {
-                'valid': True,
-                'productive': True,
+                'head.valid': True,
+                'head.productive': True,
             },
             'diagram': {
                 'track': {
@@ -137,8 +160,8 @@ configuration = {
         },
         'productive': {
             'sample': {
-                'valid': True,
-                'productive': True,
+                'head.valid': True,
+                'head.productive': True,
             },
             'diagram': {
                 'track': {
@@ -156,8 +179,8 @@ configuration = {
         },
         'productive!': {
             'sample': {
-                'valid': True,
-                'productive': False,
+                'head.valid': True,
+                'head.productive': False,
             },
             'diagram': {
                 'track': {
@@ -176,8 +199,8 @@ configuration = {
         },
         'productive~': {
             'sample': {
-                'valid': True,
-                'productive': True,
+                'head.valid': True,
+                'head.productive': True,
             },
             'diagram': {
                 'track': {
@@ -196,9 +219,9 @@ configuration = {
         },
         'palindromic': {
             'sample': {
-                'valid': True,
-                'productive': True,
-                'palindromic': True,
+                'head.valid': True,
+                'head.productive': True,
+                'head.palindromic': True,
             },
             'diagram': {
                 'track': {
@@ -216,8 +239,8 @@ configuration = {
         },
         'gapped': {
             'sample': {
-                'valid': True,
-                'gapped': True,
+                'head.valid': True,
+                'head.gapped': True,
             },
             'diagram': {
                 'track': {
@@ -234,8 +257,8 @@ configuration = {
         },
         'premature': {
             'sample': {
-                'valid': True,
-                'premature': True,
+                'head.valid': True,
+                'head.premature': True,
             },
             'diagram': {
                 'track': {
@@ -254,8 +277,8 @@ configuration = {
         },
         'in': {
             'sample': {
-                'valid': True,
-                'in frame': True,
+                'head.valid': True,
+                'head.in frame': True,
             },
             'diagram': {
                 'track': {
@@ -273,8 +296,8 @@ configuration = {
         },
         'out': {
             'sample': {
-                'valid': True,
-                'in frame': False,
+                'head.valid': True,
+                'head.in frame': False,
             },
             'diagram': {
                 'track': {
@@ -340,7 +363,7 @@ configuration = {
         'imgt fasta header': re.compile(
             r"""
             ^>
-            (?P<imgt_accession>[^|]*)\|
+            (?P<accession>[^|]*)\|
             (?P<allele_name>(?P<gene_name>(?P<subgroup>[^-]+)[^\*]+)\*[0-9]+)\|
             (?P<organism_name>[^|_]*)(?:_(?P<strain>[^|]+))?\|
             (?P<functionality>[\[\(]?(?:F|ORF|P)[\]\)]?)\|
@@ -358,9 +381,75 @@ configuration = {
             """,
             re.VERBOSE
         ),
-        'nucleotide sequence': re.compile('^[atcgnyATCGNY]+$')
+        'nucleotide sequence': re.compile('^[ACGTRYKMSWBDHVN]+$', re.IGNORECASE)
+    },
+    'accession header': {
+        'imgt': re.compile(r'^>(?P<accession_number>[^ ]+) (?P<description>.*)$'),
+        'ncbi': re.compile(r'^>gi\|[0-9]+\|[a-z]+\|(?P<accession_number>[^\.]+)+\.(?P<accession_version>[0-9]+)\|(?P<description>.*)$'),
+    },
+    'strain': {
+        'mus musculus': [
+            {
+                'name': 'C57BL/6',
+                'expression': re.compile(r'\b(?:c57bl/6|c57)\b', re.IGNORECASE)
+            },
+            {
+                'name': 'C57BL/6J',
+                'expression': re.compile(r'\bc57bl/6j\b', re.IGNORECASE)
+            },
+            {
+                'name': 'C57BL/6N',
+                'expression': re.compile(r'\bc57bl/6n\b', re.IGNORECASE)
+            },
+            {
+                'name': 'C57BL/10',
+                'expression': re.compile(r'\bc57bl/10\b', re.IGNORECASE)
+            },
+            {
+                'name': '129/Sv',
+                'expression': re.compile(r'\b129/sv\b', re.IGNORECASE)
+            },
+            {
+                'name': '129/J',
+                'expression': re.compile(r'\b129/j\b', re.IGNORECASE)
+            },
+            {
+                'name': '129/Ole',
+                'expression': re.compile(r'\b129/ole\b', re.IGNORECASE)
+            },
+            {
+                'name': 'BALB/c',
+                'expression': re.compile(r'\bbalb/c\b', re.IGNORECASE)
+            },
+            {
+                'name': 'BALB.K',
+                'expression': re.compile(r'\bbalb\.k\b', re.IGNORECASE)
+            },
+            {
+                'name': 'MRL/lpr',
+                'expression': re.compile(r'\bmrl/lpr\b', re.IGNORECASE)
+            },
+            {
+                'name': 'A/J',
+                'expression': re.compile(r'\ba/j\b', re.IGNORECASE)
+            },
+            {
+                'name': 'NBZ',
+                'expression': re.compile(r'\bnbz\b', re.IGNORECASE)
+            },
+        ]
     },
     'command': {
+        'blat': {
+            'cwd': '/Users/lg/code/blat',
+            'arguments': [
+                'blat',
+                'chr12.fa',
+                'stdin',
+                'stdout',
+                '-minIdentity=100'
+            ]
+        },
         'igblast': {
             'cwd': '/Users/lg/code/somatic/igblast',
             'arguments': [
@@ -540,6 +629,21 @@ configuration = {
                     'metavar': 'NAME'
                 }
             }, 
+            'format': {
+                'flag': [
+                    '-f', 
+                    '--format'
+                ], 
+                'parameter': {
+                    'required': True,
+                    'choices': [
+                        'imgt', 
+                        'ncbi'
+                    ], 
+                    'dest': 'format', 
+                    'help': 'fasta header format'
+                }
+            }, 
             'path': {
                 'flag': [
                     'path'
@@ -644,7 +748,7 @@ configuration = {
                         'drop'
                     ], 
                     'instruction': {
-                        'description': 'match each read in file to regions with igblast and store results in the library. takes read from stdin', 
+                        'description': 'match each read in file to regions with igblast and store results in the library. takes data from stdin', 
                         'help': 'populate samples for library', 
                         'name': 'populate'
                     }
@@ -725,6 +829,24 @@ configuration = {
                         'productive',
                     ], 
                     'instruction': {
+                        'help': 'print sample fastq stream', 
+                        'name': 'fastq'
+                    }
+                }, 
+                {
+                    'argument': [
+                        'profile',
+                        'library', 
+                        'id', 
+                        'gapped', 
+                        'valid', 
+                        'in frame', 
+                        'premature',
+                        'limit',
+                        'skip',
+                        'productive',
+                    ], 
+                    'instruction': {
                         'help': 'view JSON sample record', 
                         'name': 'info'
                     }
@@ -744,29 +866,51 @@ configuration = {
                 }, 
                 {
                     'argument': [
+                        'format',
+                    ],
+                    'instruction': {
+                        'help': 'load imgt accession sequences from fasta file. takes data from stdin', 
+                        'name': 'accession-populate'
+                    }
+                }, 
+                {
+                    'argument': [],
+                    'instruction': {
+                        'help': 'dump accession sequences to fasta', 
+                        'name': 'accession-fasta'
+                    }
+                }, 
+                {
+                    'argument': [
                         'path'
                     ], 
                     'instruction': {
                         'help': 'load imgt reference sequences from fasta file', 
-                        'name': 'load-reference'
+                        'name': 'ref-populate'
                     }
                 }, 
                 {
                     'argument': [
-                        'region'
+                        'region',
+                        'strain',
+                        'profile',
+                        'id', 
                     ], 
                     'instruction': {
                         'help': 'dump reference sequences to fasta', 
-                        'name': 'to-blast-fasta'
+                        'name': 'ref-fasta'
                     }
                 }, 
                 {
                     'argument': [
-                        'region'
+                        'region',
+                        'strain',
+                        'profile',
+                        'id', 
                     ], 
                     'instruction': {
                         'help': 'dump reference sequences to igblast auxiliary file', 
-                        'name': 'to-auxiliary'
+                        'name': 'ref-igblast-aux'
                     }
                 }, 
                 {
@@ -785,6 +929,32 @@ configuration = {
                 'title': 'pipeline operations'
             }
         }
+    },
+    'iupac amino acid notation': {
+        'A': {  'code':'ala',   'weight': 89,   'charge': 1.8,  'name': 'Alanine' },
+        'R': {  'code':'arg',   'weight': 174,  'charge': -4.5, 'name': 'Arginine' },
+        'N': {  'code':'asn',   'weight': 132,  'charge': -3.5, 'name': 'Asparagine' },
+        'D': {  'code':'asp',   'weight': 133,  'charge': -3.5, 'name': 'Aspartic acid' },
+        'C': {  'code':'cys',   'weight': 121,  'charge': 2.5,  'name': 'Cysteine' },
+        'Q': {  'code':'gln',   'weight': 146,  'charge': -3.5, 'name': 'Glutamine' },
+        'E': {  'code':'glu',   'weight': 147,  'charge': -3.5, 'name': 'Glutamic acid' },
+        'G': {  'code':'gly',   'weight': 75,   'charge': -0.4, 'name': 'Glycine' },
+        'H': {  'code':'his',   'weight': 155,  'charge': -3.2, 'name': 'Histidine' },
+        'I': {  'code':'ile',   'weight': 131,  'charge': 4.5,  'name': 'Isoleucine' },
+        'L': {  'code':'leu',   'weight': 131,  'charge': 3.8,  'name': 'Leucine' },
+        'K': {  'code':'lys',   'weight': 146,  'charge': -3.9, 'name': 'Lysine' },
+        'M': {  'code':'met',   'weight': 149,  'charge': 1.9,  'name': 'Methionine' },
+        'F': {  'code':'phe',   'weight': 165,  'charge': 2.8,  'name': 'Phenylalanine' },
+        'P': {  'code':'pro',   'weight': 115,  'charge': -1.6, 'name': 'Proline' },
+        'S': {  'code':'ser',   'weight': 105,  'charge': -0.8, 'name': 'Serine' },
+        'T': {  'code':'thr',   'weight': 119,  'charge': -0.7, 'name': 'Threonine' },
+        'W': {  'code':'trp',   'weight': 204,  'charge': -0.9, 'name': 'Tryptophan' },
+        'Y': {  'code':'tyr',   'weight': 181,  'charge': -1.3, 'name': 'Tyrosine' },
+        'V': {  'code':'val',   'weight': 117,  'charge': 4.2,  'name': 'Valine' },
+        'B': {  'code':'asx',                                   'name': 'Aspartic acid or Asparagine' },
+        'Z': {  'code':'glx',                                   'name': 'Glutamine or Glutamic acid' },
+        'J': {  'code':'xle',                                   'name': 'Leucine or Isoleucine' },
+        'X': {  'code':'xaa',	                                'name': 'Any amino acid' }
     },
     'iupac nucleic acid notation': {
         'A': {  'reverse': 'T',  'option':[ 'A' ],                  'name': 'Adenine' },
@@ -989,12 +1159,12 @@ class CommandLineParser(object):
         query = {}
         for k in [
             'library',
-            'id'
+            'id',
+            'region'
         ]:
             if k in self.instruction:
                 v = self.instruction[k]
-                if v is not None:
-                    query[k] = self.instruction[k]
+                if v is not None: query[k] = v
         for k in [
             'gapped',
             'valid',
@@ -1004,8 +1174,7 @@ class CommandLineParser(object):
             'productive',
         ]:
             if k in self.instruction:
-                v = self.instruction[k]
-                if v is not None:
+                if self.instruction[k] is not None:
                     if v == 'Y': query[k] = True
                     elif v == 'N': query[k] = False
         return query
@@ -1202,12 +1371,20 @@ class Reference(object):
         self.node = node
         
         if self.node is None:
-            self.node = {}
+            self.node = { 'head': {}, 'body': {} }
         
-        if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
-            self.node['sequence'] = Sequence(self.pipeline, self.node['sequence'])
+        if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
+            self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
-            self.node['sequence'] = Sequence(self.pipeline)
+            self.body['sequence'] = Sequence(self.pipeline)
+
+    @property
+    def head(self):
+        return self.node['head']
+
+    @property
+    def body(self):
+        return self.node['body']
 
     @property
     def configuration(self):
@@ -1215,38 +1392,34 @@ class Reference(object):
 
     @property
     def id(self):
-        return self.node['allele name']
+        return self.head['id']
 
     @property
     def sequence(self):
-        return self.node['sequence']
+        return self.body['sequence']
 
     @property
     def region(self):
-        return self.node['region']
+        return self.head['region']
 
     @property
     def strain(self):
-        if 'strain' in self.node:
-            return self.node['strain']
+        if 'strain' in self.head:
+            return self.head['strain']
         else:
             return None
 
     @property
+    def strand(self):
+        return self.body['strand']
+
+    @property
     def framed(self):
-        return self.node['framed']
+        return self.head['framed']
 
     @property
     def functionality(self):
-        result = None
-        if 'functionality' in self.node:
-            if 'F' in self.node['functionality']:
-                result = 'F'
-            if 'P' in self.node['functionality']:
-                 result = 'P'
-            if 'ORF' in self.node['functionality']:
-                result = 'O'
-        return result
+        return self.head['functionality']
 
 
 class Sample(object):
@@ -1417,7 +1590,7 @@ class Sample(object):
     @property
     def productive(self):
         return self.head['productive']
-    
+
     @property
     def fasta(self):
         buffer = []
@@ -1429,6 +1602,10 @@ class Sample(object):
             buffer.append(self.sequence.nucleotide[begin:end])
             begin = end
         return '\n'.join(buffer)
+
+    @property
+    def fastq(self):
+        return '{}\n{}\n+\n{}'.format(self.id, self.sequence.nucleotide, self.sequence.quality)
 
     def add_hit(self, hit):
         if hit is not None:
@@ -1494,6 +1671,7 @@ class Sample(object):
         if self.valid: self._check_for_stop_codon()
         if self.valid: self._identify_cdr3()
         if self.valid: self._check_productive()
+        if self.valid: self._identify_chewback()
         if self.valid: self._index_regions()
         if self.valid: self._analyze_quality()
 
@@ -1592,17 +1770,17 @@ class Sample(object):
                     reference = self.pipeline.reference_for(hit['subject id'])
                     if reference:
                         if hit['subject strand'] == reference.sequence.strand:
+                            ref = reference.sequence
                             hit['subject start'] -= 1
-                            hit['subject'] = reference.sequence.crop(hit['subject start'], hit['subject end'])
                         else:
-                            hit['subject start'] = reference.sequence.length - hit['subject start']
-                            hit['subject end'] = reference.sequence.length - hit['subject end'] + 1
-                            hit['subject'] = reference.sequence.reversed.crop(hit['subject start'], hit['subject end'])
+                            ref = reference.sequence.reversed
+                            hit['subject start'] = ref.length - hit['subject start']
+                            hit['subject end'] = ref.length - hit['subject end'] + 1
             
+                        hit['subject'] = ref.crop(hit['subject start'], hit['subject end'])
                         hit['framed'] = reference.framed
                         hit['functionality'] = reference.functionality
-                        if reference.strain:
-                            hit['strain'] = reference.strain
+                        if reference.strain: hit['strain'] = reference.strain
                             
                         # only DH regions are allowed to align to the oposite strand
                         if hit['region'] != 'DH' and hit['subject strand'] != reference.sequence.strand:
@@ -1766,12 +1944,14 @@ class Sample(object):
                 
             offset = None
             # look for the most downstream tryptophan JH region
+            # followed by GG, followed by either C or T
             for index,codon in enumerate(self.region['JH']['query'].codon):
                 if codon == 'W':
-                    offset = self.region['JH']['query'].read_frame + (index + 1) * 3
-                    suffix = self.region['JH']['query'].nucleotide[offset:offset + 3]
+                    o = self.region['JH']['query'].read_frame + (index + 1) * 3
+                    suffix = self.region['JH']['query'].nucleotide[o:o + 3]
                     if suffix[0:2] == 'GG':
                         if suffix[2] == 'T' or suffix[2] == 'C':
+                            offset = o
                             break
 
             if offset is not None:
@@ -1802,6 +1982,25 @@ class Sample(object):
             'VH' in self.region and
             'JH' in self.region):
             self.head['productive'] = True
+
+    def _identify_chewback(self):
+        for hit in self.hit:
+            if hit['valid']:
+                if 'subject id' in hit:
+                    reference = self.pipeline.reference_for(hit['subject id'])
+                    if reference:
+                        if hit['subject strand'] == reference.sequence.strand:
+                            ref = reference.sequence
+                        else:
+                            ref = reference.sequence.reversed
+            
+                        if hit['region'] == 'VH' or hit['region'] == 'DH':
+                            if hit['subject end'] < ref.length:
+                                hit['3 chew'] = ref.crop(hit['subject end'], ref.length)
+                                
+                        if hit['region'] == 'JH' or hit['region'] == 'DH':
+                            if hit['subject start'] > 0:
+                                hit['5 chew'] = ref.crop(0, hit['subject start'])
 
     def _analyze_quality(self):
         for name, region in self.region.items():
@@ -2521,6 +2720,7 @@ class Pipeline(object):
         self.configuration = configuration
         self._connection = None
         self._reference_sequence = {}
+        self._accession = {}
         self._stop_codon_feature = None
         self._strains = None
         self._load_configuration()
@@ -2540,7 +2740,8 @@ class Pipeline(object):
     def connection(self):
         if self._connection is None:
             try:
-                self._connection = MongoClient('mongodb://somatic:fPWZq8nCVizzHloVDhs=@albireo.bio.nyu.edu/somatic')
+                self._connection = MongoClient('mongodb://localhost/somatic')
+                #self._connection = MongoClient('mongodb://somatic:fPWZq8nCVizzHloVDhs=@albireo.bio.nyu.edu/somatic')
             except pymongo.errors.ConnectionFailure as e:
                 self.log.error('failed to establish connection %s', e)
             else:
@@ -2592,7 +2793,7 @@ class Pipeline(object):
 
     def reference_for(self, id):
         if id not in self._reference_sequence:
-            node = self.database['reference'].find_one({'allele name': id})
+            node = self.database['reference'].find_one({'head.id': id})
             if node:
                 reference = Reference(self, node)
                 self._reference_sequence[id] = reference
@@ -2603,15 +2804,28 @@ class Pipeline(object):
         else:
             return None
 
-    def build_query(self, override, profile):
+    def accession_for(self, id):
+        if id not in self._accession:
+            node = self.database['accession'].find_one({'head.id': id})
+            if node:
+                self._accession[id] = node
+            else:
+                self._accession[id] = None
+        if id in self._accession:
+            return self._accession[id]
+        else:
+            return None
+
+    def build_query(self, override, profile, kind='sample'):
         query = {}
         if profile is not None and profile in self.configuration['profile']:
-            for k,v in self.configuration['profile'][profile]['sample'].items():
-                query['head.{}'.format(k)] = v
+            for k,v in self.configuration['profile'][profile][kind].items():
+                query[k] = v
                 
         if override:
             for k,v in override.items():
                 query['head.{}'.format(k)] = v
+        self.log.debug('Query is \n{}'.format(to_json(query)))
         return query
 
     def rebuild(self):
@@ -2635,45 +2849,144 @@ class Pipeline(object):
                 pass
     
 
-    def populate_reference(self, path):
-        def save_reference_sample(collection, sample):
-            if sample is not None:
-                
-                # fix the sequence structure
-                if 'sequence' in sample:
-                    if sample['sequence']:
-                        sample['sequence'] = {
-                            'nucleotide': sample['sequence'],
-                            'strand': True
-                        }
-                        # fix the read frame
-                        if 'read frame' in sample:
-                            sample['sequence']['read frame'] = sample['read frame']
-                            del sample['read frame']
-                            sample['framed'] = True
-                        else:
-                            sample['sequence']['read frame'] = 0
-                            sample['framed'] = False
-                    else:
-                        del sample['sequence']
+    def search_blat(self):
+        result = None
+        command = self.configuration['command']['blat']
+        process = Popen(
+            args=command['arguments'],
+            cwd=command['cwd'],
+            env=None,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=PIPE
+        )
+        output, error = process.communicate(input=self.to_fasta().read().encode('utf8'))
+        if output: result = StringIO(output.decode('utf8'))
+        return result
+
+    def populate_accession(self, format):
+        def save_accession_record(collection, accession):
+            if accession is not None:
+                accession['organism name'] = 'mus musculus'
+                if 'description' in accession:
+                    accession['simple description'] = accession['description'].lower()
+                    for pattern in self.configuration['strain']['mus musculus']:
+                        if pattern['expression'].search(accession['simple description']):
+                            accession['strain'] = pattern['name']
+                            break
                         
-                if 'sequence' in sample:
-                    collection.save(sample)
+                # fix the sequence structure
+                if 'sequence' in accession:
+                    if accession['sequence']:
+                        accession['sequence'] = {
+                            'nucleotide': accession['sequence'],
+                            'strand': True,
+                            'read frame': 0
+                        }
+                    else:
+                        del accession['sequence']
+                        
+                if 'sequence' in accession:
+                    record = { 'head': { 'id': accession['accession number'] }, 'body': accession }
+                    for k in (
+                        'strain',
+                        'organism name',
+                        'format'
+                    ):
+                        if k in accession:
+                            record['head'][k] = accession[k]
+                            del accession[k]
+                    collection.save(record)
                 else:
-                    self.log.error('refusing to save reference record %s with missing sequence', sample['id'])
+                    self.log.error('refusing to save accession record %s with missing sequence', accession['accession number'])
+
+        if format in self.configuration['accession header']:
+            parser = self.configuration['accession header'][format]
+        else:
+            self.log.critical('unknown fasta header format %s', format)
+            raise SystemExit(1)
+            
+        collection = self.database['accession']
+        accession = None
+        for line in sys.stdin:
+            if line is None: break
+            else:
+                line = line.strip()
+                if line:
+                    if line[0] == '>':
+                        # at the start of a new record save the completed one
+                        save_accession_record(collection, accession)
+                        
+                        # initialize a new accession
+                        accession = { 'header': line, 'sequence': '', 'format': format }
+                        match = parser.search(line)
+                        if match:
+                            parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
+                            for k,v in parsed.items():
+                                if v: accession[k] = v
+                    else:
+                        if self.configuration['expression']['nucleotide sequence'].search(line):
+                            accession['sequence'] += line.upper()
+        # save the last one
+        save_accession_record(collection, accession)
+
+    def populate_reference(self, path):
+        def save_reference_record(collection, reference):
+            if reference is not None:
+                # fix the sequence structure
+                if 'sequence' in reference:
+                    if reference['sequence']:
+                        reference['sequence'] = { 'nucleotide': reference['sequence'], 'strand': True }
+                        
+                        # fix the read frame
+                        reference['sequence']['read frame'] = reference['read frame']
+                        del reference['read frame']
+                    else:
+                        del reference['sequence']
+                        
+                if 'sequence' in reference:
+                    record = { 'head': { 'id': reference['allele name'] }, 'body': reference }
+                    for k in (
+                        'framed',
+                        'functionality',
+                        'region',
+                        'strain',
+                        'organism name',
+                        'confirmed genomoic dna',
+                        'identified genomoic dna',
+                        'accession'
+                    ):
+                        if k in reference:
+                            record['head'][k] = reference[k]
+                            del reference[k]
+                    if record['head']['confirmed genomoic dna'] and record['head']['identified genomoic dna']:
+                        record['head']['verified'] = True
+                    else:
+                        record['head']['verified'] = False
+                    
+                    if self.accession_for(record['head']['accession']) is None:
+                        self.log.error('accession %s is missing', record['head']['accession'])
+                    collection.save(record)
+                else:
+                    self.log.error('refusing to save reference record %s with missing sequence', reference['id'])
 
         collection = self.database['reference']
-        sample = None
+        reference = None
         with io.open(path, 'rb') as fasta:
             for line in fasta:
                 if line:
                     line = line.strip().decode('utf8')
                     if line[0] == '>':
                         # at the start of a new record save the completed one
-                        save_reference_sample(collection, sample)
+                        save_reference_record(collection, reference)
                             
-                        # initialize a new sample
-                        sample = { 'id': line, 'sequence': '' }
+                        # initialize a new reference
+                        reference = {
+                            'imgt meta': line,
+                            'sequence': '',
+                            'confirmed genomoic dna': True,
+                            'identified genomoic dna': True,
+                        }
                         match = self.configuration['expression']['imgt fasta header'].search(line)
                         if match:
                             parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
@@ -2687,40 +3000,74 @@ class Pipeline(object):
                                                 v = None
                                             else:
                                                 v = int(v)
+                                        elif k == 'functionality':
+                                            if '(' in v:
+                                                reference['confirmed genomoic dna'] = False
+                                                v = v.strip('()')
+                                            elif '[' in v:
+                                                reference['identified genomoic dna'] = False
+                                                v = v.strip('[]')
+                                            if v == 'ORF': v = 'O'
+                                        elif k == 'organism name':
+                                            v = v.lower()
+                                            
                                     except ValueError as e:
                                         self.log.error('unable to decode %s as int for %s', v, k)
                                     else:
-                                        if v is not None:
-                                            sample[k] = v
+                                        if v: reference[k] = v
                                             
                             # fix the region for heavy chain
-                            sample['region'] += 'H'
+                            reference['region'] += 'H'
                             
-                            # fix the strand
-                            sample['strand'] = True
-                            if 'polarity' in sample:
-                                if sample['polarity'] == 'rev-compl': sample['strand'] = False
-                                del sample['polarity']
+                            # fix the accession strand
+                            reference['accession strand'] = True
+                            if 'polarity' in reference:
+                                if reference['polarity'] == 'rev-compl':
+                                    reference['accession strand'] = False
+                                del reference['polarity']
                                     
                             # fix the start offset to zero based
-                            if 'start' in sample: sample['start'] -= 1
+                            if 'start' in reference: reference['start'] -= 1
                             
                             # fix the read frame offset to zero based
-                            if 'read frame' in sample: sample['read frame'] -= 1
+                            if 'read frame' in reference:
+                                reference['read frame'] -= 1
+                                reference['framed'] = True
+                            else:
+                                reference['framed'] = False
+                                reference['read frame'] = 0
                     else:
                         if self.configuration['expression']['nucleotide sequence'].search(line):
-                            sample['sequence'] += line.upper()
+                            reference['sequence'] += line.upper()
                 else:
                     break
                     
             # save the last one if it has a sequence
-            save_reference_sample(collection, sample)
+            save_reference_record(collection, reference)
 
-    def reference_to_blast_fasta(self, region):
+    def accession_to_fasta(self):
+        buffer = StringIO()
+        collection = self.database['accession']
+        cursor = collection.find()
+        for node in cursor:
+            buffer.write(node['body']['header'])
+            buffer.write('\n')
+            sequence = Sequence(self,node['body']['sequence'])
+            begin = 0
+            end = 0
+            while end < sequence.length:
+                end = min(begin + self.configuration['constant']['fasta line length'], sequence.length)
+                buffer.write(sequence.nucleotide[begin:end])
+                buffer.write('\n')
+                begin = end
+        buffer.seek(0)
+        print(buffer.read())
+
+    def reference_to_blast_fasta(self, query, profile):
+        q = self.build_query(query, profile, 'reference')
         buffer = StringIO()
         collection = self.database['reference']
-        query = { 'region': region }
-        cursor = collection.find(query)
+        cursor = collection.find(q)
         for node in cursor:
             reference = Reference(self, node)
             buffer.write('>')
@@ -2736,11 +3083,11 @@ class Pipeline(object):
         buffer.seek(0)
         print(buffer.read())
 
-    def reference_to_auxiliary(self, region):
+    def reference_to_auxiliary(self, query=None, profile='default'):
+        q = self.build_query(query, profile, 'reference')
         buffer = StringIO()
         collection = self.database['reference']
-        query = { 'region': region }
-        cursor = collection.find(query)
+        cursor = collection.find(q)
         for node in cursor:
             reference = Reference(self, node)
             if reference.framed:
@@ -2783,8 +3130,6 @@ class Pipeline(object):
 
     def fasta(self, query=None, limit=None, skip=None, profile='default'):
         q = self.build_query(query, profile)
-        self.log.debug('Query is \n{}'.format(to_json(q)))
-        
         collection = self.database['sample']
         cursor = collection.find(q)
         if limit is not None:
@@ -2797,10 +3142,22 @@ class Pipeline(object):
             print(sample.fasta)
         cursor.close()
 
+    def fastq(self, query=None, limit=None, skip=None, profile='default'):
+        q = self.build_query(query, profile)
+        collection = self.database['sample']
+        cursor = collection.find(q)
+        if limit is not None:
+            cursor.limit(limit)
+        if skip is not None:
+            cursor.skip(skip)
+            
+        for node in cursor:
+            sample = Sample(self, node)
+            print(sample.fastq)
+        cursor.close()
+
     def view(self, query=None, limit=None, skip=None, profile='default'):
         q = self.build_query(query, profile)
-        self.log.debug('Query is \n{}'.format(to_json(q)))
-        
         collection = self.database['sample']
         cursor = collection.find(q)
         if limit is not None:
@@ -2816,7 +3173,6 @@ class Pipeline(object):
     def info(self, query, limit=None, skip=None, profile='default'):
         q = self.build_query(query, profile)
         collection = self.database['sample']
-        self.log.debug('Query is \n{}'.format(to_json(q)))
         cursor = collection.find(q)
         if limit is not None:
             cursor.limit(limit)
@@ -2830,8 +3186,6 @@ class Pipeline(object):
 
     def count(self, query=None, profile='default'):
         q = self.build_query(query, profile)
-        self.log.debug('Query is \n{}'.format(to_json(q)))
-        
         collection = self.database['sample']
         print(collection.count(q))
 
@@ -2841,15 +3195,21 @@ class Pipeline(object):
             block.simulate(json, alignment, profile)
 
     def execute(self, cmd):
-        if cmd.action == 'load-reference':
+        if cmd.action == 'accession-populate':
+            self.populate_accession(cmd.instruction['format'])
+            
+        if cmd.action == 'accession-fasta':
+            self.accession_to_fasta()
+            
+        if cmd.action == 'ref-populate':
             for path in cmd.instruction['path']:
                 self.populate_reference(path)
                 
-        elif cmd.action == 'to-blast-fasta':
-            self.reference_to_blast_fasta(cmd.instruction['region'])
+        elif cmd.action == 'ref-fasta':
+            self.reference_to_blast_fasta(cmd.query, cmd.instruction['profile'])
             
-        elif cmd.action == 'to-auxiliary':
-            self.reference_to_auxiliary(cmd.instruction['region'])
+        elif cmd.action == 'ref-igblast-aux':
+            self.reference_to_auxiliary(cmd.query, cmd.instruction['profile'])
                 
         elif cmd.action == 'populate':
             self.populate(
@@ -2872,6 +3232,13 @@ class Pipeline(object):
             
         elif cmd.action == 'fasta':
             self.fasta(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+            
+        elif cmd.action == 'fastq':
+            self.fastq(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
@@ -2914,7 +3281,7 @@ def main():
             pipeline.execute(cmd)
 
         except ValueError as e:
-            self.log.critical(e)
+            logging.getLogger('main').critical(e)
             sys.exit(1)
         except(KeyboardInterrupt, SystemExit) as e:
             pipeline.close()
