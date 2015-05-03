@@ -4,18 +4,18 @@
 # Somatic V/D/J recombination analyzer
 # Author: Lior Galanti < lior.galanti@nyu.edu >
 # NYU Center for Genetics and System Biology 2015
-#     
-# somatic is free software; you can redistribute it and/or modify it under the terms of 
-# the GNU General Public License as published by the Free Software Foundation; 
+#
+# somatic is free software; you can redistribute it and/or modify it under the terms of
+# the GNU General Public License as published by the Free Software Foundation;
 # either version 2 of the License, or (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License along with this program.
 # If not, see <http://www.gnu.org/licenses/>.
-# 
+#
 
 import sys
 import logging
@@ -23,7 +23,8 @@ import re
 import json
 import uuid
 import io
-import hashlib 
+import hashlib
+import math
 
 from io import StringIO, BytesIO
 from datetime import timedelta, datetime
@@ -35,22 +36,8 @@ from pymongo.son_manipulator import SONManipulator
 from pymongo import MongoClient, DESCENDING, ASCENDING
 from pymongo.errors import BulkWriteError
 
-def to_json(node):
-    def handler(o):
-        result = None
-        if isinstance(o, datetime):
-            result = o.isoformat()
-        if isinstance(o, ObjectId):
-            result = str(o)
-        if isinstance(o, set):
-            result = list(o)
-        if isinstance(o, Sequence):
-            result = o.node
-        if isinstance(o, Sample):
-            result = o.head
-        return result
-
-    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
+BIN_BASE = '/Users/lg/code/somatic/bin'
+DB_BASE = '/Users/lg/code/somatic/db'
 
 log_levels = {
     'debug': logging.DEBUG,
@@ -110,10 +97,41 @@ configuration = {
                 'title': 'S',
                 'width': 1,
                 'value': 'subject strand',
-            }            
+            }
         }
     },
     'profile': {
+        'DH': {
+            'accession': {
+                'head.id': {
+                    '$in': [
+                    	'AJ851868',
+                    	'AC073553',
+
+                    	'J00440',
+                    	'L32868',
+                    	'D13199',
+                    	'J00431',
+                    	'D13198',
+
+                    	'J00434',
+                    	'M35332',
+                    	'J00436',
+                    	'J00438',
+                    	'J00439',
+                    	'AF428079',
+                    	'AF428080',
+                    	'J00437',
+                    	'M60961',
+                    	'J00435',
+                    	'J00432',
+                    	'J00433',
+                    	'M23243',
+                    	'M26508',
+                    ]
+                }
+            },
+        },
         'b6~': {
             'reference': {
                 'head.verified': True,
@@ -317,9 +335,34 @@ configuration = {
         },
     },
     'yes/no question': ['Y', 'N'],
-    'regions': ['VH', 'DH', 'JH'],
     'expression': {
         'gapped sequence': re.compile('^\s+Query_[0-9]+\s+(?P<offset>[0-9]+)\s+(?P<sequence>[ATCGN-]+)\s+[0-9]+$'),
+        'blat hit': re.compile(
+            r"""
+            (?P<match>[^\t]+)\t
+            (?P<mismatch>[^\t]+)\t
+            (?P<repeat_match>[^\t]+)\t
+            (?P<n_count>[^\t]+)\t
+            (?P<inserts_in_query>[^\t]+)\t
+            (?P<inserted_base_in_query>[^\t]+)\t
+            (?P<inserts_in_target>[^\t]+)\t
+            (?P<inserted_base_in_target>[^\t]+)\t
+            (?P<query_strand>[^\t]+)\t
+            (?P<query_name>[^\t]+)\t
+            (?P<query_size>[^\t]+)\t
+            (?P<query_start>[^\t]+)\t
+            (?P<query_end>[^\t]+)\t
+            (?P<target_name>[^\t]+)\t
+            (?P<target_size>[^\t]+)\t
+            (?P<target_start>[^\t]+)\t
+            (?P<target_end>[^\t]+)\t
+            (?P<block_count>[^\t]+)\t
+            (?P<block_size>[^\t]+)\t
+            (?P<query_block_start>[^\t]+)\t
+            (?P<target_block_start>[^\t]+)
+            """,
+            re.VERBOSE
+        ),
         'expand hit': re.compile(
             r"""
             (?P<region>VH|DH|JH),
@@ -434,11 +477,11 @@ configuration = {
                 'expression': re.compile(r'\b(?:c57bl/6|c57)\b', re.IGNORECASE)
             },
             {
-                'name': 'C57BL/6J',
+                'name': 'C57BL/6',
                 'expression': re.compile(r'\bc57bl/6j\b', re.IGNORECASE)
             },
             {
-                'name': 'C57BL/6N',
+                'name': 'C57BL/6',
                 'expression': re.compile(r'\bc57bl/6n\b', re.IGNORECASE)
             },
             {
@@ -481,19 +524,20 @@ configuration = {
     },
     'command': {
         'blat': {
-            'cwd': '/Users/lg/code/blat',
+            'cwd': DB_BASE + '/blat',
             'arguments': [
-                'blat',
+                BIN_BASE + '/blat',
+                '-noHead',
                 'chr12.fa',
                 'stdin',
                 'stdout',
-                '-minIdentity=100'
+                '-minIdentity=95'
             ]
         },
         'igblast': {
-            'cwd': '/Users/lg/code/somatic/igblast',
+            'cwd': DB_BASE + '/igblast',
             'arguments': [
-                'igblastn',
+                BIN_BASE + '/igblastn',
                 '-germline_db_V', 'database/mouse_imgt_vh',
                 '-germline_db_J', 'database/mouse_imgt_jh',
                 '-germline_db_D', 'database/mouse_imgt_dh',
@@ -511,9 +555,9 @@ configuration = {
             ]
         },
         'igblast.gapped': {
-            'cwd': '/Users/lg/code/somatic/igblast',
+            'cwd': DB_BASE + '/igblast',
             'arguments': [
-                'igblastn',
+                BIN_BASE + '/igblastn',
                 '-germline_db_V', 'database/mouse_imgt_vh',
                 '-germline_db_J', 'database/mouse_imgt_jh',
                 '-germline_db_D', 'database/mouse_imgt_dh',
@@ -528,257 +572,268 @@ configuration = {
                 '-num_threads', '8',
                 '-outfmt', '4',
             ]
-        } 
+        }
     },
     'interface': {
         'global': {
             'argument': [
-                'version', 
+                'version',
                 'verbosity'
             ]
-        }, 
+        },
         'instruction': {
             'description': 'Lior Galanti lior.galanti@nyu.edu NYU Center for Genomics & Systems Biology'
-        }, 
+        },
         'prototype': {
             'alignment': {
                 'flag': [
-                    '-A', 
+                    '-A',
                     '--alignment'
-                ], 
+                ],
                 'parameter': {
-                    'action': 'store_true', 
-                    'dest': 'alignment', 
+                    'action': 'store_true',
+                    'dest': 'alignment',
                     'help': 'print alignment diagram'
                 }
-            }, 
+            },
             'limit': {
                 'flag': [
-                    '-L', 
+                    '-L',
                     '--limit'
-                ], 
+                ],
                 'parameter': {
                     'type': 'int',
-                    'dest': 'limit', 
+                    'dest': 'limit',
                     'help': 'max results to return'
                 }
-            }, 
+            },
             'skip': {
                 'flag': [
-                    '-S', 
+                    '-S',
                     '--skip'
-                ], 
+                ],
                 'parameter': {
                     'type': 'int',
-                    'dest': 'skip', 
+                    'dest': 'skip',
                     'help': 'skip the first SKIP results'
                 }
-            }, 
+            },
+            'flanking': {
+                'flag': [
+                    '-F',
+                    '--flanking'
+                ],
+                'parameter': {
+                    'default': 0,
+                    'type': 'int',
+                    'dest': 'flanking',
+                    'help': 'include flanking region on each side'
+                }
+            },
             'gapped': {
                 'flag': [
-                    '-G', 
+                    '-G',
                     '--gapped'
-                ], 
+                ],
                 'parameter': {
                     'choices': [
-                        'Y', 
+                        'Y',
                         'N'
-                    ], 
-                    'dest': 'gapped', 
+                    ],
+                    'dest': 'gapped',
                     'help': 'gapped alignment'
                 }
-            }, 
+            },
             'drop': {
                 'flag': [
-                    '-D', 
+                    '-D',
                     '--drop'
-                ], 
+                ],
                 'parameter': {
-                    'action': 'store_true', 
-                    'dest': 'drop', 
+                    'action': 'store_true',
+                    'dest': 'drop',
                     'help': 'drop library items'
                 }
-            }, 
+            },
             'strain': {
                 'flag': [
                     '--strain'
-                ], 
+                ],
                 'parameter': {
-                    'dest': 'strain', 
+                    'dest': 'strain',
                     'help': 'strain'
                 }
-            }, 
+            },
             'id': {
                 'flag': [
-                    '-d', 
+                    '-d',
                     '--id'
-                ], 
+                ],
                 'parameter': {
-                    'dest': 'id', 
-                    'help': 'sample id', 
+                    'dest': 'id',
+                    'help': 'sample id',
                     'metavar': 'ID'
                 }
-            }, 
+            },
             'in frame': {
                 'flag': [
-                    '-F', 
+                    '-F',
                     '--in-frame'
-                ], 
+                ],
                 'parameter': {
                     'choices': [
-                        'Y', 
+                        'Y',
                         'N'
-                    ], 
-                    'dest': 'in frame', 
+                    ],
+                    'dest': 'in frame',
                     'help': 'in frame alignment'
                 }
-            }, 
+            },
             'productive': {
                 'flag': [
-                    '-P', 
+                    '-P',
                     '--productive'
-                ], 
+                ],
                 'parameter': {
                     'choices': [
-                        'Y', 
+                        'Y',
                         'N'
-                    ], 
-                    'dest': 'productive', 
+                    ],
+                    'dest': 'productive',
                     'help': 'productive alignment'
                 }
-            }, 
+            },
             'json': {
                 'flag': [
-                    '-J', 
+                    '-J',
                     '--json'
-                ], 
+                ],
                 'parameter': {
-                    'action': 'store_true', 
-                    'dest': 'json', 
+                    'action': 'store_true',
+                    'dest': 'json',
                     'help': 'print json info'
                 }
-            }, 
+            },
             'library': {
                 'flag': [
-                    '-l', 
+                    '-l',
                     '--library'
-                ], 
+                ],
                 'parameter': {
-                    'dest': 'library', 
-                    'help': 'library name', 
+                    'dest': 'library',
+                    'help': 'library name',
                     'metavar': 'NAME'
                 }
-            }, 
+            },
             'format': {
                 'flag': [
-                    '-f', 
+                    '-f',
                     '--format'
-                ], 
+                ],
                 'parameter': {
-                    'required': True,
                     'choices': [
-                        'imgt', 
+                        'imgt',
                         'ncbi'
-                    ], 
-                    'dest': 'format', 
+                    ],
+                    'dest': 'format',
                     'help': 'fasta header format'
                 }
-            }, 
+            },
             'path': {
                 'flag': [
                     'path'
-                ], 
+                ],
                 'parameter': {
-                    'help': 'file paths', 
-                    'metavar': 'PATH', 
+                    'help': 'file paths',
+                    'metavar': 'PATH',
                     'nargs': '*'
                 }
-            }, 
+            },
             'premature': {
                 'flag': [
-                    '-T', 
+                    '-T',
                     '--premature'
-                ], 
+                ],
                 'parameter': {
                     'choices': [
-                        'Y', 
+                        'Y',
                         'N'
-                    ], 
-                    'dest': 'premature', 
+                    ],
+                    'dest': 'premature',
                     'help': 'premature termination alignment'
                 }
-            }, 
+            },
             'region': {
                 'flag': [
-                    '-r', 
+                    '-r',
                     '--region'
-                ], 
+                ],
                 'parameter': {
                     'choices': [
-                        'VH', 
-                        'DH', 
+                        'VH',
+                        'DH',
                         'JH'
-                    ], 
-                    'dest': 'region', 
+                    ],
+                    'dest': 'region',
                     'help': 'region'
                 }
-            }, 
+            },
             'profile': {
                 'flag': [
-                    '-p', 
+                    '-p',
                     '--profile'
-                ], 
+                ],
                 'parameter': {
                     'default': 'default',
                     'choices': None,
                     'metavar': 'NAME',
-                    'dest': 'profile', 
+                    'dest': 'profile',
                     'help': 'profile is one of default, productive, productive.dropped, psudo, premature, inframe, outframe'
                 }
-            }, 
+            },
             'valid': {
                 'flag': [
-                    '-V', 
+                    '-V',
                     '--valid'
-                ], 
+                ],
                 'parameter': {
                     'choices': [
-                        'Y', 
+                        'Y',
                         'N'
-                    ], 
-                    'dest': 'valid', 
+                    ],
+                    'dest': 'valid',
                     'help': 'valid alignment'
                 }
-            }, 
+            },
             'verbosity': {
                 'flag': [
-                    '-v', 
+                    '-v',
                     '--verbosity'
-                ], 
+                ],
                 'parameter': {
                     'choices': [
-                        'debug', 
-                        'info', 
-                        'warning', 
-                        'error', 
+                        'debug',
+                        'info',
+                        'warning',
+                        'error',
                         'critical'
-                    ], 
-                    'default': 'info', 
-                    'dest': 'verbosity', 
-                    'help': 'logging verbosity level', 
+                    ],
+                    'default': 'info',
+                    'dest': 'verbosity',
+                    'help': 'logging verbosity level',
                     'metavar': 'LEVEL'
                 }
-            }, 
+            },
             'version': {
                 'flag': [
                     '--version'
-                ], 
+                ],
                 'parameter': {
-                    'action': 'version', 
+                    'action': 'version',
                     'version': '%(prog)s 1.0'
                 }
             }
-        }, 
+        },
         'section': {
             'action': [
                 {
@@ -786,191 +841,205 @@ configuration = {
                         'library',
                         'strain',
                         'drop'
-                    ], 
+                    ],
                     'instruction': {
-                        'description': 'match each read in file to regions with igblast and store results in the library. takes data from stdin', 
-                        'help': 'populate samples for library', 
+                        'description': 'match each read in file to regions with igblast and store results in the library. takes data from stdin',
+                        'help': 'populate samples for library',
                         'name': 'populate'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'library'
-                    ], 
+                    ],
                     'instruction': {
-                        'description': 'remove all samples for the provided library name', 
-                        'help': 'drop samples of a given library', 
+                        'description': 'remove all samples for the provided library name',
+                        'help': 'drop samples of a given library',
                         'name': 'drop'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'profile',
-                        'library', 
-                        'id', 
-                        'gapped', 
-                        'valid', 
-                        'in frame', 
+                        'library',
+                        'id',
+                        'gapped',
+                        'valid',
+                        'in frame',
                         'premature',
                         'limit',
                         'skip',
                         'productive',
-                    ], 
+                    ],
                     'instruction': {
-                        'help': 'view sample alignment', 
+                        'help': 'view sample alignment',
                         'name': 'view'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'profile',
-                        'library', 
-                        'id', 
-                        'gapped', 
-                        'valid', 
-                        'in frame', 
+                        'library',
+                        'id',
+                        'gapped',
+                        'valid',
+                        'in frame',
                         'premature',
                         'productive',
-                    ], 
+                    ],
                     'instruction': {
-                        'help': 'count sample alignment', 
+                        'help': 'count sample alignment',
                         'name': 'count'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'profile',
-                        'library', 
-                        'id', 
-                        'gapped', 
-                        'valid', 
-                        'in frame', 
+                        'library',
+                        'id',
+                        'gapped',
+                        'valid',
+                        'in frame',
                         'premature',
                         'limit',
                         'skip',
                         'productive',
-                    ], 
+                    ],
                     'instruction': {
-                        'help': 'print sample fasta stream', 
+                        'help': 'print sample fasta stream',
                         'name': 'fasta'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'profile',
-                        'library', 
-                        'id', 
-                        'gapped', 
-                        'valid', 
-                        'in frame', 
+                        'library',
+                        'id',
+                        'gapped',
+                        'valid',
+                        'in frame',
                         'premature',
                         'limit',
                         'skip',
                         'productive',
-                    ], 
+                    ],
                     'instruction': {
-                        'help': 'print sample fastq stream', 
+                        'help': 'print sample fastq stream',
                         'name': 'fastq'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'profile',
-                        'library', 
-                        'id', 
-                        'gapped', 
-                        'valid', 
-                        'in frame', 
+                        'library',
+                        'id',
+                        'gapped',
+                        'valid',
+                        'in frame',
                         'premature',
                         'limit',
                         'skip',
                         'productive',
-                    ], 
+                    ],
                     'instruction': {
-                        'help': 'view JSON sample record', 
+                        'help': 'view JSON sample record',
                         'name': 'info'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'profile',
-                        'library', 
+                        'library',
                         'strain',
-                        'json', 
+                        'json',
                         'alignment'
-                    ], 
+                    ],
                     'instruction': {
-                        'help': 'process alignment without updating the database', 
+                        'help': 'process alignment without updating the database',
                         'name': 'simulate'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'format',
                     ],
                     'instruction': {
-                        'help': 'load imgt accession sequences from fasta file. takes data from stdin', 
+                        'help': 'load imgt accession sequences from fasta file. takes data from stdin',
                         'name': 'accession-populate'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'format',
                         'profile',
                         'strain',
-                        'id', 
+                        'id',
                     ],
                     'instruction': {
-                        'help': 'dump accession sequences to fasta', 
+                        'help': 'dump accession sequences to fasta',
                         'name': 'accession-fasta'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'path'
-                    ], 
+                    ],
                     'instruction': {
-                        'help': 'load imgt reference sequences from fasta file', 
+                        'help': 'load imgt reference sequences from fasta file',
                         'name': 'ref-populate'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'region',
                         'strain',
                         'profile',
-                        'id', 
-                    ], 
+                        'id',
+                        'flanking',
+                    ],
                     'instruction': {
-                        'help': 'dump reference sequences to fasta', 
+                        'help': 'align reference sequences to genome',
+                        'name': 'ref-align'
+                    }
+                },
+                {
+                    'argument': [
+                        'region',
+                        'strain',
+                        'profile',
+                        'id',
+                        'flanking',
+                    ],
+                    'instruction': {
+                        'help': 'dump reference sequences to fasta',
                         'name': 'ref-fasta'
                     }
-                }, 
+                },
                 {
                     'argument': [
                         'region',
                         'strain',
                         'profile',
-                        'id', 
-                    ], 
+                        'id',
+                    ],
                     'instruction': {
-                        'help': 'dump reference sequences to igblast auxiliary file', 
+                        'help': 'dump reference sequences to igblast auxiliary file',
                         'name': 'ref-igblast-aux'
                     }
-                }, 
+                },
                 {
-                    'argument': [], 
+                    'argument': [],
                     'instruction': {
-                        'help': 'rebuild database indexes', 
+                        'help': 'rebuild database indexes',
                         'name': 'rebuild'
                     }
                 }
-            ], 
+            ],
             'instruction': {
-                'description': '', 
-                'dest': 'action', 
-                'help': None, 
-                'metavar': 'ACTION', 
+                'description': '',
+                'dest': 'action',
+                'help': None,
+                'metavar': 'ACTION',
                 'title': 'pipeline operations'
             }
         }
@@ -1087,15 +1156,15 @@ configuration = {
     'constant': {
         'buffer size': 32,
         'fasta line length': 80,
-        'minimum v identity': 0.7, 
-        'minimum d identity': 0.7, 
-        'minimum j identity': 0.8, 
-        'minimum v alignment': 45, 
-        'minimum d alignment': 4, 
-        'minimum j alignment': 30, 
+        'minimum v identity': 0.7,
+        'minimum d identity': 0.7,
+        'minimum j identity': 0.8,
+        'minimum v alignment': 45,
+        'minimum d alignment': 4,
+        'minimum j alignment': 30,
         'd overlap penalty factor': 0.5
     },
-    'vdj regions': {
+    'region': {
         'VH': {
             'name': 'VH',
             'minimum identity': 0.7,
@@ -1150,32 +1219,70 @@ configuration = {
             ]
         }
     ]
-
 }
+
+def parse_match(match):
+    if match is not None:
+        return dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items() if k and v))
+    else:
+        return None
+
+def to_fasta(id, sequence, description=None, limit=configuration['constant']['fasta line length']):
+    if id and sequence:
+        buffer = []
+        if description: buffer.append('>{} {}'.format(id, description))
+        else: buffer.append('>{}'.format(id))
+        begin = 0
+        end = 0
+        length = len(sequence)
+        while end < length:
+            end = min(begin + limit, length)
+            buffer.append(sequence[begin:end])
+            begin = end
+        return '\n'.join(buffer)
+    else:
+        return None
 
 def transform_to_document(node):
     if isinstance(node, list):
         return [ transform_to_document(v) for v in node ]
-        
+
     elif isinstance(node, dict):
         for key, value in node.items():
             node[key] = transform_to_document(value)
         return node
-        
+
     elif isinstance(node, Sample):
         return node.document
-        
+
     elif isinstance(node, Reference):
         return node.document
-        
+
     elif isinstance(node, Accession):
         return node.document
-        
+
     elif isinstance(node, Sequence):
         return node.document
-        
+
     else: return node
-    
+
+
+def to_json(node):
+    def handler(o):
+        result = None
+        if isinstance(o, datetime):
+            result = o.isoformat()
+        if isinstance(o, ObjectId):
+            result = str(o)
+        if isinstance(o, set):
+            result = list(o)
+        if isinstance(o, Sequence):
+            result = o.node
+        if isinstance(o, Sample):
+            result = o.head
+        return result
+    document = transform_to_document(node)
+    return json.dumps(document, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
 
 def simplify(value):
     if value: return value.lower()
@@ -1199,11 +1306,11 @@ class CommandLineParser(object):
         for argument in self.node['prototype'].values():
             if 'type' in argument['parameter']:
                 argument['parameter']['type'] = eval(argument['parameter']['type'])
-                
+
         # add global arguments
         for argument in self.node['global']['argument']:
             add_argument(self.parser, argument)
-            
+
         if self.sectioned:
             # Add individual command sections
             sub = self.parser.add_subparsers(**self.node['section']['instruction'])
@@ -1212,7 +1319,7 @@ class CommandLineParser(object):
                 if 'argument' in action:
                     for argument in action['argument']:
                         add_argument(action_parser, argument)
-                        
+
                 # Add groups of arguments, if any.
                 if 'group' in action:
                     for group in action['group']:
@@ -1270,7 +1377,7 @@ class CommandLineParser(object):
 class Sequence(object):
     def __init__(self, pipeline, node=None):
         self.log = logging.getLogger('Sequence')
-        self.pipeline = pipeline 
+        self.pipeline = pipeline
         self.node = node
         self._reversed = None
         self.reset()
@@ -1315,7 +1422,7 @@ class Sequence(object):
 
     def clone(self):
         clone = {
-            'nucleotide': self.nucleotide, 
+            'nucleotide': self.nucleotide,
             'read frame': self.read_frame,
             'strand': self.strand
         }
@@ -1324,14 +1431,20 @@ class Sequence(object):
         return Sequence(self.pipeline, clone)
 
     def crop(self, start, end):
-        cropped = {
-            'nucleotide': self.nucleotide[start:end], 
-            'read frame': (3 - (start - self.read_frame)%3)%3,
-            'strand': self.strand
-        }
-        if 'quality' in self.node:
-            cropped['quality'] = self.quality[start:end]
-        return Sequence(self.pipeline, cropped)
+        sequence = None
+        if start is not None and end is not None:
+            start = max(start, 0)
+            end = min(end, self.length)
+            if end > start:
+                cropped = {
+                    'nucleotide': self.nucleotide[start:end],
+                    'read frame': (3 - (start - self.read_frame)%3)%3,
+                    'strand': self.strand
+                }
+                if 'quality' in self.node:
+                    cropped['quality'] = self.quality[start:end]
+                sequence = Sequence(self.pipeline, cropped)
+        return sequence
 
     @property
     def read_frame(self):
@@ -1438,13 +1551,13 @@ class Sequence(object):
     def reversed(self):
         if self._reversed is None and self.nucleotide:
             reversed = {
-                'nucleotide': ''.join([ self.configuration['complement'][b] for b in list(self.nucleotide) ][::-1]), 
+                'nucleotide': ''.join([ self.configuration['complement'][b] for b in list(self.nucleotide) ][::-1]),
                 'read frame': (self.length - self.read_frame) % 3,
                 'strand': not self.strand
             }
             if 'quality' in self.node:
                 reversed['quality'] = self.quality[::-1]
-                
+
             self._reversed = Sequence(self.pipeline, reversed)
         return self._reversed
 
@@ -1454,10 +1567,10 @@ class Accession(object):
         self.log = logging.getLogger('Accession')
         self.pipeline = pipeline
         self.node = node
-        
+
         if self.node is None:
             self.node = { 'head': {}, 'body': {} }
-        
+
         if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
             self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
@@ -1479,6 +1592,21 @@ class Accession(object):
         return transform_to_document(self.node)
 
     @property
+    def fasta(self):
+        buffer = [ self.header ]
+        begin = 0
+        end = 0
+        while end < self.sequence.length:
+            end = min(begin + self.configuration['constant']['fasta line length'], self.sequence.length)
+            buffer.append(self.sequence.nucleotide[begin:end])
+            begin = end
+        return '\n'.join(buffer)
+
+    @property
+    def header(self):
+        return '>{} {}'.format(self.id, self.body['description'])
+
+    @property
     def head(self):
         return self.node['head']
 
@@ -1517,6 +1645,7 @@ class Accession(object):
             return self.head['strain']
         else:
             return None
+
     @strain.setter
     def strain(self, value):
         self.head['strain'] = value
@@ -1524,14 +1653,105 @@ class Accession(object):
             del self.head['strain']
 
 
+class Blat(object):
+    def __init__(self, pipeline):
+        self.log = logging.getLogger('Blat')
+        self.pipeline = pipeline
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
+    def parse_hit(self, hit):
+        hit['query strand'] = hit['query strand'] == '+'
+
+        for k in [
+            'block size',
+            'query block start',
+            'target block start',
+        ]:
+            if k in hit: hit[k] = [ int(v) for v in hit[k].split(',') if v ]
+
+        for k in [
+            'block count',
+            'inserted base in query',
+            'inserted base in target',
+            'inserts in query',
+            'inserts in target',
+            'match',
+            'mismatch',
+            'n count',
+            'query end',
+            'query size',
+            'query start',
+            'repeat match',
+            'target end',
+            'target size',
+            'target start',
+        ]:
+            if k in hit: hit[k] = int(hit[k])
+
+        hit['query length'] = hit['query end'] - hit['query start']
+        hit['target length'] = hit['target end'] - hit['target start']
+
+        hit['block'] = []
+        for i in range(hit['block count']):
+            hit['block'].append({
+                'size': hit['block size'][i],
+                'query start': hit['query block start'][i],
+                'target start': hit['target block start'][i],
+            })
+        del hit['block size']
+        del hit['query block start']
+        del hit['target block start']
+
+        hit['score'] = hit['match'] + (hit['repeat match'] / 2) - hit['mismatch'] - hit['inserts in query'] - hit['inserts in target']
+
+        millibad = 0
+        if hit['query length'] > 0 and hit['target length'] > 0:
+            diff = max(hit['query length'] - hit['target length'], 0)
+            total = hit['match'] + hit['repeat match'] + hit['mismatch']
+            if total != 0:
+                millibad = (1000 * (hit['mismatch'] + hit['inserts in query'] + round(3 * math.log(diff + 1)))) / total
+        hit['identical'] = 100.0 - millibad * 0.1
+        return hit
+
+    def search(self, fasta):
+        result = None
+        command = self.configuration['command']['blat']
+        process = Popen(
+            args=command['arguments'],
+            cwd=command['cwd'],
+            env=None,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=PIPE
+        )
+        output, error = process.communicate(input=fasta.encode('utf8'))
+        if output:
+            result = {}
+            buffer = StringIO(output.decode('utf8'))
+            for line in buffer:
+                hit = parse_match(self.configuration['expression']['blat hit'].search(line.strip()))
+                if hit:
+                    hit = self.parse_hit(hit)
+                    if hit['query name'] not in result:
+                        result[hit['query name']] = []
+                    result[hit['query name']].append(hit)
+                    del hit['query name']
+            for query in result.values():
+                query.sort(reverse=True, key=lambda x: x['score'])
+        return result
+
+
 class Reference(object):
     def __init__(self, pipeline, node=None):
         self.log = logging.getLogger('Reference')
         self.pipeline = pipeline
         self.node = node
-        
+
         if self.node is None:
-            self.node = { 
+            self.node = {
                 'head': {
                     'confirmed genomoic dna': True,
                     'identified genomoic dna': True,
@@ -1540,7 +1760,7 @@ class Reference(object):
                     'accession strand': True,
                 }
             }
-        
+
         if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
             self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
@@ -1555,9 +1775,60 @@ class Reference(object):
             buffer.append(self.head['accession'])
         if 'accession strand' in self.body:
             buffer.append('+' if self.body['accession strand'] else '-')
-            
+
         buffer.append('{} nucleotides'.format(self.length))
         return '[ {} ]'.format(', '.join(buffer))
+
+    def to_flanking_fasta(self, flank):
+        flanking = None
+        accession = self.pipeline.accession_for(self.accession)
+        if accession is not None:
+            flanking = {}
+            flanking['id'] = self.id
+            flanking['strand'] = True
+            flanking['accession start'] = self.start
+            flanking['accession end'] = self.end
+            flanking['flank start'] = max(self.start - flank, 0)
+            flanking['flank end'] = min(self.end + flank, accession.length)
+            flanking['flank length'] = flanking['flank end'] - flanking['flank start']
+            flanking['start'] = flanking['accession start'] - flanking['flank start']
+            flanking['end'] = flanking['accession end'] - flanking['flank start']
+            flanking['sequence'] = accession.sequence.crop(flanking['flank start'], flanking['flank end'])
+
+            if not self.body['accession strand']:
+                flanking['strand'] = not flanking['strand']
+                flanking['sequence'] = flanking['sequence'].reversed
+                end = flanking['flank length'] - flanking['start']
+                start = flanking['flank length'] - flanking['end']
+                flanking['end'] = end
+                flanking['start'] = start
+                
+            flanking['length'] = flanking['end'] - flanking['start']
+            
+        return flanking
+
+    def to_fasta(self, flank=0):
+        buffer = [ '>{}'.format(self.id) ]
+        sequence = self.sequence
+        if flank is not None and flank > 0:
+            accession = self.pipeline.accession_for(self.accession)
+            if accession is not None:
+                flanking = accession.sequence.crop(self.start - flank, self.end + flank)
+                if flanking is not None:
+                    if not self.body['accession strand']:
+                        flanking = flanking.reversed
+                    sequence = flanking
+        begin = 0
+        end = 0
+        while end < sequence.length:
+            end = min(begin + self.configuration['constant']['fasta line length'], sequence.length)
+            buffer.append(sequence.nucleotide[begin:end])
+            begin = end
+        return '\n'.join(buffer)
+
+    @property
+    def fasta(self):
+        return self.to_fasta()
 
     @property
     def valid(self):
@@ -1593,6 +1864,13 @@ class Reference(object):
             del self.head['id']
 
     @property
+    def accession(self):
+        if 'accession' in self.head:
+            return self.head['accession']
+        else:
+            return None
+
+    @property
     def sequence(self):
         return self.body['sequence']
 
@@ -1603,18 +1881,18 @@ class Reference(object):
         else:
             return None
 
-    @region.setter
-    def strain(self, value):
-        self.head['strain'] = value
-        if self.head['strain'] == '':
-            del self.head['strain']
-
     @property
     def strain(self):
         if 'strain' in self.head:
             return self.head['strain']
         else:
             return None
+
+    @strain.setter
+    def strain(self, value):
+        self.head['strain'] = value
+        if self.head['strain'] == '':
+            del self.head['strain']
 
     @region.setter
     def region(self, value):
@@ -1625,6 +1903,20 @@ class Reference(object):
     @property
     def length(self):
         return self.sequence.length
+
+    @property
+    def start(self):
+        if 'start' in self.body:
+            return self.body['start']
+        else:
+            return None
+
+    @property
+    def end(self):
+        if 'end' in self.body:
+            return self.body['end']
+        else:
+            return None
 
     @property
     def framed(self):
@@ -1640,11 +1932,11 @@ class Sample(object):
         self.log = logging.getLogger('Sample')
         self.pipeline = pipeline
         self.node = node
-        
+
         def load_region(node):
             if 'query' in node and isinstance(node['query'], dict):
                 node['query'] = Sequence(self.pipeline, node['query'])
-                
+
             if 'subject' in node and isinstance(node['subject'], dict):
                 node['subject'] = Sequence(self.pipeline, node['subject'])
 
@@ -1664,24 +1956,24 @@ class Sample(object):
             }
         if not self.id:
             raise InvalidSampleError('sample must have an id')
-        
+
         if not self.key:
             raise InvalidSampleError('sample must have a valid key')
-        
+
         if not self.library:
             raise InvalidSampleError('sample must have a library')
-        
+
         if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
             self.node['sequence'] = Sequence(self.pipeline, self.node['sequence'])
         else:
             self.node['sequence'] = Sequence(self.pipeline)
-            
+
         if 'hit' in self.node:
             for hit in self.node['hit']:
                 load_region(hit)
         else:
             self.node['hit'] = []
-            
+
         if 'region' in self.node:
             for value in self.node['region'].values():
                 load_region(value)
@@ -1706,17 +1998,17 @@ class Sample(object):
         def transform_to_document(node):
             if isinstance(node, list):
                 return [ transform_to_document(v) for v in node ]
-                
+
             elif isinstance(node, dict):
                 for key, value in node.items():
                     node[key] = transform_to_document(value)
                 return node
-                
+
             elif isinstance(node, Sequence):
                 return node.document
-                
+
             else: return node
-            
+
         document = transform_to_document(self.node)
         if document['hit']:
             document['matched'] = True
@@ -1900,7 +2192,7 @@ class Sample(object):
             if isinstance(o, Sequence):
                 result = o.node
             return result
-            
+
         return json.dumps(self.document, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
 
     def to_summary(self):
@@ -1910,16 +2202,16 @@ class Sample(object):
             for r in ('VH', 'DH', 'JH'):
                 if r in self.region:
                     buffer.append('{} : {}'.format(r, self.region[r]['subject id']))
-            
+
             if self.productive:
                 buffer.append('productive')
             else:
                 if self.framed:
                     buffer.append('in frame' if self.in_frame else 'out of frame')
-                    
+
                 if self.premature:
                     buffer.append('premature')
-                
+
             buffer.append('Q : {:.4}'.format(self.head['average phred']))
             return ' | '.join(buffer)
         else:
@@ -1940,7 +2232,7 @@ class Sample(object):
     def invalidate_hit(self, hit, message):
         hit['valid'] = False
         hit['error'] = message
-        self.log.warning('%dbp %s hit to %s on %s invalidated because %s', 
+        self.log.warning('%dbp %s hit to %s on %s invalidated because %s',
         hit['alignment length'], hit['region'], hit['subject id'], self.id, message)
 
     def _set_frame(self, hit):
@@ -1972,7 +2264,7 @@ class Sample(object):
                 hit['gapped'] = True
                 self.head['gapped'] = True
                 self.invalidate_hit(hit, 'hit contains a gapped alignment')
-                
+
             if hit['valid']:
                 hit['query'] = self.sequence.crop(hit['query start'], hit['query end'])
 
@@ -1989,12 +2281,12 @@ class Sample(object):
                             ref = reference.sequence.reversed
                             hit['subject start'] = ref.length - hit['subject start']
                             hit['subject end'] = ref.length - hit['subject end'] + 1
-            
+
                         hit['subject'] = ref.crop(hit['subject start'], hit['subject end'])
                         hit['framed'] = reference.framed
                         hit['functionality'] = reference.functionality
                         if reference.strain: hit['strain'] = reference.strain
-                            
+
                         # only DH regions are allowed to align to the oposite strand
                         if hit['region'] != 'DH' and hit['subject strand'] != reference.sequence.strand:
                             self.invalidate_hit(hit, 'hit aligns to the wrong strand')
@@ -2009,22 +2301,22 @@ class Sample(object):
 
     def _pick_region(self, region, candidate, strain=None):
         picked = False
-        if region in self.configuration['vdj regions']:
-            region_node = self.configuration['vdj regions'][region]
+        if region in self.configuration['region']:
+            region_node = self.configuration['region'][region]
             top = None
             search = { 'valid': [] }
             for hit in candidate:
-                if (hit['valid'] and 
+                if (hit['valid'] and
                     hit['region'] == region_node['name'] and
-                    hit['identical'] >= region_node['minimum identity'] and 
+                    hit['identical'] >= region_node['minimum identity'] and
                     hit['alignment length'] >= region_node['minimum alignment']):
                     search['valid'].append(hit)
-                    
+
             if search['valid']:
                 top = search['valid']
                 top.sort(reverse=True, key=lambda x: x['score'])
                 top = [ hit for hit in top if hit['score'] == top[0]['score'] ]
-                
+
                 if len(top) > 1:
                     search['framed'] = []
                     sample_frame = None if not self.framed else self.sequence.read_frame
@@ -2038,22 +2330,22 @@ class Sample(object):
                                 if c != query[index]:
                                     hit['codon mismatch'] += 1
                             search['framed'].append(hit)
-                            
+
                     if search['framed']:
                         top = search['framed']
                         top.sort(key=lambda x: x['codon mismatch'])
                         top = [ hit for hit in top if hit['codon mismatch'] == top[0]['codon mismatch'] ]
-    
+
                 if len(top) > 1 and strain is not None:
                     search['strained'] = [ hit for hit in top if 'strain' in hit and hit['strain'] == strain ]
                     if search['strained']:
                         top = search['strained']
-                        
+
                 if len(top) > 1:
                     search['functional'] = [ hit for hit in top if 'functionality' in hit and hit['functionality'] == 'F' ]
                     if search['functional']:
                         top = search['functional']
-                        
+
             if top:
                 self.region[region] = top[0]
                 for hit in top: hit['picked'] = True
@@ -2069,7 +2361,7 @@ class Sample(object):
         return self._pick_region('VH', self.hit, strain)
 
     def _pick_dh_region(self):
-        region_node = self.configuration['vdj regions']['DH']
+        region_node = self.configuration['region']['DH']
         top = None
         search = { 'valid': [], 'map': {} }
         for hit in self.hit:
@@ -2077,7 +2369,7 @@ class Sample(object):
                 search['map'][hit['uuid']] = hit
                 if hit['valid']:
                     search['valid'].append(hit)
-                    
+
         if search['valid']:
             if len(search['valid']) > 0:
                 search['trimmed'] = []
@@ -2086,33 +2378,33 @@ class Sample(object):
                     for k,v in hit.items():
                         if k not in ('query', 'subject', 'overlap'):
                             trimmed[k] = v
-                            
+
                     reference = self.pipeline.reference_for(hit['subject id'])
-                    
+
                     # check for overlap with VH
                     if 'VH' in self.region and self.region['VH']['query end'] > hit['query start']:
                         trimmed['query start'] = self.region['VH']['query end']
                         overlap = trimmed['query start'] - hit['query start']
                         trimmed['subject start'] += overlap
                         trimmed['overlap'] += overlap
-                        
+
                     # check for overlap with JH
                     if 'JH' in self.region and hit['query end'] > self.region['JH']['query start']:
                         trimmed['query end'] = self.region['JH']['query start']
                         overlap = hit['query end'] - trimmed['query end']
                         trimmed['subject end'] -= overlap
                         trimmed['overlap'] += overlap
-                        
+
                     # correct the score for the overlap and trim the sequences
                     trimmed['score'] = hit['bit score'] - trimmed['overlap'] * region_node['overlap penalty factor']
                     trimmed['alignment length'] = trimmed['query end'] - trimmed['query start']
                     trimmed['query'] = self.sequence.crop(trimmed['query start'], trimmed['query end'])
-    
+
                     if trimmed['subject strand'] == reference.sequence.strand:
                         trimmed['subject'] = reference.sequence.crop(trimmed['subject start'], trimmed['subject end'])
                     else:
                         trimmed['subject'] = reference.sequence.reversed.crop(trimmed['subject start'], trimmed['subject end'])
-                                        
+
                     # filter DH hits that match the criteria
                     if trimmed['query end'] > trimmed['query start']:
                         similar = 0
@@ -2132,7 +2424,7 @@ class Sample(object):
                         for k,v in trimmed.items(): original[k] = v
                         if longest >= region_node['minimum alignment']:
                             search['trimmed'].append(original)
-                            
+
                 if search['trimmed']:
                     top = search['trimmed']
         if top:
@@ -2144,17 +2436,17 @@ class Sample(object):
         if 'VH' in self.region and 'JH' in self.region:
             start = None
             end = None
-            
+
             offset = None
             # look for the most upstream cycteine on the VH region
             for index,codon in enumerate(reversed(self.region['VH']['query'].codon)):
                 if codon == 'C':
                     offset = self.region['VH']['query'].read_frame + (len(self.region['VH']['query'].codon) - index - 1) * 3
                     break
-                    
+
             if offset is not None:
                 start = self.region['VH']['query start'] + offset
-                
+
             offset = None
             # look for the most downstream tryptophan JH region
             # followed by GG, followed by either C or T
@@ -2169,7 +2461,7 @@ class Sample(object):
 
             if offset is not None:
                 end = self.region['JH']['query start'] + offset
-                
+
             if start and end:
                 self.region['CDR3'] = {
                     'subject strand': self.strand,
@@ -2191,7 +2483,7 @@ class Sample(object):
     def _check_productive(self):
         if (self.valid and
             not self.premature and
-            self.in_frame and 
+            self.in_frame and
             'VH' in self.region and
             'JH' in self.region):
             self.head['productive'] = True
@@ -2206,11 +2498,11 @@ class Sample(object):
                             ref = reference.sequence
                         else:
                             ref = reference.sequence.reversed
-            
+
                         if hit['region'] == 'VH' or hit['region'] == 'DH':
                             if hit['subject end'] < ref.length:
                                 hit['3 chew'] = ref.crop(hit['subject end'], ref.length)
-                                
+
                         if hit['region'] == 'JH' or hit['region'] == 'DH':
                             if hit['subject start'] > 0:
                                 hit['5 chew'] = ref.crop(0, hit['subject start'])
@@ -2236,7 +2528,7 @@ class Sample(object):
             'V-D',
             'D-J',
             'V-J'
-        ]: 
+        ]:
             if region in self.region:
                 self.head['region'].append(region)
         self.head['region'] = list(set(self.head['region']))
@@ -2291,7 +2583,7 @@ class Sample(object):
                     'query': self.sequence.crop(start, end)
                 }
                 self._check_palindrome(junction, self.region['VH']['query'], self.region['DH']['query'])
-                self.region['V-D'] = junction    
+                self.region['V-D'] = junction
         return True
 
     def _identify_d_j_junction(self):
@@ -2353,10 +2645,10 @@ class Diagram(object):
             p = self.configuration['profile'][profile]['diagram']
         else:
             p = self.configuration['profile']['default']['diagram']
-            
+
         for k,v in p['track'].items():
             self.query[k] = v
-        
+
         for track in sample.hit:
             if all([k in track and track[k] == v for k,v in self.query.items()]):
                 self.track.append(track)
@@ -2366,7 +2658,7 @@ class Diagram(object):
                 if 'uuid' not in track:
                     track['uuid'] = str(uuid.uuid4())
                 self.track.append(track)
-            
+
         for k in p['feature']:
             if k in self.configuration['diagram']['prototype']:
                 feature = dict(self.configuration['diagram']['prototype'][k])
@@ -2385,12 +2677,12 @@ class Diagram(object):
         self.width['table'] = self.pattern['width']
         self.width['table padding'] = 2
         self.width['diagram start'] = self.width['table'] + self.width['table padding']
-        
-        
+
+
         for track in self.track:
             self.node['track offset'][track['uuid']] = self._find_track_offset(track)
-                
-        
+
+
 
     @property
     def configuration(self):
@@ -2436,17 +2728,17 @@ class Diagram(object):
         for r in ('VH', 'DH', 'JH'):
             if r in self.sample.region:
                 b.append('{} : {}'.format(r, self.sample.region[r]['subject id']))
-        
+
         if self.sample.productive:
             b.append('productive')
         else:
             if self.sample.framed:
                 b.append('in frame' if self.sample.in_frame else 'out of frame')
-                
+
             if self.sample.premature:
                 b.append('premature')
         b.append('Q {:.4}'.format(self.sample.head['average phred']))
-        
+
         buffer.write(' | '.join(b))
         buffer.write('\n')
 
@@ -2458,7 +2750,7 @@ class Diagram(object):
         if self.width['sample read frame'] > 0:
             buffer.write('{: <{}}'.format(0, self.width['sample read frame']))
             buffer.write(self.gap)
-            
+
         for index in range(self.width['sample read frame'], self.sample.sequence.length, 3):
             buffer.write('{: <3}'.format(index))
             buffer.write(self.gap)
@@ -2504,33 +2796,33 @@ class Diagram(object):
                 buffer.write('-' * track['query'].read_frame)
                 # buffer.write(track['query'].nucleotide[0:track['query'].read_frame])
                 buffer.write(self.gap)
-                
+
             for index in range(track['query'].read_frame, track['query'].length, 3):
                 buffer.write('-' * len(track['query'].nucleotide[index:index + 3]))
                 # buffer.write(track['query'].nucleotide[index:index + 3])
                 buffer.write(self.gap)
             buffer.write('\n')
-            
+
             if 'palindrome' in track and 'P' in track['palindrome']:
                 buffer.write(' ' * self.width['diagram start'])
                 if offset > 0: buffer.write(' ' * offset)
                 if track['query'].read_frame > 0:
                     buffer.write(track['palindrome'][0:track['query'].read_frame])
                     buffer.write(self.gap)
-                    
+
                 for index in range(track['query'].read_frame, track['query'].length, 3):
                     buffer.write(track['palindrome'][index:index + 3])
                     buffer.write(self.gap)
                 buffer.write('\n')
-                
+
             if False and self.sample.framed and track['query'].codon:
                 buffer.write(' ' * self.width['diagram start'])
                 if offset > 0: buffer.write(' ' * offset)
-                    
+
                 if track['query'].read_frame > 0:
                     buffer.write(' ' * track['query'].read_frame)
                     buffer.write(self.gap)
-                    
+
                 for codon in track['query'].codon:
                     buffer.write('{: <3}'.format(codon))
                     buffer.write(self.gap)
@@ -2541,22 +2833,22 @@ class Diagram(object):
         if 'subject' in track and 'query' in track:
             subject = track['subject'].clone()
             subject.read_frame = track['query'].read_frame
-            
+
             mask = []
             for index,n in enumerate(subject.nucleotide):
                 mask.append('-' if n == track['query'].nucleotide[index] else n)
             mask = ''.join(mask)
-                
+
             if offset > 0: buffer.write(' ' * offset)
             if subject.read_frame > 0:
                 buffer.write(mask[0:subject.read_frame])
                 buffer.write(self.gap)
-                
+
             for index in range(subject.read_frame, subject.length, 3):
                 buffer.write(mask[index:index + 3])
                 buffer.write(self.gap)
             buffer.write('\n')
-            
+
             if self.sample.framed and subject.codon:
                 display = False
                 mask = []
@@ -2568,11 +2860,11 @@ class Diagram(object):
                 if display:
                     buffer.write(' ' * self.width['diagram start'])
                     if offset > 0: buffer.write(' ' * offset)
-                        
+
                     if subject.read_frame > 0:
                         buffer.write(' ' * subject.read_frame)
                         buffer.write(self.gap)
-                        
+
                     for codon in mask:
                         buffer.write('{: <3}'.format(codon))
                         buffer.write(self.gap)
@@ -2700,15 +2992,15 @@ class Block(object):
                         except InvalidSampleError as e:
                             self.log.warning(e)
                         state = 1
-                            
+
                     elif state == 1:
                         if sample is not None:
                             sample.sequence.nucleotide = line
                         state = 2
-                        
+
                     elif state == 2:
                         state = 3
-                            
+
                     elif state == 3:
                         if sample is not None:
                             sample.sequence.quality = line
@@ -2780,7 +3072,7 @@ class Block(object):
                 }
                 record['sample'] = self.lookup[record['id']]
                 state = 1
-                
+
             elif state == 1 and line[0:10] == 'Alignments':
                 state = 2
             elif state == 2:
@@ -2794,7 +3086,7 @@ class Block(object):
                     if line[0:6] == 'Lambda':
                         state = 0
                         results.append(record)
-                        
+
         for record in results:
             one = (' ' * record['offset']) + record['sequence']
             two = record['sample'].sequence.nucleotide
@@ -2844,17 +3136,17 @@ class Block(object):
                 else:
                     self.log.warning('could not parse value %s for as a strand setting to plus', hit['subject strand'])
                     hit['subject strand'] = True
-                        
+
                 for k in [
                     'identical',
                     'bit score',
                     'evalue',
-                ]: 
+                ]:
                     try: hit[k] = float(hit[k])
                     except ValueError:
                         self.log.warning('could not parse value %s for %s as int', hit[k], k)
                         hit[k] = None
-                    
+
                 for k in [
                     'subject end',
                     'gap openings',
@@ -2872,7 +3164,7 @@ class Block(object):
 
                 # fix the region for heavy chain
                 if 'region' in hit: hit['region'] += 'H'
-                
+
                 # switch from % to fraction
                 if 'identical' in hit: hit['identical'] /= 100.0
             return hit
@@ -2882,14 +3174,14 @@ class Block(object):
         buffer.seek(0)
         for line in buffer:
             line = line.strip()
-            
+
             if line.startswith('# IGBLASTN '):
                 # this is the start of a new record
                 if state == 2:
                     sample.invalidate('no alignment results found')
                 state = 1
                 sample = None
-                
+
             elif state == 1 and line.startswith('# Query: '):
                 # this is the query id for the record
                 id = line[9:]
@@ -2899,15 +3191,15 @@ class Block(object):
                 else:
                     self.log.error('could not locate %s in buffer', id)
                     state = 0
-                    
+
             elif state == 2 and line.startswith(self.configuration['expression']['igblast reversed query']):
                 # this means the hits will be for the reverse complement strand
                 sample.reverse()
-                
+
             elif state == 2 and line.startswith('# Hit table '):
                 # this means the hit table is on the next line
                 state = 3
-                
+
             elif state == 3 and not line.startswith('#'):
                 hit = parse_igblast_hit(line)
                 if hit is not None:
@@ -2943,7 +3235,7 @@ class Pipeline(object):
         self.configuration['complement'] = {}
         for k,v in self.configuration['iupac nucleic acid notation'].items():
             self.configuration['complement'][k] = v['reverse']
-        
+
         # load collection of codons possibly encoding a stop codon
         stop = [ k for k,v in self.configuration['nucleic to amino'].items() if v == '*' ]
         motif = self.motif_for(stop)
@@ -2989,7 +3281,7 @@ class Pipeline(object):
                 return expand(motif, next)
             else:
                 return space
-    
+
         feature = { 'codon': {}, 'space': set() }
         for c in codons:
             feature['codon'][c] = { 'motif':[] }
@@ -3050,28 +3342,31 @@ class Pipeline(object):
             else:
                 self.log.error('refusing to save invalid accession %s', str(accession))
 
-    def map_reference(self, reference):
+    def complement_reference_from_accesion(self, reference):
         if reference is not None:
             accession = self.accession_for(reference.head['accession'])
             if accession is not None:
-                r = reference.sequence
-                a = accession.sequence.crop(reference.body['start'], reference.body['end'])
-                if not reference.body['accession strand']: a = a.reversed
-                if r.nucleotide != a.nucleotide:
-                    print(str(reference))
-                    print(r.nucleotide)
-                    print(a.nucleotide)
+                matching = accession.sequence.crop(reference.start, reference.end)
+                if not reference.body['accession strand']: matching = matching.reversed
+
+                if matching.nucleotide != reference.sequence.nucleotide:
+                    self.log.error('reference sequence for %s does not match accession %s:%d:%d', reference.id, accession.id, reference.start, reference.end)
+
+                if reference.strain is None and accession.strain is not None:
+                    reference.strain = accession.strain
+                    self.log.info('strain %s assigned to reference %s from %s', reference.strain, reference.id, reference.accession)
+
+                if accession.strain is None and reference.strain is not None:
+                    accession.strain = reference.strain
+                    self.save_accession(accession)
+                    self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, reference.id)
+                    #self.log.info('{} {} {}'.format(reference.id, reference.accession, reference.strain))
             else:
                 self.log.error('accession %s is missing', reference.head['accession'])
-                    
+
     def save_reference(self, reference):
         if reference is not None:
             if reference.valid:
-                existing = self.reference_for(reference.id)
-                if existing:
-                    reference.node['_id'] = existing.node['_id']
-                    self.log.debug('existing reference found for %s', reference.id)
-                    
                 for k in (
                     'functionality',
                     'region',
@@ -3086,8 +3381,16 @@ class Pipeline(object):
                     reference.head['verified'] = True
                 else:
                     reference.head['verified'] = False
-                    
-                self.map_reference(reference)
+
+                existing = self.reference_for(reference.id)
+                if existing:
+                    reference.node['_id'] = existing.node['_id']
+                    self.log.debug('existing reference found for %s', reference.id)
+
+                    if existing.strain is not None and reference.strain is None:
+                        reference.strain = existing.strain
+
+                self.complement_reference_from_accesion(reference)
                 self.database['reference'].save(reference.document)
                 if reference.id in self._reference:
                     del self._reference[reference.id]
@@ -3099,7 +3402,7 @@ class Pipeline(object):
         if profile is not None and profile in self.configuration['profile']:
             for k,v in self.configuration['profile'][profile][kind].items():
                 query[k] = v
-                
+
         if override:
             for k,v in override.items():
                 query['head.{}'.format(k)] = v
@@ -3116,7 +3419,7 @@ class Pipeline(object):
                     if definition['name'] in existing_indexes:
                         self.log.info('dropping index %s on collection %s', definition['name'], table['collection'])
                         collection.drop_index(definition['name'])
-                
+
             for definition in table['index']:
                 self.log.info('building index %s on collection %s', definition['name'], table['collection'])
                 collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
@@ -3128,7 +3431,7 @@ class Pipeline(object):
         else:
             self.log.critical('unknown fasta header format %s', format)
             raise SystemExit(1)
-            
+
         accession = None
         for line in sys.stdin:
             if line is not None:
@@ -3137,7 +3440,7 @@ class Pipeline(object):
                     if line[0] == '>':
                         # at the start of a new record save the completed one
                         self.save_accession(accession)
-                        
+
                         # initialize a new accession
                         accession = Accession(self)
                         accession.body['header'] = line
@@ -3163,7 +3466,7 @@ class Pipeline(object):
         else:
             self.log.critical('unknown fasta header format %s', format)
             raise SystemExit(1)
-            
+
         reference = None
         with io.open(path, 'rb') as fasta:
             for line in fasta:
@@ -3172,7 +3475,7 @@ class Pipeline(object):
                     if line[0] == '>':
                         # at the start of a new record save the completed one
                         self.save_reference(reference)
-                            
+
                         # initialize a new reference
                         reference = Reference(self)
                         reference.body['header'] = line
@@ -3199,24 +3502,24 @@ class Pipeline(object):
                                             if v == 'ORF': v = 'O'
                                         elif k == 'organism name':
                                             v = v.lower()
-                                            
+
                                     except ValueError as e:
                                         self.log.error('unable to decode %s as int for %s', v, k)
                                     else:
                                         if v: reference.body[k] = v
-                                            
+
                             # fix the region for heavy chain
                             reference.body['region'] += 'H'
-                            
+
                             # fix the accession strand
                             if 'polarity' in reference.body:
                                 if reference.body['polarity'] == 'rev-compl':
                                     reference.body['accession strand'] = False
                                 del reference.body['polarity']
-                                    
+
                             # fix the start offset to zero based
                             if 'start' in reference.body: reference.body['start'] -= 1
-                            
+
                             # fix the read frame offset to zero based
                             if 'read frame' in reference.body:
                                 reference.head['framed'] = True
@@ -3224,7 +3527,7 @@ class Pipeline(object):
                             else:
                                 reference.head['framed'] = False
                                 reference.body['read frame'] = 0
-                                
+
                             reference.sequence.read_frame = reference.body['read frame']
                             del reference.body['read frame']
                             reference.id = reference.body['allele name']
@@ -3232,49 +3535,88 @@ class Pipeline(object):
                         if self.configuration['expression']['nucleotide sequence'].search(line):
                             reference.sequence.nucleotide += line.upper()
                 else: break
-                    
+
             # save the last one if it has a sequence
             self.save_reference(reference)
 
     def accession_to_fasta(self, query, profile):
         q = self.build_query(query, profile, 'accession')
-        print(q)
-        buffer = StringIO()
         collection = self.database['accession']
         cursor = collection.find(q)
         for node in cursor:
             accession = Accession(self, node)
-            buffer.write(accession.body['header'])
-            buffer.write('\n')
-            begin = 0
-            end = 0
-            while end < accession.length:
-                end = min(begin + self.configuration['constant']['fasta line length'], accession.length)
-                buffer.write(accession.sequence.nucleotide[begin:end])
-                buffer.write('\n')
-                begin = end
-        buffer.seek(0)
-        print(buffer.read())
+            print(accession.fasta)
+        cursor.close()
 
-    def reference_to_fasta(self, query, profile):
+    def align_reference(self, query, profile, flank=0):
+        chr12 = StringIO()
+        with io.open('/Users/lg/code/somatic/db/blat/chr12.fa', 'rb') as file:
+            for line in file:
+                line = line.decode('utf8').strip()
+                if line[0] != '>':
+                    chr12.write(line)
+        chr12.seek(0)
+        
+        q = self.build_query(query, profile, 'reference')
+        collection = self.database['reference']
+        buffer = {}
+        cursor = collection.find(q)
+        for node in cursor:
+            reference = Reference(self, node)
+            buffer[reference.id] = { 'reference': reference }
+        cursor.close()
+        
+        fasta = []
+        for record in buffer.values():
+            record['flanking'] = record['reference'].to_flanking_fasta(flank)
+            fasta.append(to_fasta(record['flanking']['id'], record['flanking']['sequence'].nucleotide))
+        fasta = '\n'.join(fasta)
+        
+        blat = Blat(self)
+        lookup = blat.search(fasta)
+        for k,v in lookup.items():
+            print('\n{} {}'.format(record['reference'].id, record['reference'].strain))
+            record = buffer[k]
+            record['hit'] = v
+            for hit in record['hit']:
+                start = record['flanking']['start'] - hit['query start']
+                end = record['flanking']['end'] - hit['query start']
+                
+                left = start
+                right = hit['target length'] - end
+
+                if hit['query strand']:
+                    hit['start'] = hit['target start'] + left
+                    hit['end'] = hit['target end'] - right
+                else:
+                    hit['start'] = hit['target start'] + right
+                    hit['end'] = hit['target end'] - left
+                
+                chr12.seek(hit['start'])
+                c = chr12.read(hit['end'] - hit['start']).upper()
+                if hit['query strand']:
+                    r = record['reference'].sequence.nucleotide
+                else:
+                    r = record['reference'].sequence.reversed.nucleotide
+                
+                m = 0
+                for i in range(len(r)):
+                    if c[i] == r[i]: m += 1
+                #print(r)
+                #print(c)
+                print('{} {} {} {} {}'.format(hit['score'], m, len(r), hit['block count'], float(m) / float(len(r))))
+                    
+        # print(to_json(buffer))
+
+    def reference_to_fasta(self, query, profile, flanking=0):
         q = self.build_query(query, profile, 'reference')
         buffer = StringIO()
         collection = self.database['reference']
         cursor = collection.find(q)
         for node in cursor:
             reference = Reference(self, node)
-            buffer.write('>')
-            buffer.write(reference.id)
-            buffer.write('\n')
-            begin = 0
-            end = 0
-            while end < reference.length:
-                end = min(begin + self.configuration['constant']['fasta line length'], reference.length)
-                buffer.write(reference.sequence.nucleotide[begin:end])
-                buffer.write('\n')
-                begin = end
-        buffer.seek(0)
-        print(buffer.read())
+            print(reference.to_fasta(flanking))
+        cursor.close()
 
     def reference_to_auxiliary(self, query=None, profile='default'):
         q = self.build_query(query, profile, 'reference')
@@ -3293,21 +3635,6 @@ class Pipeline(object):
         buffer.seek(0)
         print(buffer.read())
 
-    def search_blat(self):
-        result = None
-        command = self.configuration['command']['blat']
-        process = Popen(
-            args=command['arguments'],
-            cwd=command['cwd'],
-            env=None,
-            stdin=PIPE,
-            stdout=PIPE,
-            stderr=PIPE
-        )
-        output, error = process.communicate(input=self.to_fasta().read().encode('utf8'))
-        if output: result = StringIO(output.decode('utf8'))
-        return result
-
     def drop_library(self, library):
         if library:
             collection = self.database['sample']
@@ -3321,7 +3648,7 @@ class Pipeline(object):
     def populate(self, library, strain, drop):
         count = 0
         if not library:
-            raise ValueError('must specify a library to populate') 
+            raise ValueError('must specify a library to populate')
         block = Block(self)
         collection = self.database['sample']
         if drop:
@@ -3344,7 +3671,7 @@ class Pipeline(object):
             cursor.limit(limit)
         if skip is not None:
             cursor.skip(skip)
-            
+
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fasta)
@@ -3358,7 +3685,7 @@ class Pipeline(object):
             cursor.limit(limit)
         if skip is not None:
             cursor.skip(skip)
-            
+
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fastq)
@@ -3372,7 +3699,7 @@ class Pipeline(object):
             cursor.limit(limit)
         if skip is not None:
             cursor.skip(skip)
-            
+
         for node in cursor:
             sample = Sample(self, node)
             sample.view(profile)
@@ -3386,7 +3713,7 @@ class Pipeline(object):
             cursor.limit(limit)
         if skip is not None:
             cursor.skip(skip)
-            
+
         for node in cursor:
             sample = Sample(self, node)
             sample.info(profile)
@@ -3405,68 +3732,71 @@ class Pipeline(object):
     def execute(self, cmd):
         if cmd.action == 'accession-populate':
             self.populate_accession(cmd.instruction['format'])
-            
+
         if cmd.action == 'accession-fasta':
             self.accession_to_fasta(cmd.query, cmd.instruction['profile'])
-            
+
         if cmd.action == 'ref-populate':
             for path in cmd.instruction['path']:
                 self.populate_reference(path)
-                
+
         elif cmd.action == 'ref-fasta':
-            self.reference_to_fasta(cmd.query, cmd.instruction['profile'])
-            
+            self.reference_to_fasta(cmd.query, cmd.instruction['profile'], cmd.instruction['flanking'])
+
+        elif cmd.action == 'ref-align':
+            self.align_reference(cmd.query, cmd.instruction['profile'], cmd.instruction['flanking'])
+
         elif cmd.action == 'ref-igblast-aux':
             self.reference_to_auxiliary(cmd.query, cmd.instruction['profile'])
-                
+
         elif cmd.action == 'populate':
             self.populate(
                 cmd.instruction['library'],
                 cmd.instruction['strain'],
                 cmd.instruction['drop'])
-            
+
         elif cmd.action == 'drop':
             self.drop_library(cmd.instruction['library'])
-            
+
         elif cmd.action == 'view':
             self.view(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-            
+
         elif cmd.action == 'count':
             self.count(cmd.query, cmd.instruction['profile'])
-            
+
         elif cmd.action == 'fasta':
             self.fasta(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-            
+
         elif cmd.action == 'fastq':
             self.fastq(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-            
+
         elif cmd.action == 'info':
             self.info(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-            
+
         elif cmd.action == 'simulate':
             self.simulate(
-                cmd.instruction['library'], 
-                cmd.instruction['strain'], 
-                cmd.instruction['json'], 
+                cmd.instruction['library'],
+                cmd.instruction['strain'],
+                cmd.instruction['json'],
                 cmd.instruction['alignment'],
                 cmd.instruction['profile'])
-            
+
         elif cmd.action == 'rebuild':
             self.rebuild()
 
@@ -3474,7 +3804,7 @@ class Pipeline(object):
 def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
-    
+
     configuration['interface']['prototype']['profile']['parameter']['choices'] = list(configuration['profile'].keys())
     configuration['interface']['prototype']['profile']['parameter']['help'] = \
         '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
@@ -3494,12 +3824,10 @@ def main():
         except(KeyboardInterrupt, SystemExit) as e:
             pipeline.close()
             sys.exit(1)
-        
-    pipeline.close()
+        pipeline.close()
     sys.exit(0)
-            
-            
+
+
 
 if __name__ == '__main__':
     main()
-

@@ -2,4 +2,6 @@
 *.pyc
 *.pyo
 __pycache__/
-accession/
+db/
+resource/
+bin/
