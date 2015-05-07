@@ -21,40 +21,28 @@ import io
 from io import StringIO
 
 def usage():
-    print('usage: path int:start int:end')
+    print('usage: path query')
 
-def crop(path, start, end):
+def search(path, query):
     reference = StringIO()
     with io.open(path, 'r') as file:
         try:
             for line in file:
-                if end is not None and reference.tell() > end:
-                    break
-                    
                 line = line.strip()
                 if line[0] != '>':
                     reference.write(line)
-                    
-            reference.seek(start)
-            if end is not None:
-                print(reference.read(end - start))
-            else:
-                print(reference.read())
+            reference.seek(0)
+            reference = reference.getvalue()
+            start = reference.find(query)
+            while start >= 0:
+                end = start + len(query)
+                print('{}:{}'.format(start, end))
+                start = reference.find(query, start + 1)
                 
         except OSError as e:
             print('{} {}'.format(e.strerror, path))
 
-if len(sys.argv) > 2:
+if len(sys.argv) > 1:
     path = sys.argv[1]
-    try:
-        start = int(sys.argv[2])
-        if len(sys.argv) > 3:
-            end = int(sys.argv[3])
-        else:
-            end = None
-    except ValueError as e:
-        usage()
-    else:
-        crop(path, start, end)
-else:
-    usage()
+    query = sys.argv[2]
+    search(path, query)

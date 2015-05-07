@@ -36,6 +36,15 @@ from pymongo.son_manipulator import SONManipulator
 from pymongo import MongoClient, DESCENDING, ASCENDING
 from pymongo.errors import BulkWriteError
 
+import xmltodict
+import urllib.request, urllib.parse, urllib.error
+import urllib.parse
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
+from http.client import BadStatusLine
+
+
+
 BIN_BASE = '/Users/lg/code/somatic/bin'
 DB_BASE = '/Users/lg/code/somatic/db'
 
@@ -101,37 +110,6 @@ configuration = {
         }
     },
     'profile': {
-        'DH': {
-            'accession': {
-                'head.id': {
-                    '$in': [
-                    	'AJ851868',
-                    	'AC073553',
-
-                    	'J00440',
-                    	'L32868',
-                    	'D13199',
-                    	'J00431',
-                    	'D13198',
-
-                    	'J00434',
-                    	'M35332',
-                    	'J00436',
-                    	'J00438',
-                    	'J00439',
-                    	'AF428079',
-                    	'AF428080',
-                    	'J00437',
-                    	'M60961',
-                    	'J00435',
-                    	'J00432',
-                    	'J00433',
-                    	'M23243',
-                    	'M26508',
-                    ]
-                }
-            },
-        },
         'b6~': {
             'reference': {
                 'head.verified': True,
@@ -336,6 +314,7 @@ configuration = {
     },
     'yes/no question': ['Y', 'N'],
     'expression': {
+        'ncbi accession url': 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}',
         'gapped sequence': re.compile('^\s+Query_[0-9]+\s+(?P<offset>[0-9]+)\s+(?P<sequence>[ATCGN-]+)\s+[0-9]+$'),
         'blat hit': re.compile(
             r"""
@@ -524,7 +503,7 @@ configuration = {
     },
     'command': {
         'blat': {
-            'cwd': DB_BASE + '/blat',
+            'cwd': DB_BASE,
             'arguments': [
                 BIN_BASE + '/blat',
                 '-noHead',
@@ -1221,6 +1200,71 @@ configuration = {
     ]
 }
 
+def fetch_from_ncbi(id):
+    def normalize_document(document, transform):
+        if isinstance(document, dict):
+            transformed = {}
+            for k,v in document.items():
+                if k in transform and isinstance(v, dict):
+                    transformed[k] = normalize_document([v], transform)
+                else:
+                    transformed[k] = normalize_document(v, transform)
+            return transformed
+            
+        elif isinstance(document, list):
+            return [ normalize_document(e, transform) for e in document ]
+        else:
+            return document
+
+    def fetch(url):
+        content = None
+        request = Request(url, None, { 'Accept': 'application/xml' })
+        
+        try:
+            response = urlopen(request)
+        except BadStatusLine as e:
+            log.warning('Bad http status error when requesting %s', url)
+        except HTTPError as e:
+            log.warning('Server returned an error when requesting %s: %s', url, e.code)
+        except URLError as e:
+            log.warning('Could not reach server when requesting %s: %s', url, e.reason)
+        else:
+            content = StringIO(response.read().decode('utf8'))
+            if content.read(22) == 'Nothing has been found':
+                content = None
+            else:
+                content.seek(0)
+        return parse(content)
+
+    def parse(content):
+        transform = [
+            "INSDSet",
+            "INSDSeq",
+            "INSDFeature",
+            "INSDFeature_intervals",
+            "INSDFeature_quals",
+            "INSDQualifier",
+            "INSDSeq_references"
+        ]
+        document = None
+        if content:
+            document = xmltodict.parse(content.getvalue())
+            document = normalize_document(document, transform)
+        return document
+
+    node = None
+    if id is not None:
+        url = 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}'
+        document = fetch(url.format(id))
+        if 'INSDSet' in document:
+            for INSDSet in document['INSDSet']:
+                if 'INSDSeq' in INSDSet:
+                    for INSDSeq in INSDSet['INSDSeq']:
+                        if 'INSDSeq_moltype' in INSDSeq and INSDSeq['INSDSeq_moltype'] in ['DNA', 'mRNA', 'RNA']:
+                            node = INSDSeq
+                            break
+    return node
+
 def parse_match(match):
     if match is not None:
         return dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items() if k and v))
@@ -1246,26 +1290,25 @@ def to_fasta(id, sequence, description=None, limit=configuration['constant']['fa
 def transform_to_document(node):
     if isinstance(node, list):
         return [ transform_to_document(v) for v in node ]
-
+        
     elif isinstance(node, dict):
         for key, value in node.items():
             node[key] = transform_to_document(value)
         return node
-
+        
     elif isinstance(node, Sample):
         return node.document
-
+        
     elif isinstance(node, Reference):
         return node.document
-
+        
     elif isinstance(node, Accession):
         return node.document
-
+        
     elif isinstance(node, Sequence):
         return node.document
-
+        
     else: return node
-
 
 def to_json(node):
     def handler(o):
@@ -1301,16 +1344,16 @@ class CommandLineParser(object):
         def add_argument(parser, name):
             node = self.node['prototype'][name]
             parser.add_argument(*node['flag'], **node['parameter'])
-
+            
         # evaluate the type for each prototype
         for argument in self.node['prototype'].values():
             if 'type' in argument['parameter']:
                 argument['parameter']['type'] = eval(argument['parameter']['type'])
-
+                
         # add global arguments
         for argument in self.node['global']['argument']:
             add_argument(self.parser, argument)
-
+            
         if self.sectioned:
             # Add individual command sections
             sub = self.parser.add_subparsers(**self.node['section']['instruction'])
@@ -1319,7 +1362,7 @@ class CommandLineParser(object):
                 if 'argument' in action:
                     for argument in action['argument']:
                         add_argument(action_parser, argument)
-
+                        
                 # Add groups of arguments, if any.
                 if 'group' in action:
                     for group in action['group']:
@@ -1557,7 +1600,7 @@ class Sequence(object):
             }
             if 'quality' in self.node:
                 reversed['quality'] = self.quality[::-1]
-
+                
             self._reversed = Sequence(self.pipeline, reversed)
         return self._reversed
 
@@ -1567,10 +1610,10 @@ class Accession(object):
         self.log = logging.getLogger('Accession')
         self.pipeline = pipeline
         self.node = node
-
+        
         if self.node is None:
             self.node = { 'head': {}, 'body': {} }
-
+            
         if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
             self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
@@ -1593,18 +1636,7 @@ class Accession(object):
 
     @property
     def fasta(self):
-        buffer = [ self.header ]
-        begin = 0
-        end = 0
-        while end < self.sequence.length:
-            end = min(begin + self.configuration['constant']['fasta line length'], self.sequence.length)
-            buffer.append(self.sequence.nucleotide[begin:end])
-            begin = end
-        return '\n'.join(buffer)
-
-    @property
-    def header(self):
-        return '>{} {}'.format(self.id, self.body['description'])
+        return to_fasta(self.id, self.sequence, self.body['description'])
 
     @property
     def head(self):
@@ -1664,14 +1696,14 @@ class Blat(object):
 
     def parse_hit(self, hit):
         hit['query strand'] = hit['query strand'] == '+'
-
+        
         for k in [
             'block size',
             'query block start',
             'target block start',
         ]:
             if k in hit: hit[k] = [ int(v) for v in hit[k].split(',') if v ]
-
+            
         for k in [
             'block count',
             'inserted base in query',
@@ -1690,10 +1722,10 @@ class Blat(object):
             'target start',
         ]:
             if k in hit: hit[k] = int(hit[k])
-
+            
         hit['query length'] = hit['query end'] - hit['query start']
         hit['target length'] = hit['target end'] - hit['target start']
-
+        
         hit['block'] = []
         for i in range(hit['block count']):
             hit['block'].append({
@@ -1704,9 +1736,9 @@ class Blat(object):
         del hit['block size']
         del hit['query block start']
         del hit['target block start']
-
+        
         hit['score'] = hit['match'] + (hit['repeat match'] / 2) - hit['mismatch'] - hit['inserts in query'] - hit['inserts in target']
-
+        
         millibad = 0
         if hit['query length'] > 0 and hit['target length'] > 0:
             diff = max(hit['query length'] - hit['target length'], 0)
@@ -1749,7 +1781,7 @@ class Reference(object):
         self.log = logging.getLogger('Reference')
         self.pipeline = pipeline
         self.node = node
-
+        
         if self.node is None:
             self.node = {
                 'head': {
@@ -1760,7 +1792,7 @@ class Reference(object):
                     'accession strand': True,
                 }
             }
-
+            
         if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
             self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
@@ -1775,7 +1807,7 @@ class Reference(object):
             buffer.append(self.head['accession'])
         if 'accession strand' in self.body:
             buffer.append('+' if self.body['accession strand'] else '-')
-
+            
         buffer.append('{} nucleotides'.format(self.length))
         return '[ {} ]'.format(', '.join(buffer))
 
@@ -1794,7 +1826,7 @@ class Reference(object):
             flanking['start'] = flanking['accession start'] - flanking['flank start']
             flanking['end'] = flanking['accession end'] - flanking['flank start']
             flanking['sequence'] = accession.sequence.crop(flanking['flank start'], flanking['flank end'])
-
+            
             if not self.body['accession strand']:
                 flanking['strand'] = not flanking['strand']
                 flanking['sequence'] = flanking['sequence'].reversed
@@ -1932,14 +1964,14 @@ class Sample(object):
         self.log = logging.getLogger('Sample')
         self.pipeline = pipeline
         self.node = node
-
+        
         def load_region(node):
             if 'query' in node and isinstance(node['query'], dict):
                 node['query'] = Sequence(self.pipeline, node['query'])
-
+                
             if 'subject' in node and isinstance(node['subject'], dict):
                 node['subject'] = Sequence(self.pipeline, node['subject'])
-
+                
         if self.node is None:
             self.node = {
                 'head': {
@@ -1956,24 +1988,24 @@ class Sample(object):
             }
         if not self.id:
             raise InvalidSampleError('sample must have an id')
-
+            
         if not self.key:
             raise InvalidSampleError('sample must have a valid key')
-
+            
         if not self.library:
             raise InvalidSampleError('sample must have a library')
-
+            
         if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
             self.node['sequence'] = Sequence(self.pipeline, self.node['sequence'])
         else:
             self.node['sequence'] = Sequence(self.pipeline)
-
+            
         if 'hit' in self.node:
             for hit in self.node['hit']:
                 load_region(hit)
         else:
             self.node['hit'] = []
-
+            
         if 'region' in self.node:
             for value in self.node['region'].values():
                 load_region(value)
@@ -1998,17 +2030,17 @@ class Sample(object):
         def transform_to_document(node):
             if isinstance(node, list):
                 return [ transform_to_document(v) for v in node ]
-
+                
             elif isinstance(node, dict):
                 for key, value in node.items():
                     node[key] = transform_to_document(value)
                 return node
-
+                
             elif isinstance(node, Sequence):
                 return node.document
-
+                
             else: return node
-
+            
         document = transform_to_document(self.node)
         if document['hit']:
             document['matched'] = True
@@ -2098,15 +2130,7 @@ class Sample(object):
 
     @property
     def fasta(self):
-        buffer = []
-        buffer.append('>' + self.id)
-        begin = 0
-        end = 0
-        while end < self.sequence.length:
-            end = min(begin + self.configuration['constant']['fasta line length'], self.sequence.length)
-            buffer.append(self.sequence.nucleotide[begin:end])
-            begin = end
-        return '\n'.join(buffer)
+        return to_fasta(self.id, self.sequence)
 
     @property
     def fastq(self):
@@ -2127,7 +2151,7 @@ class Sample(object):
                 if 'compressed hit' in hit:
                     match = self.configuration['expression']['expand hit'].search(hit['compressed hit'])
                     if match:
-                        parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
+                        parsed = parse_match(match)
                         for k,v in parsed.items():
                             if k in [
                                 'query start',
@@ -2202,16 +2226,16 @@ class Sample(object):
             for r in ('VH', 'DH', 'JH'):
                 if r in self.region:
                     buffer.append('{} : {}'.format(r, self.region[r]['subject id']))
-
+                    
             if self.productive:
                 buffer.append('productive')
             else:
                 if self.framed:
                     buffer.append('in frame' if self.in_frame else 'out of frame')
-
+                    
                 if self.premature:
                     buffer.append('premature')
-
+                    
             buffer.append('Q : {:.4}'.format(self.head['average phred']))
             return ' | '.join(buffer)
         else:
@@ -2264,7 +2288,7 @@ class Sample(object):
                 hit['gapped'] = True
                 self.head['gapped'] = True
                 self.invalidate_hit(hit, 'hit contains a gapped alignment')
-
+                
             if hit['valid']:
                 hit['query'] = self.sequence.crop(hit['query start'], hit['query end'])
 
@@ -2281,12 +2305,12 @@ class Sample(object):
                             ref = reference.sequence.reversed
                             hit['subject start'] = ref.length - hit['subject start']
                             hit['subject end'] = ref.length - hit['subject end'] + 1
-
+                            
                         hit['subject'] = ref.crop(hit['subject start'], hit['subject end'])
                         hit['framed'] = reference.framed
                         hit['functionality'] = reference.functionality
                         if reference.strain: hit['strain'] = reference.strain
-
+                        
                         # only DH regions are allowed to align to the oposite strand
                         if hit['region'] != 'DH' and hit['subject strand'] != reference.sequence.strand:
                             self.invalidate_hit(hit, 'hit aligns to the wrong strand')
@@ -2311,12 +2335,12 @@ class Sample(object):
                     hit['identical'] >= region_node['minimum identity'] and
                     hit['alignment length'] >= region_node['minimum alignment']):
                     search['valid'].append(hit)
-
+                    
             if search['valid']:
                 top = search['valid']
                 top.sort(reverse=True, key=lambda x: x['score'])
                 top = [ hit for hit in top if hit['score'] == top[0]['score'] ]
-
+                
                 if len(top) > 1:
                     search['framed'] = []
                     sample_frame = None if not self.framed else self.sequence.read_frame
@@ -2330,22 +2354,22 @@ class Sample(object):
                                 if c != query[index]:
                                     hit['codon mismatch'] += 1
                             search['framed'].append(hit)
-
+                            
                     if search['framed']:
                         top = search['framed']
                         top.sort(key=lambda x: x['codon mismatch'])
                         top = [ hit for hit in top if hit['codon mismatch'] == top[0]['codon mismatch'] ]
-
+                        
                 if len(top) > 1 and strain is not None:
                     search['strained'] = [ hit for hit in top if 'strain' in hit and hit['strain'] == strain ]
                     if search['strained']:
                         top = search['strained']
-
+                        
                 if len(top) > 1:
                     search['functional'] = [ hit for hit in top if 'functionality' in hit and hit['functionality'] == 'F' ]
                     if search['functional']:
                         top = search['functional']
-
+                        
             if top:
                 self.region[region] = top[0]
                 for hit in top: hit['picked'] = True
@@ -2369,7 +2393,7 @@ class Sample(object):
                 search['map'][hit['uuid']] = hit
                 if hit['valid']:
                     search['valid'].append(hit)
-
+                    
         if search['valid']:
             if len(search['valid']) > 0:
                 search['trimmed'] = []
@@ -2378,33 +2402,33 @@ class Sample(object):
                     for k,v in hit.items():
                         if k not in ('query', 'subject', 'overlap'):
                             trimmed[k] = v
-
+                            
                     reference = self.pipeline.reference_for(hit['subject id'])
-
+                    
                     # check for overlap with VH
                     if 'VH' in self.region and self.region['VH']['query end'] > hit['query start']:
                         trimmed['query start'] = self.region['VH']['query end']
                         overlap = trimmed['query start'] - hit['query start']
                         trimmed['subject start'] += overlap
                         trimmed['overlap'] += overlap
-
+                        
                     # check for overlap with JH
                     if 'JH' in self.region and hit['query end'] > self.region['JH']['query start']:
                         trimmed['query end'] = self.region['JH']['query start']
                         overlap = hit['query end'] - trimmed['query end']
                         trimmed['subject end'] -= overlap
                         trimmed['overlap'] += overlap
-
+                        
                     # correct the score for the overlap and trim the sequences
                     trimmed['score'] = hit['bit score'] - trimmed['overlap'] * region_node['overlap penalty factor']
                     trimmed['alignment length'] = trimmed['query end'] - trimmed['query start']
                     trimmed['query'] = self.sequence.crop(trimmed['query start'], trimmed['query end'])
-
+                    
                     if trimmed['subject strand'] == reference.sequence.strand:
                         trimmed['subject'] = reference.sequence.crop(trimmed['subject start'], trimmed['subject end'])
                     else:
                         trimmed['subject'] = reference.sequence.reversed.crop(trimmed['subject start'], trimmed['subject end'])
-
+                        
                     # filter DH hits that match the criteria
                     if trimmed['query end'] > trimmed['query start']:
                         similar = 0
@@ -2424,7 +2448,7 @@ class Sample(object):
                         for k,v in trimmed.items(): original[k] = v
                         if longest >= region_node['minimum alignment']:
                             search['trimmed'].append(original)
-
+                            
                 if search['trimmed']:
                     top = search['trimmed']
         if top:
@@ -2436,17 +2460,17 @@ class Sample(object):
         if 'VH' in self.region and 'JH' in self.region:
             start = None
             end = None
-
+            
             offset = None
             # look for the most upstream cycteine on the VH region
             for index,codon in enumerate(reversed(self.region['VH']['query'].codon)):
                 if codon == 'C':
                     offset = self.region['VH']['query'].read_frame + (len(self.region['VH']['query'].codon) - index - 1) * 3
                     break
-
+                    
             if offset is not None:
                 start = self.region['VH']['query start'] + offset
-
+                
             offset = None
             # look for the most downstream tryptophan JH region
             # followed by GG, followed by either C or T
@@ -2458,10 +2482,10 @@ class Sample(object):
                         if suffix[2] == 'T' or suffix[2] == 'C':
                             offset = o
                             break
-
+                            
             if offset is not None:
                 end = self.region['JH']['query start'] + offset
-
+                
             if start and end:
                 self.region['CDR3'] = {
                     'subject strand': self.strand,
@@ -2498,11 +2522,11 @@ class Sample(object):
                             ref = reference.sequence
                         else:
                             ref = reference.sequence.reversed
-
+                            
                         if hit['region'] == 'VH' or hit['region'] == 'DH':
                             if hit['subject end'] < ref.length:
                                 hit['3 chew'] = ref.crop(hit['subject end'], ref.length)
-
+                                
                         if hit['region'] == 'JH' or hit['region'] == 'DH':
                             if hit['subject start'] > 0:
                                 hit['5 chew'] = ref.crop(0, hit['subject start'])
@@ -2640,25 +2664,25 @@ class Diagram(object):
                 'feature': [],
             },
         }
-
+        
         if profile in self.configuration['profile'] and 'diagram' in self.configuration['profile'][profile]:
             p = self.configuration['profile'][profile]['diagram']
         else:
             p = self.configuration['profile']['default']['diagram']
-
+            
         for k,v in p['track'].items():
             self.query[k] = v
-
+            
         for track in sample.hit:
             if all([k in track and track[k] == v for k,v in self.query.items()]):
                 self.track.append(track)
-
+                
         for track in sample.region.values():
             if track['subject id'] in set(['CDR3', 'V-J', 'V-D', 'D-J']):
                 if 'uuid' not in track:
                     track['uuid'] = str(uuid.uuid4())
                 self.track.append(track)
-
+                
         for k in p['feature']:
             if k in self.configuration['diagram']['prototype']:
                 feature = dict(self.configuration['diagram']['prototype'][k])
@@ -2677,12 +2701,9 @@ class Diagram(object):
         self.width['table'] = self.pattern['width']
         self.width['table padding'] = 2
         self.width['diagram start'] = self.width['table'] + self.width['table padding']
-
-
+        
         for track in self.track:
             self.node['track offset'][track['uuid']] = self._find_track_offset(track)
-
-
 
     @property
     def configuration(self):
@@ -2728,17 +2749,17 @@ class Diagram(object):
         for r in ('VH', 'DH', 'JH'):
             if r in self.sample.region:
                 b.append('{} : {}'.format(r, self.sample.region[r]['subject id']))
-
+                
         if self.sample.productive:
             b.append('productive')
         else:
             if self.sample.framed:
                 b.append('in frame' if self.sample.in_frame else 'out of frame')
-
+                
             if self.sample.premature:
                 b.append('premature')
         b.append('Q {:.4}'.format(self.sample.head['average phred']))
-
+        
         buffer.write(' | '.join(b))
         buffer.write('\n')
 
@@ -2750,7 +2771,7 @@ class Diagram(object):
         if self.width['sample read frame'] > 0:
             buffer.write('{: <{}}'.format(0, self.width['sample read frame']))
             buffer.write(self.gap)
-
+            
         for index in range(self.width['sample read frame'], self.sample.sequence.length, 3):
             buffer.write('{: <3}'.format(index))
             buffer.write(self.gap)
@@ -2796,33 +2817,33 @@ class Diagram(object):
                 buffer.write('-' * track['query'].read_frame)
                 # buffer.write(track['query'].nucleotide[0:track['query'].read_frame])
                 buffer.write(self.gap)
-
+                
             for index in range(track['query'].read_frame, track['query'].length, 3):
                 buffer.write('-' * len(track['query'].nucleotide[index:index + 3]))
                 # buffer.write(track['query'].nucleotide[index:index + 3])
                 buffer.write(self.gap)
             buffer.write('\n')
-
+            
             if 'palindrome' in track and 'P' in track['palindrome']:
                 buffer.write(' ' * self.width['diagram start'])
                 if offset > 0: buffer.write(' ' * offset)
                 if track['query'].read_frame > 0:
                     buffer.write(track['palindrome'][0:track['query'].read_frame])
                     buffer.write(self.gap)
-
+                    
                 for index in range(track['query'].read_frame, track['query'].length, 3):
                     buffer.write(track['palindrome'][index:index + 3])
                     buffer.write(self.gap)
                 buffer.write('\n')
-
+                
             if False and self.sample.framed and track['query'].codon:
                 buffer.write(' ' * self.width['diagram start'])
                 if offset > 0: buffer.write(' ' * offset)
-
+                
                 if track['query'].read_frame > 0:
                     buffer.write(' ' * track['query'].read_frame)
                     buffer.write(self.gap)
-
+                    
                 for codon in track['query'].codon:
                     buffer.write('{: <3}'.format(codon))
                     buffer.write(self.gap)
@@ -2833,22 +2854,22 @@ class Diagram(object):
         if 'subject' in track and 'query' in track:
             subject = track['subject'].clone()
             subject.read_frame = track['query'].read_frame
-
+            
             mask = []
             for index,n in enumerate(subject.nucleotide):
                 mask.append('-' if n == track['query'].nucleotide[index] else n)
             mask = ''.join(mask)
-
+            
             if offset > 0: buffer.write(' ' * offset)
             if subject.read_frame > 0:
                 buffer.write(mask[0:subject.read_frame])
                 buffer.write(self.gap)
-
+                
             for index in range(subject.read_frame, subject.length, 3):
                 buffer.write(mask[index:index + 3])
                 buffer.write(self.gap)
             buffer.write('\n')
-
+            
             if self.sample.framed and subject.codon:
                 display = False
                 mask = []
@@ -2860,11 +2881,11 @@ class Diagram(object):
                 if display:
                     buffer.write(' ' * self.width['diagram start'])
                     if offset > 0: buffer.write(' ' * offset)
-
+                    
                     if subject.read_frame > 0:
                         buffer.write(' ' * subject.read_frame)
                         buffer.write(self.gap)
-
+                        
                     for codon in mask:
                         buffer.write('{: <3}'.format(codon))
                         buffer.write(self.gap)
@@ -2992,15 +3013,15 @@ class Block(object):
                         except InvalidSampleError as e:
                             self.log.warning(e)
                         state = 1
-
+                        
                     elif state == 1:
                         if sample is not None:
                             sample.sequence.nucleotide = line
                         state = 2
-
+                        
                     elif state == 2:
                         state = 3
-
+                        
                     elif state == 3:
                         if sample is not None:
                             sample.sequence.quality = line
@@ -3047,16 +3068,7 @@ class Block(object):
         buffer = StringIO()
         for sample in self.buffer:
             if query is None or all([k in sample.head and sample.head[k] == v for k,v in query.items()]):
-                buffer.write('>')
-                buffer.write(sample.id)
-                buffer.write('\n')
-                begin = 0
-                end = 0
-                while end < sample.sequence.length:
-                    end = min(begin + self.configuration['constant']['fasta line length'], sample.sequence.length)
-                    buffer.write(sample.sequence.nucleotide[begin:end])
-                    buffer.write('\n')
-                    begin = end
+                buffer.write(to_fasta(sample.id, sample.sequence))
         buffer.seek(0)
         return buffer
 
@@ -3072,7 +3084,7 @@ class Block(object):
                 }
                 record['sample'] = self.lookup[record['id']]
                 state = 1
-
+                
             elif state == 1 and line[0:10] == 'Alignments':
                 state = 2
             elif state == 2:
@@ -3086,7 +3098,7 @@ class Block(object):
                     if line[0:6] == 'Lambda':
                         state = 0
                         results.append(record)
-
+                        
         for record in results:
             one = (' ' * record['offset']) + record['sequence']
             two = record['sample'].sequence.nucleotide
@@ -3128,7 +3140,7 @@ class Block(object):
             hit = None
             match = self.configuration['expression']['igblast hit'].search(line)
             if match:
-                hit = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
+                hit = parse_match(match)
                 if hit['subject strand'] == 'plus':
                     hit['subject strand'] = True
                 elif hit['subject strand'] == 'minus':
@@ -3136,7 +3148,7 @@ class Block(object):
                 else:
                     self.log.warning('could not parse value %s for as a strand setting to plus', hit['subject strand'])
                     hit['subject strand'] = True
-
+                    
                 for k in [
                     'identical',
                     'bit score',
@@ -3146,7 +3158,7 @@ class Block(object):
                     except ValueError:
                         self.log.warning('could not parse value %s for %s as int', hit[k], k)
                         hit[k] = None
-
+                        
                 for k in [
                     'subject end',
                     'gap openings',
@@ -3161,27 +3173,27 @@ class Block(object):
                     except ValueError as e:
                         self.log.warning('could not parse value %s for %s as int', hit[k], k)
                         hit[k] = None
-
+                        
                 # fix the region for heavy chain
                 if 'region' in hit: hit['region'] += 'H'
-
+                
                 # switch from % to fraction
                 if 'identical' in hit: hit['identical'] /= 100.0
             return hit
-
+            
         state = 0
         sample = None
         buffer.seek(0)
         for line in buffer:
             line = line.strip()
-
+            
             if line.startswith('# IGBLASTN '):
                 # this is the start of a new record
                 if state == 2:
                     sample.invalidate('no alignment results found')
                 state = 1
                 sample = None
-
+                
             elif state == 1 and line.startswith('# Query: '):
                 # this is the query id for the record
                 id = line[9:]
@@ -3191,15 +3203,15 @@ class Block(object):
                 else:
                     self.log.error('could not locate %s in buffer', id)
                     state = 0
-
+                    
             elif state == 2 and line.startswith(self.configuration['expression']['igblast reversed query']):
                 # this means the hits will be for the reverse complement strand
                 sample.reverse()
-
+                
             elif state == 2 and line.startswith('# Hit table '):
                 # this means the hit table is on the next line
                 state = 3
-
+                
             elif state == 3 and not line.startswith('#'):
                 hit = parse_igblast_hit(line)
                 if hit is not None:
@@ -3235,7 +3247,7 @@ class Pipeline(object):
         self.configuration['complement'] = {}
         for k,v in self.configuration['iupac nucleic acid notation'].items():
             self.configuration['complement'][k] = v['reverse']
-
+            
         # load collection of codons possibly encoding a stop codon
         stop = [ k for k,v in self.configuration['nucleic to amino'].items() if v == '*' ]
         motif = self.motif_for(stop)
@@ -3281,7 +3293,7 @@ class Pipeline(object):
                 return expand(motif, next)
             else:
                 return space
-
+                
         feature = { 'codon': {}, 'space': set() }
         for c in codons:
             feature['codon'][c] = { 'motif':[] }
@@ -3309,6 +3321,74 @@ class Pipeline(object):
         else:
             return None
 
+    def accession_from_ncbi(self, id):
+        def normalize_document(document, transform):
+            if isinstance(document, dict):
+                transformed = {}
+                for k,v in document.items():
+                    if k in transform and isinstance(v, dict):
+                        transformed[k] = normalize_document([v], transform)
+                    else:
+                        transformed[k] = normalize_document(v, transform)
+                return transformed
+                
+            elif isinstance(document, list):
+                return [ normalize_document(e, transform) for e in document ]
+            else:
+                return document
+
+        def fetch(url):
+            content = None
+            request = Request(url, None, { 'Accept': 'application/xml' })
+            
+            try:
+                response = urlopen(request)
+            except BadStatusLine as e:
+                log.warning('Bad http status error when requesting %s', url)
+            except HTTPError as e:
+                log.warning('Server returned an error when requesting %s: %s', url, e.code)
+            except URLError as e:
+                log.warning('Could not reach server when requesting %s: %s', url, e.reason)
+            else:
+                content = StringIO(response.read().decode('utf8'))
+                if content.read(22) == 'Nothing has been found':
+                    content = None
+                else:
+                    content.seek(0)
+            return parse(content)
+
+        def parse(content):
+            transform = [
+                "INSDSet",
+                "INSDSeq",
+                "INSDFeature",
+                "INSDFeature_intervals",
+                "INSDFeature_quals",
+                "INSDQualifier",
+                "INSDSeq_references"
+            ]
+            document = None
+            if content:
+                document = xmltodict.parse(content.getvalue())
+                document = normalize_document(document, transform)
+            return document
+
+        node = None
+        if id is not None:
+            url = configuration['expression']['ncbi accession url'].format(id)
+            document = fetch(url)
+            if 'INSDSet' in document:
+                for INSDSet in document['INSDSet']:
+                    if 'INSDSeq' in INSDSet:
+                        for INSDSeq in INSDSet['INSDSeq']:
+                            if  'INSDSeq_moltype' in INSDSeq and \
+                                INSDSeq['INSDSeq_moltype'] in ['DNA', 'mRNA', 'RNA']:
+                                node = INSDSeq
+                                break
+        return node
+        
+    
+
     def accession_for(self, id):
         if id not in self._accession:
             node = self.database['accession'].find_one({'head.id': id})
@@ -3335,7 +3415,7 @@ class Pipeline(object):
                         if pattern['expression'].search(accession.body['simple description']):
                             accession.strain = pattern['name']
                             break
-
+                            
                 self.database['accession'].save(accession.document)
                 if accession.id in self._accession:
                     del self._accession[accession.id]
@@ -3348,19 +3428,20 @@ class Pipeline(object):
             if accession is not None:
                 matching = accession.sequence.crop(reference.start, reference.end)
                 if not reference.body['accession strand']: matching = matching.reversed
-
+                
                 if matching.nucleotide != reference.sequence.nucleotide:
                     self.log.error('reference sequence for %s does not match accession %s:%d:%d', reference.id, accession.id, reference.start, reference.end)
-
+                else:
+                    self.log.info('reference sequence for %s matched to accession %s:%d:%d', reference.id, accession.id, reference.start, reference.end)
+                    
                 if reference.strain is None and accession.strain is not None:
                     reference.strain = accession.strain
                     self.log.info('strain %s assigned to reference %s from %s', reference.strain, reference.id, reference.accession)
-
+                    
                 if accession.strain is None and reference.strain is not None:
                     accession.strain = reference.strain
                     self.save_accession(accession)
                     self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, reference.id)
-                    #self.log.info('{} {} {}'.format(reference.id, reference.accession, reference.strain))
             else:
                 self.log.error('accession %s is missing', reference.head['accession'])
 
@@ -3381,15 +3462,15 @@ class Pipeline(object):
                     reference.head['verified'] = True
                 else:
                     reference.head['verified'] = False
-
+                    
                 existing = self.reference_for(reference.id)
                 if existing:
                     reference.node['_id'] = existing.node['_id']
                     self.log.debug('existing reference found for %s', reference.id)
-
+                    
                     if existing.strain is not None and reference.strain is None:
                         reference.strain = existing.strain
-
+                        
                 self.complement_reference_from_accesion(reference)
                 self.database['reference'].save(reference.document)
                 if reference.id in self._reference:
@@ -3402,7 +3483,7 @@ class Pipeline(object):
         if profile is not None and profile in self.configuration['profile']:
             for k,v in self.configuration['profile'][profile][kind].items():
                 query[k] = v
-
+                
         if override:
             for k,v in override.items():
                 query['head.{}'.format(k)] = v
@@ -3419,10 +3500,20 @@ class Pipeline(object):
                     if definition['name'] in existing_indexes:
                         self.log.info('dropping index %s on collection %s', definition['name'], table['collection'])
                         collection.drop_index(definition['name'])
-
+                        
             for definition in table['index']:
                 self.log.info('building index %s on collection %s', definition['name'], table['collection'])
                 collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
+
+    def load_chromosome_12(self):
+        chromosome = StringIO()
+        with io.open(DB_BASE + '/chr12.fa', 'rb') as file:
+            for line in file:
+                line = line.decode('utf8').strip()
+                if line[0] != '>':
+                    chromosome.write(line)
+        chromosome.seek(0)
+        return chromosome
 
     def populate_accession(self, format, organism='mus musculus'):
         f = '{} accession'.format(format)
@@ -3431,7 +3522,7 @@ class Pipeline(object):
         else:
             self.log.critical('unknown fasta header format %s', format)
             raise SystemExit(1)
-
+            
         accession = None
         for line in sys.stdin:
             if line is not None:
@@ -3440,7 +3531,7 @@ class Pipeline(object):
                     if line[0] == '>':
                         # at the start of a new record save the completed one
                         self.save_accession(accession)
-
+                        
                         # initialize a new accession
                         accession = Accession(self)
                         accession.body['header'] = line
@@ -3448,7 +3539,7 @@ class Pipeline(object):
                         accession.head['organism name'] = organism
                         match = parser.search(line)
                         if match:
-                            parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
+                            parsed = parse_match(match)
                             for k,v in parsed.items():
                                 if v: accession.body[k] = v
                             accession.id = accession.body['accession number']
@@ -3466,22 +3557,22 @@ class Pipeline(object):
         else:
             self.log.critical('unknown fasta header format %s', format)
             raise SystemExit(1)
-
+            
         reference = None
         with io.open(path, 'rb') as fasta:
             for line in fasta:
                 if line is not None:
                     line = line.strip().decode('utf8')
-                    if line[0] == '>':
+                    if line and line[0] == '>':
                         # at the start of a new record save the completed one
                         self.save_reference(reference)
-
+                        
                         # initialize a new reference
                         reference = Reference(self)
                         reference.body['header'] = line
                         match = parser.search(line)
                         if match:
-                            parsed = dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items()))
+                            parsed = parse_match(match)
                             for k,v in parsed.items():
                                 if v:
                                     try:
@@ -3502,24 +3593,24 @@ class Pipeline(object):
                                             if v == 'ORF': v = 'O'
                                         elif k == 'organism name':
                                             v = v.lower()
-
+                                            
                                     except ValueError as e:
                                         self.log.error('unable to decode %s as int for %s', v, k)
                                     else:
                                         if v: reference.body[k] = v
-
+                                        
                             # fix the region for heavy chain
                             reference.body['region'] += 'H'
-
+                            
                             # fix the accession strand
                             if 'polarity' in reference.body:
                                 if reference.body['polarity'] == 'rev-compl':
                                     reference.body['accession strand'] = False
                                 del reference.body['polarity']
-
+                                
                             # fix the start offset to zero based
                             if 'start' in reference.body: reference.body['start'] -= 1
-
+                            
                             # fix the read frame offset to zero based
                             if 'read frame' in reference.body:
                                 reference.head['framed'] = True
@@ -3527,7 +3618,7 @@ class Pipeline(object):
                             else:
                                 reference.head['framed'] = False
                                 reference.body['read frame'] = 0
-
+                                
                             reference.sequence.read_frame = reference.body['read frame']
                             del reference.body['read frame']
                             reference.id = reference.body['allele name']
@@ -3535,7 +3626,7 @@ class Pipeline(object):
                         if self.configuration['expression']['nucleotide sequence'].search(line):
                             reference.sequence.nucleotide += line.upper()
                 else: break
-
+                
             # save the last one if it has a sequence
             self.save_reference(reference)
 
@@ -3549,64 +3640,403 @@ class Pipeline(object):
         cursor.close()
 
     def align_reference(self, query, profile, flank=0):
-        chr12 = StringIO()
-        with io.open('/Users/lg/code/somatic/db/blat/chr12.fa', 'rb') as file:
-            for line in file:
-                line = line.decode('utf8').strip()
-                if line[0] != '>':
-                    chr12.write(line)
-        chr12.seek(0)
+        collection = self.database['accession']
         
+        accessions = [
+            "AC073553",
+            "AC073561",
+            "AC073563",
+            "AC073565",
+            "AC073589",
+            "AC073590",
+            "AC073939",
+            "AC074329",
+            "AC079181",
+            "AC079273",
+            "AC087166",
+            "AC090843",
+            "AC090887",
+            "AC160473",
+            "AC160985",
+            "AC160990",
+            "AC163348",
+            "AF025443",
+            "AF025445",
+            "AF025446",
+            "AF025447",
+            "AF025448",
+            "AF025449",
+            "AF064442",
+            "AF064444",
+            "AF064445",
+            "AF064446",
+            "AF120459",
+            "AF120460",
+            "AF120461",
+            "AF120463",
+            "AF120465",
+            "AF120466",
+            "AF120469",
+            "AF120470",
+            "AF120471",
+            "AF120472",
+            "AF120474",
+            "AF290963",
+            "AF290966",
+            "AF290967",
+            "AF290971",
+            "AF304545",
+            "AF304546",
+            "AF304547",
+            "AF304548",
+            "AF304550",
+            "AF304551",
+            "AF304552",
+            "AF304553",
+            "AF304554",
+            "AF304556",
+            "AF304557",
+            "AF304558",
+            "AF305910",
+            "AF428079",
+            "AF428080",
+            "AJ223544",
+            "AJ223545",
+            "AJ972403",
+            "AJ972404",
+            "BN000872",
+            "CAAA01073483",
+            "CAAA01078923",
+            "D13198",
+            "D13199",
+            "D13200",
+            "D13201",
+            "D13202",
+            "D13203",
+            "D14633",
+            "D14634",
+            "J00431",
+            "J00432",
+            "J00433",
+            "J00434",
+            "J00435",
+            "J00436",
+            "J00437",
+            "J00438",
+            "J00439",
+            "J00440",
+            "J00488",
+            "J00502",
+            "J00507",
+            "J00511",
+            "J00513",
+            "J00532",
+            "J00533",
+            "J00535",
+            "J00537",
+            "K00603",
+            "K00604",
+            "K00605",
+            "K00606",
+            "K00607",
+            "K00692",
+            "K00693",
+            "K00694",
+            "K00707",
+            "K01569",
+            "K02153",
+            "K02154",
+            "K02790",
+            "L14364",
+            "L14366",
+            "L14367",
+            "L14368",
+            "L14547",
+            "L14548",
+            "L17134",
+            "L26851",
+            "L26853",
+            "L26854",
+            "L26856",
+            "L26857",
+            "L26858",
+            "L26860",
+            "L26867",
+            "L26868",
+            "L26869",
+            "L26870",
+            "L26871",
+            "L26872",
+            "L26873",
+            "L26874",
+            "L26875",
+            "L26877",
+            "L26878",
+            "L26880",
+            "L26881",
+            "L26882",
+            "L26883",
+            "L26885",
+            "L26886",
+            "L26925",
+            "L26926",
+            "L26927",
+            "L26929",
+            "L26930",
+            "L26931",
+            "L26932",
+            "L26933",
+            "L26934",
+            "L26935",
+            "L26952",
+            "L27628",
+            "L32868",
+            "L33934",
+            "L33936",
+            "L33942",
+            "L33944",
+            "L33945",
+            "L33946",
+            "L33947",
+            "L33948",
+            "L33950",
+            "L33951",
+            "L33952",
+            "L33953",
+            "L33954",
+            "L33957",
+            "L33958",
+            "L33959",
+            "L33960",
+            "L33961",
+            "M12376",
+            "M13788",
+            "M13789",
+            "M16726",
+            "M17574",
+            "M17575",
+            "M17696",
+            "M17950",
+            "M19402",
+            "M19403",
+            "M20457",
+            "M20774",
+            "M21470",
+            "M23243",
+            "M26465",
+            "M26508",
+            "M27021",
+            "M34977",
+            "M34978",
+            "M34979",
+            "M34980",
+            "M34981",
+            "M34982",
+            "M34983",
+            "M34985",
+            "M34987",
+            "M35332",
+            "M60961",
+            "S73821",
+            "S77041",
+            "U04227",
+            "U04228",
+            "U14945",
+            "U23020",
+            "U23021",
+            "U23022",
+            "U23023",
+            "U23024",
+            "U23025",
+            "U39293",
+            "V00762",
+            "V00767",
+            "V00770",
+            "X00160",
+            "X00163",
+            "X01113",
+            "X02063",
+            "X02064",
+            "X02066",
+            "X02458",
+            "X02459",
+            "X02460",
+            "X02461",
+            "X02462",
+            "X02463",
+            "X02464",
+            "X02465",
+            "X02467",
+            "X03253",
+            "X03255",
+            "X03256",
+            "X03302",
+            "X03398",
+            "X03399",
+            "X05745",
+            "X05746",
+            "X06864",
+            "X06868",
+            "X16801",
+            "X55934",
+            "X55935",
+            "X63164",
+            "X67408",
+            "X67409",
+            "Z15020",
+            "Z15022"
+        ]
+        
+        for id in accessions:
+            db = collection.find_one({'head.id': id})
+            online = fetch_from_ncbi(id)
+            if online:
+                if db['body']['sequence']['nucleotide'].upper() != online['INSDSeq_sequence'].upper():
+                    print('accession {} dont match'.format(db['head']['id']))
+                    print(online['INSDSeq_sequence'])
+                    print(db['body']['sequence']['nucleotide'])
+                else:
+                    print('accession {} match'.format(db['head']['id']))
+            else:
+                self.log.error('could not find %s in ncbi', db['head']['id'])
+
+    def align_reference_backup(self, query, profile, flank=0):
+        buffer = {}
+        
+        # load the reference sequences
         q = self.build_query(query, profile, 'reference')
         collection = self.database['reference']
-        buffer = {}
         cursor = collection.find(q)
         for node in cursor:
             reference = Reference(self, node)
-            buffer[reference.id] = { 'reference': reference }
+            buffer[reference.id] = { 'reference': reference, 'objective': [] }
         cursor.close()
         
+        # make a fasta with all the regions and their flanking sequences
         fasta = []
         for record in buffer.values():
             record['flanking'] = record['reference'].to_flanking_fasta(flank)
             fasta.append(to_fasta(record['flanking']['id'], record['flanking']['sequence'].nucleotide))
         fasta = '\n'.join(fasta)
         
+        # execute blat and add the hits to each reference sequence in the buffer
         blat = Blat(self)
-        lookup = blat.search(fasta)
-        for k,v in lookup.items():
-            print('\n{} {}'.format(record['reference'].id, record['reference'].strain))
+        hits = blat.search(fasta)
+        for k,v in hits.items():
+            buffer[k]['hit'] = v
+            
+        chr12 = self.load_chromosome_12()
+        for k in sorted(buffer.keys()):
             record = buffer[k]
-            record['hit'] = v
-            for hit in record['hit']:
-                start = record['flanking']['start'] - hit['query start']
-                end = record['flanking']['end'] - hit['query start']
+            if 'hit' in record:
+                self.log.debug('aligning %s %s', record['reference'].id, record['reference'].strain)
                 
-                left = start
-                right = hit['target length'] - end
-
-                if hit['query strand']:
-                    hit['start'] = hit['target start'] + left
-                    hit['end'] = hit['target end'] - right
-                else:
-                    hit['start'] = hit['target start'] + right
-                    hit['end'] = hit['target end'] - left
-                
-                chr12.seek(hit['start'])
-                c = chr12.read(hit['end'] - hit['start']).upper()
-                if hit['query strand']:
-                    r = record['reference'].sequence.nucleotide
-                else:
-                    r = record['reference'].sequence.reversed.nucleotide
-                
-                m = 0
-                for i in range(len(r)):
-                    if c[i] == r[i]: m += 1
-                #print(r)
-                #print(c)
-                print('{} {} {} {} {}'.format(hit['score'], m, len(r), hit['block count'], float(m) / float(len(r))))
+                for hit in record['hit']:
+                    objective = { 'block': [] }
+                    record['objective'].append(objective)
                     
-        # print(to_json(buffer))
+                    # if the query is on the opposite strand from the reference, reverse the query
+                    location = { 'start': None, 'end': None }
+                    if record['flanking']['strand'] == hit['query strand']:
+                        flanking = record['flanking']['sequence']
+                        location['end'] = record['flanking']['end']
+                        location['start'] = record['flanking']['start']
+                    else:
+                        flanking = record['flanking']['sequence'].reversed
+                        location['end'] = record['flanking']['flank length'] - record['flanking']['start']
+                        location['start'] = record['flanking']['flank length'] - record['flanking']['end']
+                        
+                    for block in hit['block']:
+                        chr12.seek(block['target start'])
+                        block['target sequence'] = chr12.read(block['size'])
+                        block['query sequence'] = flanking.nucleotide[block['query start']:block['query start'] + block['size']]
+                        
+                    # project the objective region
+                    for block in hit['block']:
+                        start = max(block['query start'], location['start'])
+                        end = min(block['query start'] + block['size'], location['end'])
+                        if start < end:
+                            o = {
+                                'query start': start,
+                                'size': end - start,
+                                'target start': block['target start'] + (start - block['query start']),
+                                'query sequence': flanking.nucleotide[start:end]
+                            }
+                            chr12.seek(o['target start'])
+                            o['target sequence'] = chr12.read(end - start)
+                            objective['block'].append(o)
+                    if objective['block']:
+                        objective['block count'] = len(objective['block'])
+                        objective['query start'] = location['start']
+                        objective['query end'] = location['end']
+                        objective['target start'] = min([ b['target start'] for b in objective['block'] ])
+                        
+                        # construct a consensus sequence for both query and target
+                        position = { 'query': objective['query start'], 'target': objective['target start'] }
+                        objective['query sequence'] = ''
+                        objective['target sequence'] = ''
+                        for block in objective['block']:
+                            if block['query start'] > position['query']:
+                                objective['query sequence'] += flanking.nucleotide[position['query']:block['query start']]
+                                objective['target sequence'] += '-' * (block['query start'] - position['query'])
+                                
+                            if block['target start'] > position['target']:
+                                chr12.seek(position['target'])
+                                objective['target sequence'] += chr12.read(block['target start'] - position['target'])
+                                objective['query sequence'] += '-' * (block['target start'] - position['target'])
+                                
+                            objective['query sequence'] += block['query sequence']
+                            position['query'] += block['size']
+                            
+                            objective['target sequence'] += block['target sequence']
+                            position['target'] += block['size']
+                            
+                        # check the result
+                        objective['check'] = []
+                        for i in range(len(objective['query sequence'])):
+                            q = objective['query sequence'][i]
+                            t = objective['target sequence'][i]
+                            if q.upper() == t.upper():
+                                objective['check'].append('-')
+                            else:
+                                objective['check'].append('*')
+                        objective['check'] = ''.join(objective['check'])
+
+
+
+                    # construct a consensus sequence for both query and target
+                    position = { 'query': hit['query start'], 'target': hit['target start'] }
+                    hit['query sequence'] = ''
+                    hit['target sequence'] = ''
+                    for block in hit['block']:
+                        if block['query start'] > position['query']:
+                            hit['query sequence'] += flanking.nucleotide[position['query']:block['query start']]
+                            hit['target sequence'] += '-' * (block['query start'] - position['query'])
+                            
+                        if block['target start'] > position['target']:
+                            chr12.seek(position['target'])
+                            hit['target sequence'] += chr12.read(block['target start'] - position['target'])
+                            hit['query sequence'] += '-' * (block['target start'] - position['target'])
+                            
+                        hit['query sequence'] += block['query sequence']
+                        position['query'] += block['size']
+                        
+                        hit['target sequence'] += block['target sequence']
+                        position['target'] += block['size']
+                        
+                    # check the result
+                    hit['check'] = []
+                    for i in range(len(hit['query sequence'])):
+                        q = hit['query sequence'][i]
+                        t = hit['target sequence'][i]
+                        if q == '-' or t == '-' or q.upper() == t.upper():
+                            hit['check'].append('-')
+                        else:
+                            hit['check'].append('*')
+                    hit['check'] = ''.join(hit['check'])
+            else:
+                print('\nno matches for {} {}'.format(record['reference'].id, record['reference'].strain))
+            print(to_json(record))
 
     def reference_to_fasta(self, query, profile, flanking=0):
         q = self.build_query(query, profile, 'reference')
@@ -3653,7 +4083,7 @@ class Pipeline(object):
         collection = self.database['sample']
         if drop:
             self.drop_library(library)
-
+            
         while block.fill(library, strain):
             try:
                 result = collection.insert_many(block.document)
@@ -3671,7 +4101,7 @@ class Pipeline(object):
             cursor.limit(limit)
         if skip is not None:
             cursor.skip(skip)
-
+            
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fasta)
@@ -3685,7 +4115,7 @@ class Pipeline(object):
             cursor.limit(limit)
         if skip is not None:
             cursor.skip(skip)
-
+            
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fastq)
@@ -3699,7 +4129,7 @@ class Pipeline(object):
             cursor.limit(limit)
         if skip is not None:
             cursor.skip(skip)
-
+            
         for node in cursor:
             sample = Sample(self, node)
             sample.view(profile)
@@ -3713,7 +4143,7 @@ class Pipeline(object):
             cursor.limit(limit)
         if skip is not None:
             cursor.skip(skip)
-
+            
         for node in cursor:
             sample = Sample(self, node)
             sample.info(profile)
@@ -3732,63 +4162,63 @@ class Pipeline(object):
     def execute(self, cmd):
         if cmd.action == 'accession-populate':
             self.populate_accession(cmd.instruction['format'])
-
+            
         if cmd.action == 'accession-fasta':
             self.accession_to_fasta(cmd.query, cmd.instruction['profile'])
-
+            
         if cmd.action == 'ref-populate':
             for path in cmd.instruction['path']:
                 self.populate_reference(path)
-
+                
         elif cmd.action == 'ref-fasta':
             self.reference_to_fasta(cmd.query, cmd.instruction['profile'], cmd.instruction['flanking'])
-
+            
         elif cmd.action == 'ref-align':
             self.align_reference(cmd.query, cmd.instruction['profile'], cmd.instruction['flanking'])
-
+            
         elif cmd.action == 'ref-igblast-aux':
             self.reference_to_auxiliary(cmd.query, cmd.instruction['profile'])
-
+            
         elif cmd.action == 'populate':
             self.populate(
                 cmd.instruction['library'],
                 cmd.instruction['strain'],
                 cmd.instruction['drop'])
-
+                
         elif cmd.action == 'drop':
             self.drop_library(cmd.instruction['library'])
-
+            
         elif cmd.action == 'view':
             self.view(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-
+                
         elif cmd.action == 'count':
             self.count(cmd.query, cmd.instruction['profile'])
-
+            
         elif cmd.action == 'fasta':
             self.fasta(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-
+                
         elif cmd.action == 'fastq':
             self.fastq(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-
+                
         elif cmd.action == 'info':
             self.info(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-
+                
         elif cmd.action == 'simulate':
             self.simulate(
                 cmd.instruction['library'],
@@ -3796,7 +4226,7 @@ class Pipeline(object):
                 cmd.instruction['json'],
                 cmd.instruction['alignment'],
                 cmd.instruction['profile'])
-
+                
         elif cmd.action == 'rebuild':
             self.rebuild()
 
@@ -3804,11 +4234,11 @@ class Pipeline(object):
 def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
-
+    
     configuration['interface']['prototype']['profile']['parameter']['choices'] = list(configuration['profile'].keys())
     configuration['interface']['prototype']['profile']['parameter']['help'] = \
         '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
-
+        
     cmd = CommandLineParser(configuration['interface'])
     if cmd.sectioned and cmd.action is None:
         cmd.help()
@@ -3817,7 +4247,7 @@ def main():
         pipeline = Pipeline()
         try:
             pipeline.execute(cmd)
-
+            
         except ValueError as e:
             logging.getLogger('main').critical(e)
             sys.exit(1)
@@ -3826,8 +4256,6 @@ def main():
             sys.exit(1)
         pipeline.close()
     sys.exit(0)
-
-
 
 if __name__ == '__main__':
     main()
