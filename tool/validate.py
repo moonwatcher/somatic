@@ -1,12 +1,200 @@
-{
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
+import logging
+import re
+import json
+import uuid
+import io
+import hashlib
+import math
+
+from io import StringIO, BytesIO
+from datetime import timedelta, datetime
+from argparse import ArgumentParser
+from subprocess import Popen, PIPE
+
+from bson.objectid import ObjectId
+from pymongo.son_manipulator import SONManipulator
+from pymongo import MongoClient, DESCENDING, ASCENDING
+from pymongo.errors import BulkWriteError
+
+import xmltodict
+import urllib.request, urllib.parse, urllib.error
+import urllib.parse
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
+from http.client import BadStatusLine
+
+log = logging.getLogger('Validate')
+
+def reverse(sequence):
+    complement = {
+        'A': 'T',
+        'B': 'V',
+        'C': 'G',
+        'D': 'H',
+        'G': 'C',
+        'H': 'D',
+        'K': 'M',
+        'M': 'K',
+        'N': 'N',
+        'R': 'Y',
+        'S': 'S',
+        'T': 'A',
+        'V': 'B',
+        'W': 'W',
+        'Y': 'R',
+
+        'a': 't',
+        'b': 'v',
+        'c': 'g',
+        'd': 'h',
+        'g': 'c',
+        'h': 'd',
+        'k': 'm',
+        'm': 'k',
+        'n': 'n',
+        'r': 'y',
+        's': 's',
+        't': 'a',
+        'v': 'b',
+        'w': 'w',
+        'y': 'r',
+    }
+    return ''.join([complement[b] for b in list(sequence.strip())][::-1])
+
+def fetch_from_ncbi(id):
+    def normalize_document(document, transform):
+        if isinstance(document, dict):
+            transformed = {}
+            for k,v in document.items():
+                if k in transform and isinstance(v, dict):
+                    transformed[k] = normalize_document([v], transform)
+                else:
+                    transformed[k] = normalize_document(v, transform)
+            return transformed
+            
+        elif isinstance(document, list):
+            return [ normalize_document(e, transform) for e in document ]
+        else:
+            return document
+
+    def fetch(url):
+        content = None
+        request = Request(url, None, { 'Accept': 'application/xml' })
+        
+        try:
+            response = urlopen(request)
+        except BadStatusLine as e:
+            log.warning('Bad http status error when requesting %s', url)
+        except HTTPError as e:
+            log.warning('Server returned an error when requesting %s: %s', url, e.code)
+        except URLError as e:
+            log.warning('Could not reach server when requesting %s: %s', url, e.reason)
+        else:
+            content = StringIO(response.read().decode('utf8'))
+            if content.read(22) == 'Nothing has been found':
+                content = None
+            else:
+                content.seek(0)
+        return parse(content)
+
+    def parse(content):
+        transform = [
+            "INSDSet",
+            "INSDSeq",
+            "INSDFeature",
+            "INSDFeature_intervals",
+            "INSDFeature_quals",
+            "INSDQualifier",
+            "INSDSeq_references"
+        ]
+        document = None
+        if content:
+            document = xmltodict.parse(content.getvalue())
+            document = normalize_document(document, transform)
+        return document
+
+    node = None
+    if id is not None:
+        url = 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}'
+        document = fetch(url.format(id))
+        if 'INSDSet' in document:
+            for INSDSet in document['INSDSet']:
+                if 'INSDSeq' in INSDSet:
+                    for INSDSeq in INSDSet['INSDSeq']:
+                        if 'INSDSeq_moltype' in INSDSeq and INSDSeq['INSDSeq_moltype'] in ['DNA', 'mRNA', 'RNA']:
+                            if 'INSDSeq_sequence' in INSDSeq:
+                                INSDSeq['INSDSeq_sequence'] = INSDSeq['INSDSeq_sequence'].upper()
+                            node = INSDSeq
+                            break
+    return node
+
+def to_json(node):
+    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4)
+
+def search(space, query):
+    result = []
+    start = space.find(query)
+    while start >= 0 and start < len(space):
+        end = start + len(query)
+        result.append([start, end])
+        start = space.find(query, start + 1)
+    return result
+
+def validate(gene):
+    if 'accession' in gene and 'start' in gene and 'end' in gene and 'strand' in gene:
+        if gene['accession'] in documents:
+            document = documents[gene['accession']]
+        else:
+            document = fetch_from_ncbi(gene['accession'])
+            documents[gene['accession']] = document
+
+        r = document['INSDSeq_sequence'][gene['start']:gene['end']].upper()
+        if not gene['strand']:
+            r = reverse(r)
+
+        if r != gene['sequence']:
+            complement(gene, True)
+            r = document['INSDSeq_sequence'][gene['start']:gene['end']].upper()
+            if r != gene['sequence']:
+                print('ERROR: {} is invalid'.format(gene['id']))
+        else:
+            print('{} is valid'.format(gene['id']))
+    else:
+        print('ERROR: {} is missing metadata'.format(gene['id']))
+
+def complement(gene, force=False):
+    if force or ('start' not in gene or 'end' not in gene):
+        if gene['accession'] in documents:
+            document = documents[gene['accession']]
+        else:
+            document = fetch_from_ncbi(gene['accession'])
+            documents[gene['accession']] = document
+        result = search(document['INSDSeq_sequence'], gene['sequence'])
+        if len(result) == 1:
+          r = result[0]
+          print('new position found for {} in {} : {}'.format(gene['id'], gene['accession'], r))
+          gene['start'] = r[0]
+          gene['end'] = r[1]
+        elif len(result) == 0:
+          print('{} not found in {}'.format(gene['id'], gene['accession']))
+          print(document['INSDSeq_sequence'])
+          print(gene['sequence'])
+        else:
+          print('multiple positions found for {} in {} : {}'.format(gene['id'], gene['accession'], result))
+
+genes = {
     "DH": [
         {
             "accession": "J00434",
-            "confirmed": true,
+            "confirmed": True,
             "end": 70,
             "functionality": "F",
             "id": "DFL16.1",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD1-1*01",
             "length": 23,
             "name": "DFL16.1",
@@ -16,16 +204,16 @@
             "sequence": "TTTATTACTACGGTAGTAGCTAC",
             "source": "imgt",
             "start": 47,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M35332",
-            "confirmed": true,
+            "confirmed": True,
             "end": 129,
             "functionality": "F",
             "id": "IGHD1-1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD1-1*02",
             "length": 23,
             "name": "IGHD1-1*02",
@@ -35,16 +223,16 @@
             "sequence": "TTTATTACTATGGTGGTAGCTAC",
             "source": "imgt",
             "start": 106,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00436",
-            "confirmed": true,
+            "confirmed": True,
             "end": 60,
             "functionality": "F",
             "id": "DFL16.2",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD1-2*01",
             "length": 17,
             "name": "DFL16.2",
@@ -54,16 +242,16 @@
             "sequence": "TTCATTACTACGGCTAC",
             "source": "imgt",
             "start": 43,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1300374,
             "functionality": "F",
             "id": "DFL16.3",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD1-3*01",
             "length": 23,
             "name": "DFL16.3",
@@ -73,16 +261,16 @@
             "sequence": "TATATAACTAAAGTGGTAGCTCA",
             "source": "imgt",
             "start": 1300351,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1372406,
             "functionality": "F",
             "id": "IGHD2-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-1*01",
             "length": 17,
             "name": "IGHD2-1*01",
@@ -92,16 +280,16 @@
             "sequence": "TCTACTATGGTAACTAC",
             "source": "imgt",
             "start": 1372389,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00438",
-            "confirmed": true,
+            "confirmed": True,
             "end": 64,
             "functionality": "F",
             "id": "DSP2.7",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-10*01",
             "length": 17,
             "name": "DSP2.7",
@@ -111,16 +299,16 @@
             "sequence": "CCTACTATGGTAACTAC",
             "source": "imgt",
             "start": 47,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1391384,
             "functionality": "F",
             "id": "IGHD2-10*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-10*02",
             "length": 17,
             "name": "IGHD2-10*02",
@@ -130,16 +318,16 @@
             "sequence": "CCTAGTATGGTAACTAC",
             "source": "imgt",
             "start": 1391367,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00439",
-            "confirmed": true,
+            "confirmed": True,
             "end": 64,
             "functionality": "F",
             "id": "DSP2.8",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-11*01",
             "length": 17,
             "name": "DSP2.8",
@@ -149,16 +337,16 @@
             "sequence": "CCTAGTATGGTAACTAC",
             "source": "imgt",
             "start": 47,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1396845,
             "functionality": "F",
             "id": "IGHD2-11*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-11*02",
             "length": 17,
             "name": "IGHD2-11*02",
@@ -168,16 +356,16 @@
             "sequence": "CCTACTATGGTAACTAC",
             "source": "imgt",
             "start": 1396828,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF428079",
-            "confirmed": true,
+            "confirmed": True,
             "end": 62,
             "functionality": "F",
             "id": "DSP2.12",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-12*01",
             "length": 26,
             "name": "DSP2.12",
@@ -187,16 +375,16 @@
             "sequence": "CCTACTATAGTTACTATAGTTACGAC",
             "source": "imgt",
             "start": 36,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF428080",
-            "confirmed": true,
+            "confirmed": True,
             "end": 53,
             "functionality": "F",
             "id": "DSP2.13",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-13*01",
             "length": 17,
             "name": "DSP2.13",
@@ -206,16 +394,16 @@
             "sequence": "TCTACTATGGTGACTAC",
             "source": "imgt",
             "start": 36,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1381732,
             "functionality": "F",
             "id": "IGHD2-14*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-14*01",
             "length": 17,
             "name": "IGHD2-14*01",
@@ -225,16 +413,16 @@
             "sequence": "CCTACTATAGGTACGAC",
             "source": "imgt",
             "start": 1381715,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00437",
-            "confirmed": true,
+            "confirmed": True,
             "end": 51,
             "functionality": "F",
             "id": "DSP2.4",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-2*01",
             "length": 17,
             "name": "DSP2.4",
@@ -244,16 +432,16 @@
             "sequence": "TCTACTATGGTTACGAC",
             "source": "imgt",
             "start": 34,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "D13199",
-            "confirmed": true,
+            "confirmed": True,
             "end": 400,
             "functionality": "F",
             "id": "DSP2.9",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-3*01",
             "length": 17,
             "name": "DSP2.9",
@@ -263,16 +451,16 @@
             "sequence": "TCTATGATGGTTACTAC",
             "source": "imgt",
             "start": 383,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00431",
-            "confirmed": true,
+            "confirmed": True,
             "end": 496,
             "functionality": "F",
             "id": "DSP2.2",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-4*01",
             "length": 17,
             "name": "DSP2.2",
@@ -282,16 +470,16 @@
             "sequence": "TCTACTATGATTACGAC",
             "source": "imgt",
             "start": 479,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M60961",
-            "confirmed": true,
+            "confirmed": True,
             "end": 153,
             "functionality": "F",
             "id": "DSP2.x",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-5*01",
             "length": 17,
             "name": "DSP2.x",
@@ -301,16 +489,16 @@
             "sequence": "CCTACTATAGTAACTAC",
             "source": "imgt",
             "start": 136,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 101554,
             "functionality": "F",
             "id": "IGHD2-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-6*01",
             "length": 17,
             "name": "IGHD2-6*01",
@@ -320,16 +508,16 @@
             "sequence": "CCTACTATAGTAACTAC",
             "source": "imgt",
             "start": 101537,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00435",
-            "confirmed": true,
+            "confirmed": True,
             "end": 64,
             "functionality": "F",
             "id": "DSP2.3",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-7*01",
             "length": 17,
             "name": "DSP2.3",
@@ -339,16 +527,16 @@
             "sequence": "TCTACTATGGTTACGAC",
             "source": "imgt",
             "start": 47,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00432",
-            "confirmed": true,
+            "confirmed": True,
             "end": 55,
             "functionality": "F",
             "id": "DSP2.5",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-8*01",
             "length": 17,
             "name": "DSP2.5",
@@ -358,16 +546,16 @@
             "sequence": "TCTACTATGGTAACTAC",
             "source": "imgt",
             "start": 38,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00433",
-            "confirmed": true,
+            "confirmed": True,
             "end": 48,
             "functionality": "F",
             "id": "DSP2.6",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD2-9*01",
             "length": 17,
             "name": "DSP2.6",
@@ -377,16 +565,16 @@
             "sequence": "CCTACTATGGTTACGAC",
             "source": "imgt",
             "start": 31,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1377054,
             "functionality": "F",
             "id": "DSP2.2a",
-            "identified": true,
+            "identified": True,
             "length": 17,
             "name": "DSP2.2a",
             "organism name": "mus musculus",
@@ -395,16 +583,16 @@
             "sequence": "TCTACTATGATTACGAC",
             "source": "igblast",
             "start": 1377037,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1386724,
             "functionality": "F",
             "id": "DSP2.2b",
-            "identified": true,
+            "identified": True,
             "length": 17,
             "name": "DSP2.2b",
             "organism name": "mus musculus",
@@ -413,16 +601,16 @@
             "sequence": "TCTACTATGATTACGAC",
             "source": "igblast",
             "start": 1386707,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 37610,
             "functionality": "F",
             "id": "IGHD3-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD3-1*01",
             "length": 17,
             "name": "IGHD3-1*01",
@@ -432,16 +620,16 @@
             "sequence": "GGCACAGCTCGGGCTAC",
             "source": "imgt",
             "start": 37593,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M23243",
-            "confirmed": true,
+            "confirmed": True,
             "end": 145,
             "functionality": "F",
             "id": "DST4-BALB/c",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD3-2*01",
             "length": 16,
             "name": "DST4-BALB/c",
@@ -451,16 +639,16 @@
             "sequence": "AGACAGCTCGGGCTAC",
             "source": "imgt",
             "start": 129,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 114709,
             "functionality": "F",
             "id": "IGHD3-2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD3-2*02",
             "length": 16,
             "name": "IGHD3-2*02",
@@ -470,16 +658,16 @@
             "sequence": "AGACAGCTCAGGCTAC",
             "source": "imgt",
             "start": 114693,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1366216,
             "functionality": "F",
             "id": "DST4.3",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD3-3*01",
             "length": 17,
             "name": "DST4.3",
@@ -489,16 +677,16 @@
             "sequence": "GGGACAGCTAGGGCTGT",
             "source": "imgt",
             "start": 1366199,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L32868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 2956,
             "functionality": "F",
             "id": "IGHD4-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD4-1*01",
             "length": 11,
             "name": "IGHD4-1*01",
@@ -508,16 +696,16 @@
             "sequence": "CTAACTGGGAC",
             "source": "imgt",
             "start": 2945,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00440",
-            "confirmed": true,
+            "confirmed": True,
             "end": 322,
             "functionality": "F",
             "id": "DQ52-BALB/c",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD4-1*02",
             "length": 10,
             "name": "DQ52-BALB/c",
@@ -527,16 +715,16 @@
             "sequence": "CAACTGGGAC",
             "source": "imgt",
             "start": 312,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 36123,
             "functionality": "P",
             "id": "IGHD5-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD5-1*01",
             "length": 10,
             "name": "IGHD5-1*01",
@@ -546,16 +734,16 @@
             "sequence": "GAGTACCTAC",
             "source": "imgt",
             "start": 36113,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 93497,
             "functionality": "O",
             "id": "IGHD5-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD5-2*01",
             "length": 10,
             "name": "IGHD5-2*01",
@@ -565,16 +753,16 @@
             "sequence": "GAATACCTAC",
             "source": "imgt",
             "start": 93487,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 98162,
             "functionality": "O",
             "id": "IGHD5-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD5-3*01",
             "length": 10,
             "name": "IGHD5-3*01",
@@ -584,16 +772,16 @@
             "sequence": "GAATACCTAC",
             "source": "imgt",
             "start": 98152,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 102822,
             "functionality": "O",
             "id": "IGHD5-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD5-4*01",
             "length": 10,
             "name": "IGHD5-4*01",
@@ -603,16 +791,16 @@
             "sequence": "GAATACCTAC",
             "source": "imgt",
             "start": 102812,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 107981,
             "functionality": "O",
             "id": "IGHD5-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD5-5*01",
             "length": 10,
             "name": "IGHD5-5*01",
@@ -622,16 +810,16 @@
             "sequence": "GACTACCTAC",
             "source": "imgt",
             "start": 107971,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 113335,
             "functionality": "O",
             "id": "IGHD5-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD5-6*01",
             "length": 10,
             "name": "IGHD5-6*01",
@@ -641,16 +829,16 @@
             "sequence": "GAATACCTAC",
             "source": "imgt",
             "start": 113325,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 98399,
             "functionality": "O",
             "id": "IGHD5-7*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD5-7*01",
             "length": 29,
             "name": "IGHD5-7*01",
@@ -660,16 +848,16 @@
             "sequence": "AGGCAGCTAGCCTCTGCAGTGCCACAACC",
             "source": "imgt",
             "start": 98370,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 103059,
             "functionality": "O",
             "id": "IGHD5-8*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD5-8*01",
             "length": 29,
             "name": "IGHD5-8*01",
@@ -679,16 +867,16 @@
             "sequence": "AGACAGCTAGCCTCTGCAGTGCCACAACC",
             "source": "imgt",
             "start": 103030,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M26508",
-            "confirmed": true,
+            "confirmed": True,
             "end": 468,
             "functionality": "P",
             "id": "IGHD6-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD6-1*01",
             "length": 29,
             "name": "IGHD6-1*01",
@@ -698,16 +886,16 @@
             "sequence": "AGACAGCTAGCCTCTGCAGTGCCACAACC",
             "source": "imgt",
             "start": 439,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 82780,
             "functionality": "P",
             "id": "IGHD6-1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD6-1*02",
             "length": 29,
             "name": "IGHD6-1*02",
@@ -717,16 +905,16 @@
             "sequence": "AGGCAGCTAGCCTCTGCAGTGCCACAACC",
             "source": "imgt",
             "start": 82751,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "D13198",
-            "confirmed": true,
+            "confirmed": True,
             "end": 33,
             "functionality": "P",
             "id": "IGHD6-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD6-2*01",
             "length": 27,
             "name": "IGHD6-2*01",
@@ -736,16 +924,16 @@
             "sequence": "AGGCAGCTAGTCTCTGCAGTGCCACAA",
             "source": "imgt",
             "start": 6,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 88048,
             "functionality": "P",
             "id": "IGHD6-2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHD6-2*02",
             "length": 29,
             "name": "IGHD6-2*02",
@@ -755,18 +943,18 @@
             "sequence": "AGGCAGCTAGTCTCTGCAGTGCCACAACC",
             "source": "imgt",
             "start": 88019,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         }
     ],
     "JH": [
         {
             "accession": "V00762",
-            "confirmed": true,
+            "confirmed": True,
             "end": 496,
             "functionality": "F",
             "id": "IGHJ1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ1*01",
             "imgt gene name": "IGHJ1",
             "length": 53,
@@ -777,16 +965,16 @@
             "sequence": "CTACTGGTACTTCGATGTCTGGGGCGCAGGGACCACGGTCACCGTCTCCTCAG",
             "source": "imgt",
             "start": 443,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "V00770",
-            "confirmed": true,
+            "confirmed": True,
             "end": 117,
             "functionality": "F",
             "id": "IGHJ1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ1*02",
             "imgt gene name": "IGHJ1",
             "length": 53,
@@ -797,16 +985,16 @@
             "sequence": "CTACTGGTACTTCGATGTCTGGGGCGCAGGGACCACGGTCACCGTTTCCTCAG",
             "source": "imgt",
             "start": 64,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X63164",
-            "confirmed": true,
+            "confirmed": True,
             "end": 64,
             "functionality": "F",
             "id": "IGHJ1*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ1*03",
             "imgt gene name": "IGHJ1",
             "length": 53,
@@ -817,16 +1005,16 @@
             "sequence": "CTACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG",
             "source": "imgt",
             "start": 11,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "V00770",
-            "confirmed": true,
+            "confirmed": True,
             "end": 430,
             "functionality": "F",
             "id": "IGHJ2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ2*01",
             "imgt gene name": "IGHJ2",
             "length": 48,
@@ -837,16 +1025,16 @@
             "sequence": "ACTACTTTGACTACTGGGGCCAAGGCACCACTCTCACAGTCTCCTCAG",
             "source": "imgt",
             "start": 382,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "S73821",
-            "confirmed": true,
+            "confirmed": True,
             "end": 314,
             "functionality": "F",
             "id": "IGHJ2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ2*02",
             "imgt gene name": "IGHJ2",
             "length": 48,
@@ -857,16 +1045,16 @@
             "sequence": "ACTACTTTGACTACTGGGGCCAAGGCACCTCTCTCACAGTCTCCTCAG",
             "source": "imgt",
             "start": 266,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "S77041",
-            "confirmed": true,
+            "confirmed": True,
             "end": 46,
             "functionality": "F",
             "id": "IGHJ2*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ2*03",
             "imgt gene name": "IGHJ2",
             "length": 46,
@@ -877,16 +1065,16 @@
             "sequence": "TACTTTGACTACTGGGGCCAAGGCACCAGTCTCACAGTCTCCTCAG",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "V00770",
-            "confirmed": true,
+            "confirmed": True,
             "end": 813,
             "functionality": "F",
             "id": "IGHJ3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ3*01",
             "imgt gene name": "IGHJ3",
             "length": 48,
@@ -897,16 +1085,16 @@
             "sequence": "CCTGGTTTGCTTACTGGGGCCAAGGGACTCTGGTCACTGTCTCTGCAG",
             "source": "imgt",
             "start": 765,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "S73821",
-            "confirmed": true,
+            "confirmed": True,
             "end": 697,
             "functionality": "P",
             "id": "IGHJ3*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ3*02",
             "imgt gene name": "IGHJ3",
             "length": 48,
@@ -917,16 +1105,16 @@
             "sequence": "CCTGGTTTGGTTAGTGGGGCCAAGGGACTCTGGTCACTGTCTCTGCAG",
             "source": "imgt",
             "start": 649,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "V00770",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1386,
             "functionality": "F",
             "id": "IGHJ4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHJ4*01",
             "imgt gene name": "IGHJ4",
             "length": 54,
@@ -937,15 +1125,15 @@
             "sequence": "ATTACTATGCTATGGACTACTGGGGTCAAGGAACCTCAGTCACCGTCTCCTCAG",
             "source": "imgt",
             "start": 1332,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X63166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 61,
             "id": "JH1",
-            "identified": true,
+            "identified": True,
             "length": 52,
             "name": "JH1",
             "organism name": "mus musculus",
@@ -954,15 +1142,15 @@
             "sequence": "CTACTGGTACTTCGATGTCTGGGGCGCAGGGACCACGGTCACCGTCTCCTCA",
             "source": "igblast",
             "start": 9,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X63166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 374,
             "id": "JH2",
-            "identified": true,
+            "identified": True,
             "length": 45,
             "name": "JH2",
             "organism name": "mus musculus",
@@ -971,15 +1159,15 @@
             "sequence": "TACTTTGACTACTGGGGCCAAGGCACCACTCTCACAGTCTCCTCA",
             "source": "igblast",
             "start": 329,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X63166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 757,
             "id": "JH3",
-            "identified": true,
+            "identified": True,
             "length": 48,
             "name": "JH3",
             "organism name": "mus musculus",
@@ -988,15 +1176,15 @@
             "sequence": "GCCTGGTTTGCTTACTGGGGCCAAGGGACTCTGGTCACTGTCTCTGCA",
             "source": "igblast",
             "start": 709,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X63166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1329,
             "id": "JH4",
-            "identified": true,
+            "identified": True,
             "length": 53,
             "name": "JH4",
             "organism name": "mus musculus",
@@ -1005,18 +1193,18 @@
             "sequence": "ATTACTATGCTATGGACTACTGGGGTCAAGGAACCTCAGTCACCGTCTCCTCA",
             "source": "igblast",
             "start": 1276,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         }
     ],
     "VH": [
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 193537,
             "functionality": "F",
             "id": "IGHV3-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-1*01",
             "imgt family name": "IGHV3",
             "length": 296,
@@ -1028,17 +1216,17 @@
             "source": "imgt",
             "start": 193241,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 498302,
             "family": "X24",
             "functionality": "F",
             "id": "VHX24.a2.89",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV4-2*02",
             "imgt family name": "IGHV4",
             "length": 296,
@@ -1050,8 +1238,8 @@
             "source": "imgt",
             "start": 498006,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -1067,7 +1255,7 @@
             "sequence": "GAAGTGAAAATTGAGGAGTCAGGAGGAGGCTTGGTCCAACCTGGAGGATCCATGAAACTCTCTTGTGCAGCCTCTGGATTCACTTTCAGTGATTACAGGATGGACTGGGTCCACCACTCTACAGAGAATGGGTTGGAGTGGGTTGCTGAAATTAGAAACAAAGCTAGTAATTATGCAACATATTATGTGGAGTCTGTGAATGGGAGGTTCACCATCTCAAGAGATGATTCCAAAAGTAGTGTCTACCTGCAAATGAACAGCTTAAGAGCTGAAGATACTGGCATTTATTACTGTACAAGG",
             "source": "igblast",
             "start": 1654213,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303840",
@@ -1083,7 +1271,7 @@
             "sequence": "AAGGTCCAAGTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGAGCTTCAATGAAGATATCGTGCAAGGCTTCTGGTTACTCATTCACTGGCTACACCATGAACTGGGTGAAGCAGAGCCATGGAAAGAACCTTGACTGGATTGGACTTATTAATCCTTACCATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTAACTGTAGACAAGTCATCCAGCACAGCCTACACGGAGCTCCTCAGTCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAAT",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -1099,15 +1287,15 @@
             "sequence": "GTTACTCTGAAAGTGTCTGGCCCTGGGATATTGCAGCCATCACAGACTCTCAGCCTGGCCTGTACTTTCTCTGGGATTTCACTGAGTACTTCTGGTATGGGTTTGAGCTGGCTTCGTAAGCCCTCAGGGAAGGCTTTAGAGTGGCTGGCAAGCATTTGGAATAATGATAACTACTACAACCCATCTTTGAAGAGCCGGCTCACAATCTCCAAGGAGACCTCCAACTACCAAGTATTCCTTAAACTCACCAGTGTGGACACTGCAGATTCTGCCACATACTACGGTGCTTGGAGAGAG",
             "source": "igblast",
             "start": 1608522,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1399140,
             "functionality": "F",
             "id": "IGHV1-17-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-17-1*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -1119,8 +1307,8 @@
             "source": "imgt",
             "start": 1398846,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF455348",
@@ -1136,15 +1324,15 @@
             "sequence": "TTCAGTGAAGATATCCTGCAAGGCTTCCGGCTACACCTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTTTCCTGGAAGTGGTAGTACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTTACTGTAGACAAATCCTCCAGCACAGCCTACATGTTGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26867",
-            "confirmed": true,
+            "confirmed": True,
             "end": 965,
             "functionality": "F",
             "id": "IGHV1S70*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S70*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -1155,7 +1343,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAAACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAATATTTATCCTCTTGATAGTAATACTAACTACAATCAAAAGTTCAAGGACAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 713,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF459911",
@@ -1171,16 +1359,16 @@
             "sequence": "CCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTATGGTATAAGCTGGGTGAAGCAGAGAACTGGACAGGGCCTTGAGTGGATTGGAGAGATTTATCCTAGAAGTGGTAATACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCGTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X55935",
-            "confirmed": false,
+            "confirmed": False,
             "end": 300,
             "family": "3609N",
             "functionality": "F",
             "id": "VH3609N",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV13-2*03",
             "imgt family name": "IGHV13",
             "length": 300,
@@ -1192,16 +1380,16 @@
             "source": "imgt",
             "start": 0,
             "strain": "NZB",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF120469",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.30b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5S24*01",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -1212,16 +1400,16 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGTTTAGTGAAGCCTGGACAGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAACTATTACATGTCTTGGGTTCACCAGACTCCGGAGAAGAGGCTGGAGTGGGTTGCATACATTAGTAGTAGTGGTGTTAGCACCTATTATCCAGACAATGTAAAGGGCCGATTCGCCATCTCCAGAGACAATGCCAAGAACACCCTTTACCTGCAAATGACCAGTCTGAAGTCAGAGGACACGGCCATGTATTACTGTGCAAGACGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF304552",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.h",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S132*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -1232,7 +1420,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGACTTCTGGCTACACCTTCACCAGCTACTGGATTCAGTGGGTAAAACAGAGGCCTGGACAGGGCCTTGGGTGGATTGGAGAGATATTTCCTGGAACTGGCACTACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTATAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCTGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303868",
@@ -1248,16 +1436,16 @@
             "sequence": "CAGGTCCAACTGCAGCAACCTGGGTATGAGCTGGTGAGGCCTGGAGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACATTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAATATTTATCCTGGTAGTGGTAGTACTAACTACGATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 926254,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a28.48",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-12-1*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -1269,16 +1457,16 @@
             "source": "imgt",
             "start": 925958,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC163348",
-            "confirmed": true,
+            "confirmed": True,
             "end": 15106,
             "functionality": "F",
             "id": "IGHV1-72*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-72*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -1290,16 +1478,16 @@
             "source": "imgt",
             "start": 14812,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 64761,
             "functionality": "P",
             "id": "IGHV8-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-3*01",
             "imgt family name": "IGHV8",
             "length": 295,
@@ -1310,17 +1498,17 @@
             "source": "imgt",
             "start": 64466,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF304557",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.m",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S136*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -1331,16 +1519,16 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACATTCACTGACTATGTTATGCACTGGGTGAAGCAGAAGCCTGGGCAGGGCCTTGAGTGGATTGGATATATTTATCCTTACAATGATGGTACTGAGTACACTGAGAAGTTCAAAGGCAAGGCCACACTGACTTTAGACAAATCCTCCAGCACAGCCTACATGGATCTCAGCAGCCTGACCTCTGAGGACTCTACGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 845355,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a35.57",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-12-2*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -1352,16 +1540,16 @@
             "source": "imgt",
             "start": 845059,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L26931",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1S92*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S92*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -1372,15 +1560,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTAAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACTTTCACCAGCTACTGGATGCACTGGGTAAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAATGATTCATCCTAATAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCTCAGCCTACATGAAGCTCATC",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 155647,
             "functionality": "F",
             "id": "IGHV1-75*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-75*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -1392,16 +1580,16 @@
             "source": "imgt",
             "start": 155353,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L33948",
-            "confirmed": true,
+            "confirmed": True,
             "end": 966,
             "functionality": "P",
             "id": "IGHV1-42*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-42*03",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -1412,7 +1600,7 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGTAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGAACTGGGTGAAGCAAAGTCCTGAAAAGAGCCTTGAGTGGATTGGAGAGATTAATCCTAGCACTGGTGGTACTACCTACAACCAGAAGTTCAAGGCCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATCTAGCTCAAGA",
             "source": "imgt",
             "start": 713,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF290972",
@@ -1428,15 +1616,15 @@
             "sequence": "GATGTGCAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCGGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTTTGGAATGCACTGGGTTCGTCAGGCTCCAGAGAAGGGGCTGGAGTGGGTCGCATACATTAGTAGTGGCAGTAGTACCATCTACTATGCAGACACAGTGAAGGGCCGATTCACCATCTCCAGAGACAATCCCAAGAACACCCTGTTCCTGCAAATGACCAGTCTAAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 141,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 743217,
             "functionality": "F",
             "id": "IGHV5-6-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6-6*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -1448,16 +1636,16 @@
             "source": "imgt",
             "start": 742923,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 54385,
             "functionality": "F",
             "id": "IGHV3-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-6*01",
             "imgt family name": "IGHV3",
             "length": 296,
@@ -1469,16 +1657,16 @@
             "source": "imgt",
             "start": 54089,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 68498,
             "functionality": "P",
             "id": "IGHV6-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-2*01",
             "imgt family name": "IGHV6",
             "length": 295,
@@ -1489,8 +1677,8 @@
             "source": "imgt",
             "start": 68203,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -1506,15 +1694,15 @@
             "sequence": "GAGGTGAAGCTGGATGAGACTGGAGGAGGCTTGGTGCAACCTGGGAGGCCCATGAAACTCTCCTGTGTTGCCTCTGGATTCACTTTTAGTGACTACTGGATGAACTGGGTCCGCCAGTCTCCAGAGAAAGGACTGGAGTGGGTAGCACAAATTAGAAACAAACCTTATAATTATGAAACATATTATTCAGATTCTGTGAAAGGCAGATTCACCATCTCAAGAGATGATTCCAAAAGTAGTGTCTACCTGCAAATGAACAACTTAAGAGCTGAAGACATGGGTATCTATTACTGTACATGG",
             "source": "igblast",
             "start": 5813,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160990",
-            "confirmed": true,
+            "confirmed": True,
             "end": 70252,
             "functionality": "F",
             "id": "IGHV1-84*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-84*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -1526,8 +1714,8 @@
             "source": "imgt",
             "start": 69958,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "U23022",
@@ -1543,15 +1731,15 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGTATATTGCAGCCCTCCCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAGCACTTTTGGTATGGGTATAGGCTGGATTCGTCAGCCTTCAGGGAAGGGTCTAGAGTGGCTGGCACACATTTGGTGGGATGATGATAAGTACTATAACCCAGCCCTGAAGAGTCGGCTCACAATCTCCAAGGATACCTCCAACAACCAGGTATTCCTCAAGATCACCAGTGTGGACACTGCAGATACTGCCACATAC",
             "source": "igblast",
             "start": 1,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26935",
-            "confirmed": true,
+            "confirmed": True,
             "end": 955,
             "functionality": "F",
             "id": "IGHV1S96*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S96*01",
             "imgt family name": "IGHV1",
             "length": 249,
@@ -1562,15 +1750,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTTATAGTGATATTAAGTACAGTGAGAAGTTCAAGAACAAGGCCACACTGACTGTAGACAAACCCTCCAATACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 74130,
             "functionality": "P",
             "id": "IGHV1-29*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-29*01",
             "imgt family name": "IGHV1",
             "length": 285,
@@ -1581,8 +1769,8 @@
             "source": "imgt",
             "start": 73845,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -1598,18 +1786,18 @@
             "sequence": "GAAGTGAAGCTTGAGGAGTCTGGAGGAGGCTTGGTGCAACCTGGAGGATCCATGAAACTCTCCTGTGTTGCCTCTGGATTCACTTTCAGTAACTACTGGATGTCCTGGGTCCGCCAGTCTCCAGAGAAGGGGCTTGAGTGGGTTGCTCAAATAAGATTGAAATCTGATAATTATGCAACACATTATGCGGAGTCTGTGAAAGGGAGGTTCACCATATCAAGAGATGATTCCAAAAGTAGTGTCTACCTGCAAATGAACAACTTAAGGGCTGAAGACACTGGAATTTATTACTGCACAGGC",
             "source": "igblast",
             "start": 64515,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
             "allele name": "VH7183.a16.27",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1071619,
             "family": "7183",
             "family name": "7183",
             "functionality": "F",
             "id": "VH7183.a16.27",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-9-2*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -1621,16 +1809,16 @@
             "source": "imgt",
             "start": 1071323,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 122229,
             "functionality": "F",
             "id": "IGHV1-43*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-43*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -1642,8 +1830,8 @@
             "source": "imgt",
             "start": 121935,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -1659,15 +1847,15 @@
             "sequence": "GAAGTGAAGCTTGAGGAGTCTGGAGGAGGCTTGGTGCAACCTGGAGGATCCATGAAACTCTCCTGTGTTGCCTCTGGATTCACTTTCAGTAACTACTGGATGAACTGGGTCCGCCAGTCTCCAGAGAAGGGGCTTGAGTGGGTTGCTGAAATTAGATTGAAATCTAATAATTATGCAACACATTATGCGGAGTCTGTGAAAGGGAGGTTCACCATCTCAAGAGATGATTCCAAAAGTAGTGTCTACCTGCAAATGAACAACTTAAGAGCTGAAGACACTGGCATTTATTACTGTACCAGG",
             "source": "igblast",
             "start": 21727,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K01569",
-            "confirmed": true,
+            "confirmed": True,
             "end": 293,
             "functionality": "F",
             "id": "IGHV3S1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3S1*01",
             "imgt family name": "IGHV3",
             "length": 293,
@@ -1678,8 +1866,8 @@
             "sequence": "GAGGTGCAGCTTCAGGAGTCAGGACCTAGCCTCGTGAAACCTTCGCAGACTCTGTCCCTCACCTGTTCTGTCACTGGCGACTCCATCACCAGTGATTACTGGAACTGGATCCGGAAATTCCCAGGGAATAAACTTGAGTACATGGGGTACATAAGCTACAGTGGTAGCACTTACTACAATCCATCTCTCAAAAGTCGAATCTCCATCACTCGAGACACATCCAAGAACCAGTACTACCTGCAGTTGAATTCTGTGACTTCTGAGGACACAGCCACATATTACTGTGCAAGATA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -1695,15 +1883,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGACTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAATATTAATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTATTGTGCAAGA",
             "source": "igblast",
             "start": 912381,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 725017,
             "functionality": "P",
             "id": "IGHV5-13-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-13-1*01",
             "imgt family name": "IGHV5",
             "length": 291,
@@ -1714,16 +1902,16 @@
             "source": "imgt",
             "start": 724726,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160990",
-            "confirmed": true,
+            "confirmed": True,
             "end": 138610,
             "functionality": "F",
             "id": "IGHV1-80*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-80*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -1735,16 +1923,16 @@
             "source": "imgt",
             "start": 138316,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X03399",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "functionality": "F",
             "id": "IGHV5S4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5S4*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -1755,17 +1943,17 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAACCTCTGGATTCACTTTCAGTAGCTATGGCATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTGGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACAACCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCTTGTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 543484,
             "family": "36-60",
             "functionality": "F",
             "id": "VH36-60.a1.85",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-1*02",
             "imgt family name": "IGHV3",
             "length": 294,
@@ -1777,16 +1965,16 @@
             "source": "imgt",
             "start": 543190,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L26869",
-            "confirmed": true,
+            "confirmed": True,
             "end": 961,
             "functionality": "F",
             "id": "IGHV1S72*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S72*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -1797,7 +1985,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTCCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGAACTGGGTGAAGCAGAGGCCTGGACGAGGCCTCGAGTGGATTGGAAGGATTGATCCTTCCGATAGTGAAACTCACTACAATCAAAAGTTCAAGGACAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATCCAACTCAGC",
             "source": "imgt",
             "start": 709,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L14367",
@@ -1813,7 +2001,7 @@
             "sequence": "TCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAACTGCTGGAATGCAGTGGGTGCAAAAGATGCCAGGAAAGGGTTTGAAGTGGATTGGCTGGATAAACACCCACTCTGGAGTGCCAAAATATGCAGAAGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACATGGCTACATATTTCTGT",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169690",
@@ -1829,7 +2017,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAGAATATCCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTCAAGTGGATGGGCATGATATACACCGACACTGGAGAGCCAACATATGCTGAAGAGTTCAAGGGACGGTTTGCCTTCTCTTTGGAGACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGTAAGA",
             "source": "igblast",
             "start": 426,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303859",
@@ -1845,16 +2033,16 @@
             "sequence": "CTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGTTACACCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAGATGGTAGTACTAAGTACAATGAGAAGTTCAAGGGCAAGACCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGTTGCTCAGCAGCCTGACCTCTGAGGACTCTGCGATCTATTTCTGTGCAAG",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 822452,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a37.59",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6-5*01",
             "imgt family name": "IGHV5",
             "length": 293,
@@ -1866,17 +2054,17 @@
             "source": "imgt",
             "start": 822159,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF290971",
-            "confirmed": true,
+            "confirmed": True,
             "end": 427,
             "family name": "7183",
             "functionality": "F",
             "id": "VH7183.9",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5S9*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -1887,8 +2075,8 @@
             "sequence": "GAAGTGATGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGCCATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGACA",
             "source": "imgt",
             "start": 131,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303858",
@@ -1904,15 +2092,15 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAGATGGTAGTACTAAGTACAATGAGAAGTTCAAGGGCAAGACCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGTTGCTCAGCAGCCTGACCTCTGAGGACTCTGCGATCTATTTCTGTGCAAGG",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF025443",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1S120*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S120*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -1923,15 +2111,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGTCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTATATGTACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTAATCCTAGCAATGGTGGTACTAACTTCAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCATACATGCAACTCAGC",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 117934,
             "functionality": "P",
             "id": "IGHV1-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-1*01",
             "imgt family name": "IGHV1",
             "length": 291,
@@ -1941,16 +2129,16 @@
             "sequence": "CAAATCCAACTGCAACCGTCTGGGGCCGACCTGATTAATCCTGGATCCTCAATGAAGGTGTCTTGCAAGGTTCCTGGCTACAGTTTCACTAGCTACTATATGACCTGGGTAAAAGAGAGTCCTGGACAGGGTCTAGAATAGATTAGAGAAACCACCCTAGTAGTTGCAGTATAAGTTATGCACAGAAGTTTCAAGGACACATCTCCATGACTAGGCACATATCCTCCAGCATGGCCTACATGGAGCTCAGCAGGCTGACCTCTGAGGACACTTCTGTTTATTGCTGTTTAT",
             "source": "imgt",
             "start": 117643,
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L26885",
-            "confirmed": true,
+            "confirmed": True,
             "end": 961,
             "functionality": "F",
             "id": "IGHV1S75*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S75*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -1961,15 +2149,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAAATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAAACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATATTTATCCTGGTACAGGTATTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTCTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 709,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 160373,
             "functionality": "F",
             "id": "IGHV5-12*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-12*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -1981,8 +2169,8 @@
             "source": "imgt",
             "start": 160077,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AY672647",
@@ -1998,15 +2186,15 @@
             "sequence": "AGGCTTCTGGCTACACCTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAAGCGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 335513,
             "functionality": "O",
             "id": "IGHV12-2-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-2-1*01",
             "imgt family name": "IGHV12",
             "length": 305,
@@ -2018,16 +2206,16 @@
             "source": "imgt",
             "start": 335208,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 29952,
             "functionality": "P",
             "id": "IGHV1-48*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-48*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -2039,16 +2227,16 @@
             "source": "imgt",
             "start": 29658,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 141915,
             "functionality": "P",
             "id": "IGHV8-10*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-10*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -2060,16 +2248,16 @@
             "source": "imgt",
             "start": 141614,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "CAAA01073483",
-            "confirmed": true,
+            "confirmed": True,
             "end": 312,
             "functionality": "F",
             "id": "IGHV5-15*05",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-15*05",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -2080,8 +2268,8 @@
             "sequence": "GAGGTGAAGCTGGTGGAGTCTGGGGGAGCCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTACGGAATGGCGTGGGTTCGACAGGCTCCAAGGAAGGGGCCTGAGTGGGTAGCATTCATTAGTAATTTGGCATATAGTATCTACTATGCAGACACTGTGACGGGCCGATTCACCATCTCTAGAGAGAATGCCAAGAACACCCTGTACCTGGAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGACA",
             "source": "imgt",
             "start": 16,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AY169689",
@@ -2097,7 +2285,7 @@
             "sequence": "CAGATCCAGTTCGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGTGTATACCTTCACAGAATATCCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTCAAGTGGATGGGCTGGATAAACACCTACTCTGGAGAGCCAACATATGCTGACGACTTCAAGGGACGGTTTGCCTTTTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 425,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "U23019",
@@ -2113,7 +2301,7 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGGATATTGCAGTCCTCCCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAGCACTTCTGGTATGGGTGTGAGCTGGATTCGTCAGCCTTCAGGAAAGGGTCTGGAGTGGCTGGCACACATTTACTGGGATGATGACAAGCGCTATAACCCATCCCTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAGAAACCAGGTATTCCTCAAGATCACCAGTGTGGACACTGCAGATACTGCCACATAC",
             "source": "igblast",
             "start": 1,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303873",
@@ -2129,15 +2317,15 @@
             "sequence": "CAGGTGCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAAGCCTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACATTTACCAGTTACAATATGCACTGGGTAAAGCAGACACCTGGACAGGGCCTGGAATGGATTGGAGCTATTTATCCAGGAAATGGTGATACTTCCTACAATCAGAAGTTCAAAGGCAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "D13200",
-            "confirmed": true,
+            "confirmed": True,
             "end": 619,
             "functionality": "P",
             "id": "IGHV1S57*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S57*01",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -2148,8 +2336,8 @@
             "source": "imgt",
             "start": 326,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF290969",
@@ -2165,15 +2353,15 @@
             "sequence": "GAAGTGCAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTATTACATGTATTGGGTTCGCCAGACTCCGGAAAAGAGGCTGGAGTGGGTCGCAACCATTAGTGATGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACAACCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGAGA",
             "source": "igblast",
             "start": 131,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M16726",
-            "confirmed": true,
+            "confirmed": True,
             "end": 764,
             "functionality": "F",
             "id": "IGHV7-4*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-4*03",
             "imgt family name": "IGHV7",
             "length": 306,
@@ -2185,8 +2373,8 @@
             "source": "imgt",
             "start": 458,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "U53526",
@@ -2202,7 +2390,7 @@
             "sequence": "CAGGTGCAGCTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATCACTTGCACTGTCTCTGGGTTTTCATTAACCAGCTATGGTGTACACTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTAATATGGGCTGGTGGAAGCACAAATTATAATTCGGCTCTCATGTCCAGACTGAGCATCAGCAAAGACAACTCCAAGAGCCAAGTTTTCTTAAAAATGAACAGTCTGCAAACTGATGACACAGCCATGTACTACTGTGCCAGA",
             "source": "igblast",
             "start": 105,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303845",
@@ -2218,7 +2406,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGATACGCCTTCACTAATTACTTGATAGAGTGGGTAAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGAGTGATTAATCCTGGAAGTGGTGGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCAACACTGACTGCAGACAAATCCTCCAGCACTGCTTACATGCAGCTCAGCAGCCTGACATCCGACGACTCCGCGGTTTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M34579",
@@ -2234,7 +2422,7 @@
             "sequence": "CAGGTCCAACTGCAGCNGCCTGGGGCTGAGCTGGTGAGGCCTGGGTCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCATTGGGTGAAGCAGAGGCCTATACAAGGCCTTGAATGGATTGGTAACATTGACCCTTCTGATAGTGAAACTCACTACAATCAAAAGTTCAAGGACAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -2250,15 +2438,15 @@
             "sequence": "GAGGTGAAGCTGGTGGAATCTGGAGGAGGCTTGGTACAGCCTGGGGGTTCTCTGAGACTCTCCTGTGCAACTTCTGGGTTCACCTTCAGTGATTTCTACATGGAGTGGGTCCGCCAGCCTCCAGGGAAGAGACTGGAGTGGATTGCTGCAAGTAGAAACAAAGCTAATGATTATACAACAGAGTACAGTGCATCTGTGAAGGGTCGGTTCATCGTCTCCAGAGACACTTCCCAAAGCATCCTCTACCTTCAGATGAATGCCCTGAGAGCTGAGGACACTGCCATTTATTACTGTGCAAGAGATGCA",
             "source": "igblast",
             "start": 616680,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1146780,
             "functionality": "P",
             "id": "IGHV(II)-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(II)-2*01",
             "length": 301,
             "name": "IGHV(II)-2*01",
@@ -2268,8 +2456,8 @@
             "source": "imgt",
             "start": 1146479,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "Z11163",
@@ -2285,15 +2473,15 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGCCGTGTCTTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATCCATTAGTAGTGGTGGTAGCACCTACTATCCAGACAGTGTGAAGGGCCGATTCACCATCTCCAGAGATAATGCCAGGAACATCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGGAGACACGGCCATGTATTACTGTGCGATA",
             "source": "igblast",
             "start": 480,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 162679,
             "functionality": "F",
             "id": "IGHV1-20*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-20*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -2305,16 +2493,16 @@
             "source": "imgt",
             "start": 162385,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 123691,
             "functionality": "P",
             "id": "IGHV8-7*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-7*01",
             "imgt family name": "IGHV8",
             "length": 294,
@@ -2326,16 +2514,16 @@
             "source": "imgt",
             "start": 123397,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1047917,
             "functionality": "P",
             "id": "IGHV2-2-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-2-1*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -2347,16 +2535,16 @@
             "source": "imgt",
             "start": 1047624,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L26868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 966,
             "functionality": "F",
             "id": "IGHV1-72*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-72*03",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -2367,7 +2555,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTCACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 714,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -2383,7 +2571,7 @@
             "sequence": "CAAGTGCAGATGAAGGAGTCAGGACCTGACCTTGTGCAGCCATCACAGACTCTGTCTCTCACCTGCACTGTCTCTGGGTTCTCATTAAGTAGCTATGGTGTACATTGGTTTCGCAAGCCTCCGAGAAAGGGATTGGAATGGTTGGGAGGAATATGGTCTGGTGGAAGCATATACTATACTCCAGCTCTCAGTTCCCGACTGAGTGTCAGCAGGGACACCTCTAAGAGCCAAGTTTTCTTTAAAATGAGCAGTCTGCAAAGTGAAGACACGGCTGTGTACCACTGTGCCAGAT",
             "source": "igblast",
             "start": 2263542,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303882",
@@ -2399,7 +2587,7 @@
             "sequence": "CAGGTTCAACTGCAGCAGTCTGGGGCTGAGCTGGTGAGGCCTGGGGCTTCAGTGACGCTGTCCTGCAAGGCTTCGGGCTACACATTTACTGACTATGAAATGCACTGGGTGAAGCAGACACCTGTGCATGGCCTGGAATGGATTGGAGCTATTGATCCTGAAACTGGTGGTACTGCCTACAATCAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCCGTCTATTACTGTACCCTA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -2415,15 +2603,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTATTGTGCAAGA",
             "source": "igblast",
             "start": 312800,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 131066,
             "functionality": "F",
             "id": "IGHV1-42*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-42*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -2435,16 +2623,16 @@
             "source": "imgt",
             "start": 130772,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 41413,
             "functionality": "F",
             "id": "IGHV1-7*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-7*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -2456,16 +2644,16 @@
             "source": "imgt",
             "start": 41119,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L26883",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "P",
             "id": "IGHV1S84*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S84*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -2476,7 +2664,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGTCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACAACTTCACCAGCTACTGGATAAACTGGGTGAAGCTGAGGCCGTATCAAGGCATTGAGTGGATTTGAGATATTTACCCTGGTAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGTAAGGCCACACTGACTGTAGACACATCCTCCAGTACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -2492,7 +2680,7 @@
             "sequence": "GATGTACAGCTTCAGGAGTCAGGACCTGGCCTCGTGAAACCTTCTCAGTCTCTGTCTCTCACCTGCTCTGTCACTGGCTACTCCATCACCAGTGGTTATTACTGGAACTGGATCCGGCAGTTTCCAGGAAACAAACTGGAATGGATGGGCTACATAAGCTACGACGGTAGCAATAACTACAACCCATCTCTCAAAAATCGAATCTCCATCACTCGTGACACATCTAAGAACCAGTTTTTCCTGAAGTTGAATTCTGTGACTACTGAGGACACAGCTACATATTACTGTGCAAGAGA",
             "source": "igblast",
             "start": 167897,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303844",
@@ -2508,7 +2696,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGATACGCCTTCACTAATTACTTGATAGAGTGGGTAAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGAGTGATTAATCCTGGAAGTGGTGGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCAACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAGCAGCCTGACATCTGATGACTCTGCGGTTTATTTCTGTGCAAGC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -2524,16 +2712,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTGAAACCCGGGGCATCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACTGAGTATACTATACACTGGGTAAAGCAGAGGTCTGGACAGGGTCTTGAGTGGATTGGGTGGTTTTACCCTGGAAGTGGTAGTATAAAGTACAATGAGAAATTCAAGGACAAGGCCACATTGACTGCGGACAAATCCTCCAGCACAGTCTATATGGAGCTTAGTAGATTGACATCTGAAGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 624360,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 563433,
             "family": "X24",
             "functionality": "F",
             "id": "VHX24.a1.84",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV4-1*02",
             "imgt family name": "IGHV4",
             "length": 296,
@@ -2545,8 +2733,8 @@
             "source": "imgt",
             "start": 563137,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -2562,16 +2750,16 @@
             "sequence": "CAGGTGCAGCTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATCACTTGCACTGTCTCTGGGTTTTCATTAACCAGCTATGGTGTAGACTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTAATATGGGGTGGTGGAAGCACAAATTATAATTCAGCTCTCATGTCCAGACTGAGCATCAGCAAAGACAACTCCAAGAGCCAAGTTTTCTTAAAAATGAACAGTCTGCAAACTGATGACACAGCCATGTACTACTGTGCCAAACA",
             "source": "igblast",
             "start": 2191760,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 634055,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a27.79",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-9*02",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -2583,8 +2771,8 @@
             "source": "imgt",
             "start": 633762,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -2600,15 +2788,15 @@
             "sequence": "CAGATCCAGTTCGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGTGTATACCTTCACAGAATATCCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTCAAGTGGATGGGCTGGATAAACACCTACTCTGGAGAGCCAACATATGCTGACGACTTCAAGGGACGGTTTGCCTTTTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 1961817,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 179666,
             "functionality": "P",
             "id": "IGHV1-17*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-17*01",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -2619,16 +2807,16 @@
             "source": "imgt",
             "start": 179373,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "X03253",
-            "confirmed": true,
+            "confirmed": True,
             "end": 566,
             "functionality": "F",
             "id": "IGHV7-1*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-1*03",
             "imgt family name": "IGHV7",
             "length": 306,
@@ -2639,16 +2827,16 @@
             "sequence": "GAGGTGAAGCTGGTGGAATCTGGAGGAGGCTTGGTACAGTCTGGGCGTTCTCTGAGACTCTCCTGTGCAACTTCTGGGTTCACCTTCAGTGATTTCTACATGGAGTGGGTCCGCCAAGCTCCAGGGAAGGGACTGGAGTGGATTGCTGCAAGTAGAAACAAAGCTAATGATTATACAACAGAGTACAGTGCATCTGTGAAGGGTCGGTTCATCGTCTCCAGAGACACTTCCCAAAGCATCCTCTACCTTCAGATGAATGCCCTGAGAGCTGAGGACACTGCCATTTATTACTGTGCAAGAGATGCA",
             "source": "imgt",
             "start": 260,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L33934",
-            "confirmed": true,
+            "confirmed": True,
             "end": 970,
             "functionality": "F",
             "id": "IGHV1S100*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S100*01",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -2659,15 +2847,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGATACACATTCACTGACTACTACATGGACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTATCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCA",
             "source": "imgt",
             "start": 717,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26874",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "F",
             "id": "IGHV1S68*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S68*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -2678,15 +2866,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGACTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACAACTTCACCAGCTACTGGATAAACTGGGTGAAGCTGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATATTTATCCTGGTAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33951",
-            "confirmed": true,
+            "confirmed": True,
             "end": 969,
             "functionality": "P",
             "id": "IGHV1S110*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S110*01",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -2697,7 +2885,7 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCATGGCTTCTGGTTTATCATTCAGTGACTACTACATGCACTGAGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTAACCCTAACAATGGTTGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCGTACATGGAGCTCCACA",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M18314",
@@ -2713,7 +2901,7 @@
             "sequence": "GTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCGGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTTTGGAATGCACTGGGTTCGTCAGGCTCCAGAGAAGGGGCTGGAGTGGGTCGCATACATTAGTAGTGGCAGTAGTACCCTCCACTATGCAGACACAGTGAAGGGCCGATTCACCATCTCCAGAGACAATCCCAAGAACACCCTGTTCCTGCAAATGACCAGTCTAAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -2729,7 +2917,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGCCAAGGCCTTGAGTGGATTGGAAGGATTCATCCTTCTGATAGTGATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAATA",
             "source": "igblast",
             "start": 269113,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF290959",
@@ -2745,15 +2933,15 @@
             "sequence": "GAGGTGCAGCTGGTGGAGTCTGGGGGAGACTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGGCATGTCTTGGGTTCGCCAGACTCCAGACAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 122,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 115161,
             "functionality": "F",
             "id": "IGHV1-11*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-11*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -2765,16 +2953,16 @@
             "source": "imgt",
             "start": 114867,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 624662,
             "functionality": "F",
             "id": "IGHV1-62-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-62-2*01",
             "imgt family name": "IGHV1",
             "length": 302,
@@ -2786,16 +2974,16 @@
             "source": "imgt",
             "start": 624360,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "K02790",
-            "confirmed": true,
+            "confirmed": True,
             "end": 293,
             "functionality": "F",
             "id": "IGHV3S1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3S1*02",
             "imgt family name": "IGHV3",
             "length": 293,
@@ -2806,16 +2994,16 @@
             "sequence": "GAGGTGCAGCTTCAGGAGTCAGGACCTAGCCTCGTGAAACCTTCGCAGACTCTGTCCCTCACCTGTTCTGTCACTGGCGACTCCATCACCAGTGGTTACTGGAACTGGATCCGGAAATTCCCAGGGAATAAACTTGAGTACATGGGGTACATAAGCTACAGTGGTAGCACTTACTACAATCCATCTCTCAAAAGTCGAATCTCCATCACTCGAGACACATCCAAGAACCAGTACTACCTGCAGTTGAATTCTGTGACTACTGAGGACACACCCACATATTACTGTGCAAGATA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M20457",
-            "confirmed": true,
+            "confirmed": True,
             "end": 304,
             "functionality": "F",
             "id": "IGHV7-3*04",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-3*04",
             "imgt family name": "IGHV7",
             "length": 304,
@@ -2827,16 +3015,16 @@
             "source": "imgt",
             "start": 0,
             "strain": "NZB",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 449729,
             "functionality": "P",
             "id": "IGHV(III)-7*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-7*01",
             "length": 228,
             "name": "IGHV(III)-7*01",
@@ -2846,17 +3034,17 @@
             "source": "imgt",
             "start": 449501,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1005781,
             "family name": "7183",
             "functionality": "F",
             "id": "VH7183.a21.35",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-9-4*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -2868,17 +3056,17 @@
             "source": "imgt",
             "start": 1005485,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00488",
-            "confirmed": true,
+            "confirmed": True,
             "end": 634,
             "family": "J558",
             "functionality": "F",
             "id": "VH108A",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S29*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -2889,16 +3077,16 @@
             "sequence": "GAGGTCCAGCTTCAGCAGTCAGGACCTGAGCTGGTGAAACCTGGGGCCTCAGTGAAGATATCCTGCAAGGCTTCTGGATACACATTCACTGACTACAACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTTATCCTTACAATGGTGGTACTGGCTACAACCAGAAGTTCAAGAGCAAGGCCACATTGACTGTAGACAATTCCTCCAGCACAGCCTACATGGAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 340,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1046232,
             "functionality": "P",
             "id": "IGHV5-8-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-8-1*01",
             "imgt family name": "IGHV5",
             "length": 292,
@@ -2909,8 +3097,8 @@
             "source": "imgt",
             "start": 1045940,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X00161",
@@ -2926,15 +3114,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGTCTGTGCTGGTGAGGCCTGGGACTTCAGTGAAGCTATCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGCGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTCATCCTAATTGTGGTAATATTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACGTGGATCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 141,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1225755,
             "functionality": "P",
             "id": "IGHV6-1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-1*02",
             "imgt family name": "IGHV6",
             "length": 294,
@@ -2945,8 +3133,8 @@
             "source": "imgt",
             "start": 1225461,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF459872",
@@ -2962,16 +3150,16 @@
             "sequence": "GGAGCTGAGCTGATGAAGCCTGGGGCCTCAGTGAAGCTTTCCTGCAAGGCTACTGGCTACACATTCACTGGCTACTGGATAGAGTGGGTAAAGCAGAGGCCTGGACATGGCCTTGAGTGGATTGGAGAGATTTTACCTGGAAGTGGTAGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACATTCACTGCAGATACATCCTCCAACACAGCCTACATGCAACTCAGCAGCCTGACAACTGAGGACTCTGCCATCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 975408,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a15.42",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-2*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -2983,8 +3171,8 @@
             "source": "imgt",
             "start": 975115,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -3000,7 +3188,7 @@
             "sequence": "CAGGTGCAGCTGAAGCAGTCAGGACCTGGCCTAGTGCAGCCCTCACAGAGCCTGTCCATAACCTGCACAGTCTCTGGTTTCTCATTAACTAGCTATGGTGTACACTGGGTTCGCCAGTCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTGATATGGAGAGGTGGAAGCACAGACTACAATGCAGCTTTCATGTCCAGACTGAGCATCACCAAGGACAACTCCAAGAGCCAAGTTTTCTTTAAAATGAACAGTCTGCAAGCTGATGACACTGCCATATACTACTGTGCCAAAAA",
             "source": "igblast",
             "start": 2385481,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -3016,15 +3204,15 @@
             "sequence": "CAGATCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAAGCGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 91302,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K02153",
-            "confirmed": true,
+            "confirmed": True,
             "end": 251,
             "functionality": "F",
             "id": "IGHV1S20*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S20*01",
             "imgt family name": "IGHV1",
             "length": 251,
@@ -3035,17 +3223,17 @@
             "sequence": "GGTCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGATATACATTCACAAGCTACGGTATAAACTGGGTGAAACAGAGGCCTGGACAGGGCCTGGAATGGATTGGATATATTAATCCTGGAAATGGTTATACTAAGTACAATGAGAAGTTCAAGGGCAAGACCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGAAGCCTGACATCTGAGGAYTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 942943,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a17.46",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-5-1*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -3057,8 +3245,8 @@
             "source": "imgt",
             "start": 942650,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -3074,15 +3262,15 @@
             "sequence": "GAAGTGCAGCTGTTGGAGACTGGAGGAGGCTTGGTGCAACCTGGGGGGTCACGGGGACTCTCTTGTGAAGGCTCAGGGTTCACTTTTAGTGGCTTCTGGATGAGCTGGGTTCGACAGACACCTGGGAAGACCCTGGAGTGGATTGGAGACATTAATTCTGATGGCAGTGCAATAAACTACGCACCATCCATAAAGGATCGATTCACTATCTTCAGAGACAATGACAAGAGCACCCTGTACCTGCAGATGAGCAATGTGCGATCGGAGGACACAGCCACGTATTTCTGTATGAGATA",
             "source": "igblast",
             "start": 2022575,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 798184,
             "functionality": "P",
             "id": "IGHV(II)-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(II)-5*01",
             "length": 288,
             "name": "IGHV(II)-5*01",
@@ -3092,8 +3280,8 @@
             "source": "imgt",
             "start": 797896,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303869",
@@ -3109,7 +3297,7 @@
             "sequence": "CAGGTCCAACTGCAGCAACCTGGGTCTGAGCTGGTGAGGCCTGGAGCTTCAGTGAGGCTGTCCTGCAAGGCTTCTGGCTACACAATCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAATATTTATCCTGGTAGTGGTAGTCCTAACTACGATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X67409",
@@ -3125,15 +3313,15 @@
             "sequence": "GTGAAGCCTGGAGGGTCCCGGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTACGGAATGGCGTGGGTTCGACAGGCTCCAGGGAAGGGGCCTGAGTGGGTAGCATTCATTAGTAATTTGGCATATAGTATCTACTATGCAGACACTGTGACGGGCCGATTCACCATCTCTAGAGAGAATGCCAAGAACACCCTGTACCTGGAAATGAGCAGTCTGAGGTCTGAGGACACAGCCATGTACTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160990",
-            "confirmed": true,
+            "confirmed": True,
             "end": 130675,
             "functionality": "F",
             "id": "IGHV1-81*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-81*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3145,16 +3333,16 @@
             "source": "imgt",
             "start": 130381,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF025446",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1S122*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S122*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -3165,15 +3353,15 @@
             "sequence": "CAGGTCCAACTCCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCTGAGGCCTGGACAAGGCTTTGAGTGGATTGGAGAGATTAATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGAAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X02064",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "functionality": "F",
             "id": "IGHV1-54*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-54*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3184,16 +3372,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGATACGCCTTCACTAATTACTTGATAGAGTGGGTAAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGAGTGATTAATCCTGGAAGTGGTGGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCAACACTGACTGCAGACAAATCCTCCAACACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 13310,
             "functionality": "F",
             "id": "IGHV8-12*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-12*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -3205,8 +3393,8 @@
             "source": "imgt",
             "start": 13009,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -3222,15 +3410,15 @@
             "sequence": "GATGTGCAGCTTCAGGAGTCAGGACCTGGCCTGGTGAAACCTTCTCAGACAGTGTTCCTCACCTGCACTGTCACTGGCATTTCCATCACCACTGGAAATTACAGGTGGAGCTGGATCCGGCAGTTTCCAGGAAACAAACTGGAGTGGATAGGGTACATATACTACAGTGGTACCATTACCTACAATCCATCTCTCACAAGTCGAACCACCATCACTAGAGACACTCCCAAGAACCAGTTCTTCCTGGAAATGAACTCTTTGACTGCTGAGGACACAGCCACATACTACTGTGCACGAGA",
             "source": "igblast",
             "start": 1808161,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 105042,
             "functionality": "P",
             "id": "IGHV1-25*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-25*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3242,16 +3430,16 @@
             "source": "imgt",
             "start": 104748,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 30601,
             "functionality": "F",
             "id": "IGHV6-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-6*01",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -3263,16 +3451,16 @@
             "source": "imgt",
             "start": 30301,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 171941,
             "functionality": "F",
             "id": "IGHV1-37*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-37*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3284,8 +3472,8 @@
             "source": "imgt",
             "start": 171647,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -3301,15 +3489,15 @@
             "sequence": "GAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGATTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTTACTGGCTACTTTATGAACTGGGTGATGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGACGTATTAATCCTTACAATGGTGATACTTTCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCTAGCACAGCCCACATGGAGCTCCGGAGCCTGACATCTGAGGACTCTGCAGTCTATTATTGTGCAAGA",
             "source": "igblast",
             "start": 1347014,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC074329",
-            "confirmed": true,
+            "confirmed": True,
             "end": 133586,
             "functionality": "F",
             "id": "IGHV8-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-6*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -3321,8 +3509,8 @@
             "source": "imgt",
             "start": 133285,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "M22438",
@@ -3338,15 +3526,15 @@
             "sequence": "GAAGTGCAGCTGTTGGAGACTGGAGGAGGCTTGGTGCAACCTGGGGGGTCACGGGGACTCTCTTGTGAAGGCTCAGGGTTTACTTTTAGTGGCTTCTGGATGAGCTGGGTTCGACAGACACCTGGGAAGACCCTGGAGTGGATTGGAGACATTAATTCTGATGGCAGTGCAATAAACTACGCACCATCCATAAAGGATCGATTCACTATCTTCAGAGACAATGACAAGAGCACCCTGTACCTGCAGATGAGCAATGTGCGATCTGAGGACACAGCCACGTATTTCTGTATGAGA",
             "source": "igblast",
             "start": 57,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 893446,
             "functionality": "P",
             "id": "IGHV5-11-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-11-2*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -3357,16 +3545,16 @@
             "source": "imgt",
             "start": 893152,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 48185,
             "functionality": "P",
             "id": "IGHV5-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-3*01",
             "imgt family name": "IGHV5",
             "length": 265,
@@ -3377,8 +3565,8 @@
             "source": "imgt",
             "start": 47920,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -3394,15 +3582,15 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCGCTTTCAGTAGCTATGACATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAGGAACACCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCTTGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 1167187,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 539308,
             "functionality": "P",
             "id": "IGHV(III)-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-5*01",
             "length": 288,
             "name": "IGHV(III)-5*01",
@@ -3412,17 +3600,17 @@
             "source": "imgt",
             "start": 539020,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 2275011,
             "family": "Q52",
             "functionality": "F",
             "id": "Q52.10.33",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-8*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -3434,16 +3622,16 @@
             "source": "imgt",
             "start": 2274718,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "U39293",
-            "confirmed": false,
+            "confirmed": False,
             "end": 351,
             "functionality": "F",
             "id": "IGHV15-2*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV15-2*02",
             "imgt family name": "IGHV15",
             "length": 297,
@@ -3455,7 +3643,7 @@
             "source": "imgt",
             "start": 54,
             "strain": "BALB/c",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -3471,7 +3659,7 @@
             "sequence": "CAGGTTCAACTGCAGCAGTCTGGGGCTGAGCTGGTGAGGCCTGGGGCTTCAGTGACGCTGTCCTGCAAGGCTTCGGGCTACACATTTACTGACTATGAAATGCACTGGGTGAAGCAGACACCTGTGCATGGCCTGGAATGGATTGGAGCTATTGATCCTGAAACTGGTGGTACTGCCTACAATCAGAAGTTCAAGGGCAAGGCCATACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCCGTCTATTACTGTACAAGA",
             "source": "igblast",
             "start": 1413461,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "J00538",
@@ -3487,7 +3675,7 @@
             "sequence": "GAGGTGAAGCTGGTGGAATCTGGAGGAGGCTTGGTACAGCCTGGGGGTTCTCTGAGACTCTCCTGTGCAACTTCTGGGTTCACCTTCAGTGATTTCTACATGGAGTGGGTCCGCCAGCCTCCAGGGAAGAGACTGGAGTGGATTGCTGCAAGTAGAAACAAAGCTAATGATTATACAACAGAGTACAGTGCATCTGTGAAGGGTCGGTTCATCGTCTCCAGAGACACTTCCCAAAGCATCCTCTACCTTCAGATGAATGCCCTGAGAGCTGAGGACACTGCCATTTATTACTGTGCAAGAGATGCA",
             "source": "igblast",
             "start": 484,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -3503,15 +3691,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCAGTGGGTAAAACAGAGGCCTGGACAGGGCCTTGAGTGGATCGGAGAGATTGATCCTTCTGATAGCTATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 951036,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 177803,
             "functionality": "F",
             "id": "IGHV1-19*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-19*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3523,8 +3711,8 @@
             "source": "imgt",
             "start": 177509,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -3540,15 +3728,15 @@
             "sequence": "GAAGTGCAGCTGTTGGAGACTGGAGAAGGCTTGGTGCCACCTGGGGGGTCACGGGGACTCTCTTGTGAAGGCTCAGGGTTCACTTTTAGTGGCTTCTGGATGAGCTGGGTTCGACAGACACCTGGGAAGACCCTGGAGTGGATTGGAGACATTAATTCTGATGGCAGTGCAATAAACTACGCACCATCCATAAAGGATCGCTTCACTATCTTCAGAGACAATGACAAGAGCACCCTGTACCTGCAGATGAGCAATGTGCGATCTGAGGACACAGCCACGTATTTCTGTATGAGATA",
             "source": "igblast",
             "start": 2088937,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 153710,
             "functionality": "F",
             "id": "IGHV1-64*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-64*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3560,8 +3748,8 @@
             "source": "imgt",
             "start": 153416,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AY169677",
@@ -3577,15 +3765,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCTACACTGGAGAGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 416,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "Z15022",
-            "confirmed": true,
+            "confirmed": True,
             "end": 396,
             "functionality": "F",
             "id": "IGHV9-1*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV9-1*03",
             "imgt family name": "IGHV9",
             "length": 280,
@@ -3597,8 +3785,8 @@
             "source": "imgt",
             "start": 116,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF304555",
@@ -3614,15 +3802,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGACACTGAGTTGGTGAAACCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACCATGCTATTCACTGGGTGAAGCAGAGGCCTGAACAGGGCCTGGAATGGATTGGATATATTTCTCCCGGAAATGGTGATATTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAACAGCCTGACATCTGAGGATTCTGCAGTGTATTTCTGTAAAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 69352,
             "functionality": "P",
             "id": "IGHV1-30*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-30*01",
             "imgt family name": "IGHV1",
             "length": 292,
@@ -3633,17 +3821,17 @@
             "source": "imgt",
             "start": 69060,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1014038,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a12.33",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-4-1*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -3655,17 +3843,17 @@
             "source": "imgt",
             "start": 1013745,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 779641,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a22.67",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-5*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -3677,16 +3865,16 @@
             "source": "imgt",
             "start": 779348,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 165711,
             "functionality": "P",
             "id": "IGHV8-15*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-15*01",
             "imgt family name": "IGHV8",
             "length": 299,
@@ -3697,16 +3885,16 @@
             "source": "imgt",
             "start": 165412,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "M34980",
-            "confirmed": true,
+            "confirmed": True,
             "end": 554,
             "functionality": "F",
             "id": "IGHV1S50*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S50*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3717,16 +3905,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAGGATATCCTGCAAGACTTCTGGCTACACCTTCACAAGCTACAATATACACTGGGTGAAAGAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAGATGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGACCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 260,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 64330,
             "functionality": "P",
             "id": "IGHV2-8*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-8*01",
             "imgt family name": "IGHV2",
             "length": 299,
@@ -3737,8 +3925,8 @@
             "source": "imgt",
             "start": 64031,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -3754,7 +3942,7 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGTTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACATTCACTGACTACTACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTTATCCTAACAATGGTGGTAATGGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1219596,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -3770,7 +3958,7 @@
             "sequence": "CAGATGCAGCTTCAGGAGTCAGGACCTGGCCTGGTGAAACCCTCACAGTCACTCTTCCTTACCTGCTCTATTACTGGTTTCCCCATCACCAGTGGTTACTACTGGATCTGGATCCGTCAGTCACCTGGGAAACCCCTAGAATGGATGGGGTACATCACTCATAGTGGGGAAACTTTCTACAACCCATCTCTCCAGAGCCCCATCTCCATTACTAGAGAAACGTCAAAGAACCAGTTCTTCCTCCAATTGAACTCTGTGACCACAGAGGACACAGCCATGTATTACTGTGCAGGAGACAGA",
             "source": "igblast",
             "start": 1704289,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -3786,15 +3974,15 @@
             "sequence": "GAGGTGAAGCTGGTGGAGTCTGGAGGAGGCTTGGTACAGCCTGGGGGTTCTCTGAGTCTCTCCTGTGCAGCTTCTGGATTCACCTTCACTGATTACTACATGAGCTGGGTCCGCCAGCCTCCAGGGAAGGCACTTGAGTGGTTGGGTTTTATTAGAAACAAAGCTAATGGTTACACAACAGAGTACAGTGCATCTGTGAAGGGTCGGTTCACCATCTCCAGAGATAATTCCCAAAGCATCCTCTATCTTCAAATGAATGCCCTGAGAGCTGAGGACAGTGCCACTTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1917628,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M26465",
-            "confirmed": false,
+            "confirmed": False,
             "end": 297,
             "functionality": "P",
             "id": "IGHV12S2*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV12S2*01",
             "imgt family name": "IGHV12",
             "length": 297,
@@ -3804,15 +3992,15 @@
             "sequence": "CAGGTGCAGGCTTCAGGAGTCAGGACCTGGCCTGGTGAAACCCTCACAGTCACTCTTCCTCGCCTGCTCTATTACTGGTTTCCCCATCACCAGTGGTTACTACTGGATCTGGATCCGTCAGTCACCTGGGAAACCCCTAGAATGGATGGGGTACATCACTCATAGTGGGAAAACTTTCTACAACCCATCCCTTCCAGAGCCCCATCTTCCATTACTAGAGAAACATCCAAGAACCAGTTCTTTCTGCAATTGAACTCTGTGACCACAGAGGACACAGCCATGTATTACTGTGCAGGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1366933,
             "functionality": "P",
             "id": "IGHV1-19-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-19-1*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3824,16 +4012,16 @@
             "source": "imgt",
             "start": 1366639,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 35889,
             "functionality": "P",
             "id": "IGHV1-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-6*01",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -3844,16 +4032,16 @@
             "source": "imgt",
             "start": 35596,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 74818,
             "functionality": "F",
             "id": "IGHV10-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV10-1*01",
             "imgt family name": "IGHV10",
             "length": 302,
@@ -3865,16 +4053,16 @@
             "source": "imgt",
             "start": 74516,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "U04227",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "functionality": "F",
             "id": "IGHV5-6-4*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6-4*02",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -3885,16 +4073,16 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATACCATGTCTTGGGTTCGCCAGTCTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTACAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 77428,
             "functionality": "P",
             "id": "IGHV1-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-3*01",
             "imgt family name": "IGHV1",
             "length": 302,
@@ -3905,8 +4093,8 @@
             "source": "imgt",
             "start": 77126,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF303833",
@@ -3922,7 +4110,7 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGCACTGGGTGAAGCAAAGCCATGTAAAGAGCCTTGAGTGGATTGGACGTATTAATCCTTACAATGGTGCTACTAGCTACAACCAGAATTTCAAGGACAAGGCCAGCTTGACTGTAGATAAGTCCTCCAGCACAGCCTACATGGAGCTCCACAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGG",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF290963",
@@ -3938,7 +4126,7 @@
             "sequence": "GTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATACCATGTCTTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATACATTAGTAATGGTGGTGGTAGCACCTACTATCCAGACACTGTAAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACGGCCATGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -3954,15 +4142,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGTCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCATTGGGTGAAGCAGAGGCCTATACAAGGCCTTGAATGGATTGGTAACATTGACCCTTCTGATAGTGAAACTCACTACAATCAAAAGTTCAAGGACAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 925297,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 183564,
             "functionality": "F",
             "id": "IGHV1-77*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-77*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -3974,16 +4162,16 @@
             "source": "imgt",
             "start": 183270,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "CAAA01078923",
-            "confirmed": true,
+            "confirmed": True,
             "end": 8022,
             "functionality": "P",
             "id": "IGHV5-13*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-13*01",
             "imgt family name": "IGHV5",
             "length": 298,
@@ -3994,8 +4182,8 @@
             "source": "imgt",
             "start": 7724,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303857",
@@ -4011,15 +4199,15 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCGTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACAGCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTTTCCTGGAAGTGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACGGCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTTCTGTGCAAGC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 77071,
             "functionality": "F",
             "id": "IGHV1-47*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-47*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4031,16 +4219,16 @@
             "source": "imgt",
             "start": 76777,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 787648,
             "functionality": "P",
             "id": "IGHV5-12-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-12-3*01",
             "imgt family name": "IGHV5",
             "length": 295,
@@ -4051,8 +4239,8 @@
             "source": "imgt",
             "start": 787353,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AY169687",
@@ -4068,7 +4256,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGCTATACCTTCACAAACTATGCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGAAATACACCAACACTGGAGAGCCAACATATGGTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACATGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 427,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -4084,16 +4272,16 @@
             "sequence": "CAGGTGCAGCTTGTAGAGACCGGGGGAGGCTTGGTGAGGCCTGGAAATTCTCTGAAACTCTCCTGTGTTACCTCGGGATTCACTTTCAGTAACTACCGGATGCACTGGCTTCGCCAGCCTCCAGGGAAGAGGCTGGAGTGGATTGCTGTAATTACAGTCAAATCTGATAATTATGGAGCAAATTATGCAGAGTCTGTGAAAGGCAGATTCGCCATTTCAAGAGATGATTCAAAAAGCAGTGTCTACCTAGAGATGAACAGATTAAGAGAGGAAGACACTGCCACTTATTTTTGTAGTAGA",
             "source": "igblast",
             "start": 1713048,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF304553",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.i",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-54*03",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4104,15 +4292,15 @@
             "sequence": "CAGGTCCAGTTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGATACGCCTTCACTAATTACTTGATAGAGTGGGTAAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGGGTGATTAATCCTGGAAGTGGTGGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCAACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAGCAGCCTGACATCTGATGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 6563,
             "functionality": "F",
             "id": "IGHV1-36*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-36*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4124,8 +4312,8 @@
             "source": "imgt",
             "start": 6269,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -4141,15 +4329,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAACCTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATATTTATCCTGGTAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 862689,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 61707,
             "functionality": "P",
             "id": "IGHV6-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-1*01",
             "imgt family name": "IGHV6",
             "length": 294,
@@ -4160,16 +4348,16 @@
             "source": "imgt",
             "start": 61413,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 66193,
             "functionality": "F",
             "id": "IGHV9-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV9-4*01",
             "imgt family name": "IGHV9",
             "length": 294,
@@ -4181,16 +4369,16 @@
             "source": "imgt",
             "start": 65899,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L26927",
-            "confirmed": true,
+            "confirmed": True,
             "end": 961,
             "functionality": "F",
             "id": "IGHV1-53*04",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-53*04",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -4201,15 +4389,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCAGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAATATTAATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 709,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 111537,
             "functionality": "F",
             "id": "IGHV2-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-4*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -4221,8 +4409,8 @@
             "source": "imgt",
             "start": 111244,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF303884",
@@ -4238,15 +4426,15 @@
             "sequence": "CAGGGTCAGATGCAGCAGTCTGGAGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGACTTCTGGCTTCACCTTCAGCAGTAGCTATATAAGTTGGTTGAAGCAAAAGCCTGGACAGAGTCTTGAGTGGATTGCATGGATTTATGCTGGAACTGGTGGTACTAGCTATAATCAGAAGTTCACAGGCAAGGCCCAACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAATTCAGCAGCCTGACAACTGAGGACTCTGCCATCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 9844,
             "functionality": "P",
             "id": "IGHV1-62*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-62*01",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -4257,16 +4445,16 @@
             "source": "imgt",
             "start": 9551,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160985",
-            "confirmed": true,
+            "confirmed": True,
             "end": 107431,
             "functionality": "F",
             "id": "IGHV2-9-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-9-1*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -4277,16 +4465,16 @@
             "sequence": "CAGGTGCAGCTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATCACATGCACTGTCTCTGGGTTCTCATTAACCAGCTATGCTATAAGCTGGGTTCGCCAGCCACCAGGAAAGGGTCTGGAGTGGCTTGGAGTAATATGGACTGGTGGAGGCACAAATTATAATTCAGCTCTCAAATCCAGACTGAGCATCAGCAAAGACAACTCCAAGAGTCAAGTTTTCTTAAAAATGAACAGTCTGCAAACTGATGACACAGCCAGGTACTACTGTGCCAGAAA",
             "source": "imgt",
             "start": 107138,
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 150206,
             "functionality": "P",
             "id": "IGHV1-21-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-21-1*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4297,16 +4485,16 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGTTGGTGAAGCCTGGGGCTTTAGTGAAGTTATCCTGCAAGGTTTCTGGATTCACATTCACTGACTAATACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGACATGTTTATCCTTACAATGGTGGTACTAGCTACAACCAGAAATTCAAGGGCAAGGCCACATTGACTGTCGACAATACCTCCAGCACAGCCTACATGGAGCTCGGCAGCCTGACTTCTGAGGACTCTGCGGTCTATTACTCTGCAAGA",
             "source": "imgt",
             "start": 149912,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 72760,
             "functionality": "F",
             "id": "IGHV3-5*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-5*02",
             "imgt family name": "IGHV3",
             "length": 299,
@@ -4318,16 +4506,16 @@
             "source": "imgt",
             "start": 72461,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "X03255",
-            "confirmed": true,
+            "confirmed": True,
             "end": 501,
             "functionality": "F",
             "id": "IGHV7-4*04",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-4*04",
             "imgt family name": "IGHV7",
             "length": 306,
@@ -4338,16 +4526,16 @@
             "sequence": "GAGGTGAAGCTGGTGGAATCTGGAGGAGGCTTGGTACAGCCTGGGGGTTCTCTGAGACTCTCCTGTGCAGCTTCTGGATTCACCTTTACTGATTACTACATGAGCTGGGTCCGCCAGCCTCCAGGGAAGGCACCTGAGTGGTTGGCTTTGATTAGAAACAAAGCTAATGGTTACACAACAGAGTATACTGCATCTGTTAAGGGTCGGTTCACCATCTCCAGAGATAATTCCCAAAACATCCTCTATCTTCAAATGAACACCCTGAGGGCTGAGGACAGTGCCACTTATTACTGTGTAAAAGCTGTA",
             "source": "imgt",
             "start": 195,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M34987",
-            "confirmed": true,
+            "confirmed": True,
             "end": 418,
             "functionality": "F",
             "id": "IGHV1S56*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S56*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4358,8 +4546,8 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAGGATATCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTACAATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAGATGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGACCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 124,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303848",
@@ -4375,15 +4563,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGAGCTGAGCTGATGAAGCCTGGGGCCTCAGTGAAGATATCCTGCAAGGCTACTGGCTACACATTCAGTAGCTACTGGATAGAGTGGGTAAAGCAGAGGCCTGGACATGGCCTTGAGTGGATTGGAGAGATTTTACCTGGAAGTGGTAGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACATTCACTGCAGATACATCCTCCAACACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCCGTCTATTACTGTGTCAAC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ972404",
-            "confirmed": true,
+            "confirmed": True,
             "end": 133585,
             "functionality": "F",
             "id": "IGHV6-6*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-6*02",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -4395,8 +4583,8 @@
             "source": "imgt",
             "start": 133285,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -4412,7 +4600,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACAGCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAAGTGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACGGCAGACACATCCTCCAGCACTGCCTACATGCAGCTCAGCAGCCTAACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 477674,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -4428,7 +4616,7 @@
             "sequence": "GAGGTGCAGCTTCAGGAGTCAGGACCTAGCCTCGTGAAACCTTCTCAGACTCTGTCCCTCACCTGTTCTGTCACTGGCGACTCCATCACCAGTGGTTACTGGAACTGGATCCGGAAATTCCCAGGGAATAAACTTGAGTACATGGGGTACATAAGCTACAGTGGTAGCACTTACTACAATCCATCTCTCAAAAGTCGAATCTCCATCACTCGAGACACATCCAAGAACCAGTACTACCTGCAGTTGAATTCTGTGACTACTGAGGACACAGCCACATATTACTGTGCAAGATA",
             "source": "igblast",
             "start": 134369,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -4444,15 +4632,15 @@
             "sequence": "GAAGTGAAGCTTGAGGAGTCTGGAGGAGGCTTGGTGCAACCTGGAGGATCCATGAAACTCTCCTGTGTTGCCTCTGGATTCACTTTCAGTAACTACTGGATGAACTGGGTCCGCCAGTCTCCAGAGAAGGGGCTTGAGTGGGTTGCTCAAATTAGATTGAAATCTGATAATTATGCAACACATTATGCGGAGTCTGTGAAAGGGAGGTTCACCATCTCAAGAGATGATTCCAAAAGTAGTGTCTACCTGCAAATGAACAACTTAAGGGCTGAAGACACTGGAATTTATTACTGCACAGG",
             "source": "igblast",
             "start": 1679098,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC074329",
-            "confirmed": true,
+            "confirmed": True,
             "end": 175897,
             "functionality": "F",
             "id": "IGHV1-55*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-55*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4464,16 +4652,16 @@
             "source": "imgt",
             "start": 175603,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "X06864",
-            "confirmed": true,
+            "confirmed": True,
             "end": 479,
             "functionality": "P",
             "id": "IGHV1S10*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S10*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4484,16 +4672,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAGGCCTGGGACTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTATACCTTCCTCACCTACTGGATGAACTGGGTGAAGTAGATGCCTGGACAGGGCCTTGAGTGGATTGGACAGATTTTTCCTGCAAGTGGTAGTACTAACTACAATGAGATGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTAAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 185,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 83755,
             "functionality": "F",
             "id": "IGHV5-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -4505,16 +4693,16 @@
             "source": "imgt",
             "start": 83459,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "U14945",
-            "confirmed": true,
+            "confirmed": True,
             "end": 444,
             "functionality": "P",
             "id": "IGHV8S2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8S2*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -4525,8 +4713,8 @@
             "sequence": "CAAGATACTCTAAAAGAGTATGGCCCTGGGAAATTGTAGCCCTCTCAGACCTTCAGTCTGACTTGTACTTTCTCTGGGTTTTCACTGAGCACTTATGGAATGATGGTGAGCTGGATGTGTCAGCCTTCAGGGAAGGGTCTGGTGTGGCTGGCACTCATTTGGTGTAATAATGATAAGGGCTACAATCCATTCCTGAGGAGCCAGCTGACAATCTCCAAGGATACCTCCAACAACCAGGTATTCCTCAAGATCACCAGTGTGGACCCTGCAGATACTGCCACATACTACTGTGCTTGAGGAG",
             "source": "imgt",
             "start": 143,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -4542,7 +4730,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGTCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGGATTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAATGGATTGGTAACATTTACCCTTCTGATAGTGAAACTCACTACAATCAAAAGTTCAAGGACAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 711644,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AB052128",
@@ -4558,16 +4746,16 @@
             "sequence": "CAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAACCTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATATTTATCCTGGTAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF304550",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.f",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S130*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4578,15 +4766,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGTCTGTGCTGGTGAGGCCTGGAGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTCCTGGATGCACTGGGCGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTCATCCTAATAGTGGTAATACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACGTGGATCTCAGCAGCCCGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 109644,
             "functionality": "F",
             "id": "IGHV11-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV11-2*01",
             "imgt family name": "IGHV11",
             "length": 296,
@@ -4598,16 +4786,16 @@
             "source": "imgt",
             "start": 109348,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 17193,
             "functionality": "F",
             "id": "IGHV9-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV9-3*01",
             "imgt family name": "IGHV9",
             "length": 294,
@@ -4619,16 +4807,16 @@
             "source": "imgt",
             "start": 16899,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF290966",
-            "confirmed": true,
+            "confirmed": True,
             "end": 230,
             "functionality": "F",
             "id": "IGHV5-6-3*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6-3*02",
             "imgt family name": "IGHV5",
             "length": 230,
@@ -4639,16 +4827,16 @@
             "sequence": "GCAGCCTCTGGATTCACTTTCAGTAGCTATGGCATGTCTTGGGTTCGCCAGACTCCAGACAAGAGGCTGGAGTTGGTCGCAACCATTAATAGTAACGGTGGTAGCACCTATTATCCAGACAGTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X03302",
-            "confirmed": true,
+            "confirmed": True,
             "end": 610,
             "functionality": "P",
             "id": "IGHV8S1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8S1*01",
             "imgt family name": "IGHV8",
             "length": 296,
@@ -4659,8 +4847,8 @@
             "source": "imgt",
             "start": 314,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -4676,7 +4864,7 @@
             "sequence": "GAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGCACTGGGTGAAGCAGAGCCATGGAAATATCCTCGATTGGATTGGATATATTTATCCTTACAATGGTGTTTCTAGCTACAACCAGAAATTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCTAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1241522,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -4692,15 +4880,15 @@
             "sequence": "CAGGTGCAGCTTGTAGAGACCGGGGGAGGCTTGGTGAGGCCTGGAAATTCTCTGAAACTCTCCTGTGTTACCTCGGGATTCACTTTCAGTAACTACCGGATGCACTGGCTTCGCCAGCCTCCAGGGAAGAGGCTGGAGTGGATTGCTGTAATTACAGTCAAATCTGATAATTATGGAGCAAATTATGCAGAGTCTGTGAAAGGCAGATTCACTATTTCAAGAGATGATTCAAAAAGCAGTGTCTACCTGCAGATGAACAGATTAAGAGAGGAAGACACTGCCACTTATTATTGTAGTAGA",
             "source": "igblast",
             "start": 109436,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26853",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1-64*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-64*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -4711,15 +4899,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTAAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACTTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAATGATTCATCCTAATAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 123999,
             "functionality": "F",
             "id": "IGHV13-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV13-2*01",
             "imgt family name": "IGHV13",
             "length": 302,
@@ -4731,8 +4919,8 @@
             "source": "imgt",
             "start": 123697,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF303832",
@@ -4748,7 +4936,7 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTAGTGAAGACTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGTTACTACATGCACTGGGTCAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTAGTTGTTACAATGGTGCTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTTACTGTAGACACATCCTCCAGCACAGCCTACATGCAGTTCAACAGCCTGACATCTGAAGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M13787",
@@ -4764,7 +4952,7 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTTAGTGAAGATATCCTGCAAGGCTTCTGGTTACACCTTCACAAGCTACGATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAGATGGTAGTACTAAGTACAATGAGAAATTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACTTCTGAGAACTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 82,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303870",
@@ -4780,7 +4968,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGACTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACAACTTCACCAGCTACTGGATAAACTGGGTGAAGCTGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATATTTATCCTGGTAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGGCATCTGAGGACTCTGCTCTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169691",
@@ -4796,16 +4984,16 @@
             "sequence": "CAGATCCAGTTGGTACAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAACCTATGGAATGAGCTGGGTGAAACAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCTACTCTGGAGTGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 426,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1175946,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a5.13",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-4*02",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -4817,8 +5005,8 @@
             "source": "imgt",
             "start": 1175653,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF455996",
@@ -4834,15 +5022,15 @@
             "sequence": "AAGCTCAGCTGCAAGGCTTCTGGCTACACTTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAATGATTCATCCTAATAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 51437,
             "functionality": "F",
             "id": "IGHV6-7*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-7*01",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -4854,17 +5042,17 @@
             "source": "imgt",
             "start": 51137,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "X55934",
-            "confirmed": false,
+            "confirmed": False,
             "end": 291,
             "family": "SM7",
             "functionality": "F",
             "id": "VHSM7-13",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV14S4*01",
             "imgt family name": "IGHV14",
             "length": 291,
@@ -4875,7 +5063,7 @@
             "sequence": "GAGGTTCAGCTGCAGCAGTCTGGGGCTGAGGTTGTACCAGGGGCCTCAGTCAAGTTGTCCTGCACAGCTTCTGGCTTTAACATTAAAGACGACTATATGCACTGGGCGAAGCAGAGGCCTGACCAGGGCCTGGAGTGGATTGGAAGGATTGATCCTGCGATTGATGATACTGATTATGCCCCGAAGTTCCAGGACAAGGCCACTATGATCACAGACACATCCTCCAATATAGCCTACCTGCAGTCCAGCAGCCTGACATCTGAGGACACTGCCGTCTATTACTGTCCCTAT",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -4891,7 +5079,7 @@
             "sequence": "GATGTGAACCTGGAAGTGTCTGGAGGAGGCTTAGTTAAACCTGGAGGATCCATGCAACGCTCTTGTGTAGACTCTGGATTTACTTTTGTAGATGGCTGGATGGACTGGGTCTGCCAGTCTCCAGAGAAGGGTCTTGAGTGGGTTGCTGAAATTGCAAACAAAGCTAATAATTACGCAACATATTATCCCGAGTCTGTGAAAGGCAGATTCACCATCTCAAGAGATGATTTCAAAAGTCGTGTCTACCTGCAAAAGAACAGCTTAAGAGCTGAAGATACAGGCATTTATTACTGTACAAGG",
             "source": "igblast",
             "start": 48685,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -4907,15 +5095,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGTGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGTAAGGCTTCTGGATACACATTCACTGACTACTATATGAACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGTTATTAATCCTTACAACGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTTGACAAGTCCTCCAGCACAGCCTACATGGAGCTCAACAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1362138,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K00606",
-            "confirmed": true,
+            "confirmed": True,
             "end": 355,
             "functionality": "P",
             "id": "IGHV1S18*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S18*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -4926,16 +5114,16 @@
             "sequence": "TAGGTCCAGCTGCAGCAGCCTGGGGCTGAACTGGTGAATACTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTTACTAGCTACACGATGCACTGGGTAAAACAGAGGCTTGGACAGGGTCTGGAATGGATTGGATACATTAATCCTAGCAGTGGTTATACTAACTACAATCAGAAGTTCAAGGACAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAACTGAGCAGCCTGACATCTGAGGACTCCGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 61,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 28887,
             "functionality": "F",
             "id": "IGHV3-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-5*01",
             "imgt family name": "IGHV3",
             "length": 299,
@@ -4947,8 +5135,8 @@
             "source": "imgt",
             "start": 28588,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF290960",
@@ -4964,7 +5152,7 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGTTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTNCTGTNNAGCCTCTGGATTCACTTTCAGTAGCTATACCATGTCTTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATACATTAGTAATGGTGGTGGTAGCACATACTATCCAGACACTGTAAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACGGCCATGTATTACTGTACAAGA",
             "source": "igblast",
             "start": 131,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -4980,15 +5168,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCTACACTGGAGAGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACATGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 427329,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "D13203",
-            "confirmed": true,
+            "confirmed": True,
             "end": 148,
             "functionality": "F",
             "id": "IGHV3-3*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-3*03",
             "imgt family name": "IGHV3",
             "length": 148,
@@ -4999,8 +5187,8 @@
             "sequence": "GGGACACATTCTACAGTGGTATCACTTACTACAACCCATCTCTCGAAAGTCGAACGTACATAACGCGTGACACATCTAAGAACCAGTTCTCACTGAAGTTGAGTTCTGTGACTACTGAGGACACAGCCACTTACTACTGTGCGAGAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -5016,7 +5204,7 @@
             "sequence": "CAGGTGCAGCTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATCACATGCACTGTCTCTGGGTTCTCATTAACCAGCTATGCTATAAGCTGGGTTCGCCAGCCACCAGGAAAGGGTCTGGAGTGGCTTGGAGTAATATGGACTGGTGGAGGCACAAATTATAATTCAGCTCTCAAATCCAGACTGAGCATCAGCAAAGACAACTCCAAGAGTCAAGTTTTCTTAAAAATGAACAGTCTGCAAACTGATGACACAGCCAGGTACTACTGTGCCAGAAA",
             "source": "igblast",
             "start": 2301005,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169682",
@@ -5032,15 +5220,15 @@
             "sequence": "CAGATCCAGTTCGTGCAGTCTGGATCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTTACAAACTATCCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGCTTTCAAGTGGATGGGCTGGATAAACACCAACACTGGAGAGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACAGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 425,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K00707",
-            "confirmed": true,
+            "confirmed": True,
             "end": 435,
             "functionality": "F",
             "id": "IGHV1S14*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S14*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5051,17 +5239,17 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGTCTGTGCTGGTGAGGCCTGGGACTTCAGTGAAGCTATCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGCGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTCATCCTAATTGTGGTAATATTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACGTGGATCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 141,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF304556",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.l",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S135*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5072,7 +5260,7 @@
             "sequence": "GAGATCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGGTATCCTGCAAGGCTTCTGGTTACTCATTCACTGACTACAACATGTACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTGATCCTTACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTTGACAAGTCCTCCAGCACAGCCTTCATGCATCTCAACAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -5088,15 +5276,15 @@
             "sequence": "GAGGTTCAGCTGCAGCAGTCTGGGGCTGAGCTTGTGAGGCCAGGGGCCTCAGTCAAGTTGTCCTGCACAGCTTCTGGCTTTAACATTAAAGACGACTATATGCACTGGGTGAAGCAGAGGCCTGAACAGGGCCTGGAGTGGATTGGATGGATTGATCCTGAGAATGGTGATACTGAATATGCCTCGAAGTTCCAGGGCAAGGCCACTATAACAGCAGACACATCCTCCAACACAGCCTACCTGCAGCTCAGCAGCCTGACATCTGAGGACACTGCCGTCTATTACTGTACTACA",
             "source": "igblast",
             "start": 1894380,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 127888,
             "functionality": "F",
             "id": "IGHV3-8*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-8*02",
             "imgt family name": "IGHV3",
             "length": 293,
@@ -5108,16 +5296,16 @@
             "source": "imgt",
             "start": 127595,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1088495,
             "functionality": "F",
             "id": "IGHV5-9-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-9-1*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -5129,8 +5317,8 @@
             "source": "imgt",
             "start": 1088201,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303876",
@@ -5146,7 +5334,7 @@
             "sequence": "CAGGTCCAGCTTCAGCAGTCTGGGGCTGAACTGGCAAAACCTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTTACTAGCTACTGGATGCACTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATTGGATACATTAATCCTAGCACTGGTTATACTGAGTACAATCAGAAGTTCAAGGACAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAACTGAGCAGCCTGACATCTGAGGACTCTGCAGTATATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -5162,7 +5350,7 @@
             "sequence": "GAGGTGCAGCTGGTGGAATCTGGAGGCAGCTTGGGACAGCCTGGAGGGTCCACTAAACTCTCTTGTGAAGAAGCATCTGGATTCACTTTCAGTGATCATTGGATGGACTGGTTTCGCCAAGCCCCAGGCATGAGGCTAGAATGGTTAGCAAATACAAACCATGATGAGAGTGGAAAAGGCTATGCAGAGTCTGTGAAAGACAGATTCTCCATCTCCAGAGACAATTCTGAGAACTTATTGTATCTACAAATGAACAGTCTGAGAAACGAAGACACGGCTCTGTATTATTGTGCCAGAGA",
             "source": "igblast",
             "start": 2001985,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -5178,16 +5366,16 @@
             "sequence": "CAGGTGCAGCTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATCACATGCACTGTCTCAGGGTTCTCATTAACCAGCTATGGTGTAAGCTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTAATATGGGGTGACGGGAGCACAAATTATCATTCAGCTCTCATATCCAGACTGAGCATCAGCAAGGATAACTCCAAGAGCCAAGTTTTCTTAAAACTGAACAGTCTGCAAACTGATGACACAGCCACGTACTACTGTGCCAAACC",
             "source": "igblast",
             "start": 1217735,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF064445",
-            "confirmed": true,
+            "confirmed": True,
             "end": 624,
             "family": "VH10",
             "functionality": "F",
             "id": "Vh10.2a",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV10-1*02",
             "imgt family name": "IGHV10",
             "length": 302,
@@ -5199,16 +5387,16 @@
             "source": "imgt",
             "start": 322,
             "strain": "C57BL/10",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC074329",
-            "confirmed": true,
+            "confirmed": True,
             "end": 99177,
             "functionality": "P",
             "id": "IGHV1-51*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-51*01",
             "imgt family name": "IGHV1",
             "length": 300,
@@ -5220,16 +5408,16 @@
             "source": "imgt",
             "start": 98877,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1012038,
             "functionality": "P",
             "id": "IGHV5-8-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-8-2*01",
             "imgt family name": "IGHV5",
             "length": 292,
@@ -5240,16 +5428,16 @@
             "source": "imgt",
             "start": 1011746,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 57315,
             "functionality": "F",
             "id": "IGHV1-67*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-67*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5261,16 +5449,16 @@
             "source": "imgt",
             "start": 57021,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 899778,
             "functionality": "F",
             "id": "IGHV2-6-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-3*01",
             "imgt family name": "IGHV2",
             "length": 290,
@@ -5282,16 +5470,16 @@
             "source": "imgt",
             "start": 899488,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 48884,
             "functionality": "F",
             "id": "IGHV9-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV9-2*01",
             "imgt family name": "IGHV9",
             "length": 294,
@@ -5303,16 +5491,16 @@
             "source": "imgt",
             "start": 48590,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L26857",
-            "confirmed": true,
+            "confirmed": True,
             "end": 960,
             "functionality": "F",
             "id": "IGHV1-74*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-74*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -5323,15 +5511,15 @@
             "sequence": "GAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGCCAAGGCCTTGAGTGGATTGGAAGGATTCATCCTTCTGATAGTGATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 708,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M34983",
-            "confirmed": true,
+            "confirmed": True,
             "end": 547,
             "functionality": "F",
             "id": "IGHV1S53*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S53*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5342,17 +5530,17 @@
             "sequence": "CAGGTTCAGCTGCAACAGTCTGACGCTGAGTTGGTGAAACCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACCATGCTATTCACTGGGTGAAGCAGAAGCCTGAACAGGGCCTGGAATGGATTGGATATATTTCTCCCGGAAATGGTGATATTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAACAGCCTGACATCTGAGGATTCTGCAGTGTATTTCTGTAAAAGA",
             "source": "imgt",
             "start": 253,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF120471",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.32b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-16*02",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -5363,7 +5551,7 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGAGGGAGGCTTAGTGCAGCCTGGAAGTTCCATGAAACTCTCCTGCACAGCCTCTGGATTCACTTTCAGTGACTATTACATGGCTTGGGTCCGCCAGGTTCCAGAAAAGGGTCTAGAATGGGTTGCAAACATTAATTATGATGGTAGTAGCACCTACTATCTGGACTCCTTGAAGAGCCGTTTCATCATCTCGAGAGACAATGCAAAGAACATTCTATACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGACGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -5379,15 +5567,15 @@
             "sequence": "CAGGTTCAGCTGCAACAGTCTGACGCTGAGTTGGTGAAACCTGGAGCTTCAGTGAAGATATCCTGCAAGGTTTCTGGCTACACCTTCACTGACCATACTATTCACTGGATGAAGCAGAGGCCTGAACAGGGCCTGGAATGGATTGGATATATTTATCCTAGAGATGGTAGTACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAACAGCCTGACATCTGAGGACTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 202985,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33944",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "P",
             "id": "IGHV1-33*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-33*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -5398,7 +5586,7 @@
             "source": "imgt",
             "start": 716,
             "strain": "C57BL/6",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -5414,15 +5602,15 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGGATATTGCAGTCCTCCCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAGCACTTCTGGTATGGGTGTGAGCTGGATTCGTCAGCCTTCAGGAAAGGGTCTGGAGTGGCTGGCACACATTTACTGGGATGATGACAAGCGCTATAACCCATCCCTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAGAAACCAGGTATTCCTCAAGATCACCAGTGTGGACACTGCAGATACTGCCACATACTACTGTGCTCGAAGAG",
             "source": "igblast",
             "start": 422832,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 16247,
             "functionality": "F",
             "id": "IGHV1-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-5*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5434,16 +5622,16 @@
             "source": "imgt",
             "start": 15953,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "D13201",
-            "confirmed": true,
+            "confirmed": True,
             "end": 285,
             "functionality": "F",
             "id": "IGHV1S30*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S30*02",
             "imgt family name": "IGHV1",
             "length": 285,
@@ -5454,16 +5642,16 @@
             "sequence": "CTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGCCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGAAATTAATCCTTACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCGTACATGGAGCTCCACAGCCTGACATCTGAGGACTCTTTGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 66059,
             "functionality": "F",
             "id": "IGHV2-9*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-9*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -5475,16 +5663,16 @@
             "source": "imgt",
             "start": 65766,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L14548",
-            "confirmed": true,
+            "confirmed": True,
             "end": 659,
             "functionality": "F",
             "id": "IGHV1S53*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S53*03",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5495,8 +5683,8 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGACACTGAGTTGGTGAAACCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACCATGCTATTCACTGGGTGAAGCAGAGGCCTGAACAGGGCCTGGAATGGATTGGATATATTTCTCCCGGAAATGGTGATATTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAACAGCCTGACATCTGAGGATTCTGCAGTGTATTTCTGTAAAAGA",
             "source": "imgt",
             "start": 365,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X02065",
@@ -5512,15 +5700,15 @@
             "sequence": "CTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTACGATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTAGAGATGGTAGTACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCGTACATGGAGCTCCACAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 98124,
             "functionality": "P",
             "id": "IGHV1-45*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-45*01",
             "imgt family name": "IGHV1",
             "length": 295,
@@ -5531,8 +5719,8 @@
             "source": "imgt",
             "start": 97829,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF459881",
@@ -5548,7 +5736,7 @@
             "sequence": "GGACCTGTGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGTAAGGCTTCTGGATACACATTCACTGACTACTATATGAACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGTTATTAATCCTTACAACGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTTGACAAGTCCTCCAGCACAGCCTACATGGAGCTCAACAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -5564,15 +5752,15 @@
             "sequence": "CAGATGCAGCTTCAGGAGTCAGGACCTGGCCTGGTGAAACCCTCACAGTCACTCTTCCTCGCCTGCTCTATTACTGGTTTCCCCATCACCAGTGGTTACTACTGGATCTGGATCCGTCAGTCACCTGGGAAACCCCTAGAATGGATGGGGTACATCACTCATAGTGGGGAAACTTTCTACAACCCATCCCTCCAGAGCCCCATCTCCATTACTAGAGAAACATCCAAGAACCAGTTCTTTCTGCAATTGAACTCTGTGACCACAGAGGACACAGCCATGTATTACTGTGCAGGAGACAGA",
             "source": "igblast",
             "start": 87711,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33936",
-            "confirmed": true,
+            "confirmed": True,
             "end": 972,
             "functionality": "P",
             "id": "IGHV1S101*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S101*01",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -5583,15 +5771,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCATGGCATCTGGTTATCAGTTCAGTGACTACTACATGCACTGAGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTAACCCTAACAATGGTTGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCGTACATGGAGCTCCACA",
             "source": "imgt",
             "start": 719,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "Z15020",
-            "confirmed": true,
+            "confirmed": True,
             "end": 395,
             "functionality": "F",
             "id": "IGHV9-1*04",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV9-1*04",
             "imgt family name": "IGHV9",
             "length": 280,
@@ -5602,17 +5790,17 @@
             "sequence": "CAGATCCAGTTGGCGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCTACACTGGAGAGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTGTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATCAGGACACGGCTACAT",
             "source": "imgt",
             "start": 115,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X00160",
-            "confirmed": true,
+            "confirmed": True,
             "end": 435,
             "family": "J558",
             "functionality": "F",
             "id": "VH124",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-69*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5624,16 +5812,16 @@
             "source": "imgt",
             "start": 141,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 160271,
             "functionality": "F",
             "id": "IGHV1-15*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-15*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5645,16 +5833,16 @@
             "source": "imgt",
             "start": 159977,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L33957",
-            "confirmed": true,
+            "confirmed": True,
             "end": 969,
             "functionality": "F",
             "id": "IGHV1S113*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S113*02",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -5665,15 +5853,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTTAGTGAAGATATCCTGCAAGACTTCTGGATACACATTCACTGAATATACCATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGGTATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCA",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 113523,
             "functionality": "O",
             "id": "IGHV1-24*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-24*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5685,16 +5873,16 @@
             "source": "imgt",
             "start": 113229,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 153580,
             "functionality": "F",
             "id": "IGHV1-39*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-39*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5706,16 +5894,16 @@
             "source": "imgt",
             "start": 153286,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 69664,
             "functionality": "F",
             "id": "IGHV1-58*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-58*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -5727,16 +5915,16 @@
             "source": "imgt",
             "start": 69370,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073589",
-            "confirmed": true,
+            "confirmed": True,
             "end": 21580,
             "functionality": "P",
             "id": "IGHV13-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV13-1*01",
             "imgt family name": "IGHV13",
             "length": 304,
@@ -5748,16 +5936,16 @@
             "source": "imgt",
             "start": 21276,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073589",
-            "confirmed": true,
+            "confirmed": True,
             "end": 92744,
             "functionality": "F",
             "id": "IGHV3-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-3*01",
             "imgt family name": "IGHV3",
             "length": 296,
@@ -5769,16 +5957,16 @@
             "source": "imgt",
             "start": 92448,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 143728,
             "functionality": "F",
             "id": "IGHV2-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-5*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -5790,16 +5978,16 @@
             "source": "imgt",
             "start": 143435,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 69430,
             "functionality": "F",
             "id": "IGHV2-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-3*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -5811,8 +5999,8 @@
             "source": "imgt",
             "start": 69137,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -5828,15 +6016,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGGGCTGAGCTAGTGAAGCCTGGAGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACTACCTATCCTATAGAGTGGATGAAGCAGAATCATGGAAAGAGCCTAGAGTGGATTGGAAATTTTCATCCTTACAATGATGATACTAAGTACAATGAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGAAAAATCCTCTAGCACAGTCTACTTGGAGCTCAGCCGATTAACATCTGATGACTCTGCTGTTTATTACTGTGCAAGG",
             "source": "igblast",
             "start": 1079675,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 94106,
             "functionality": "F",
             "id": "IGHV8-11*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-11*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -5848,16 +6036,16 @@
             "source": "imgt",
             "start": 93805,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 104799,
             "functionality": "P",
             "id": "IGHV1-44*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-44*01",
             "imgt family name": "IGHV1",
             "length": 295,
@@ -5868,8 +6056,8 @@
             "source": "imgt",
             "start": 104504,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -5885,15 +6073,15 @@
             "sequence": "GAGGTGCAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGAGTCCCTGAAACTCTCCTGTGAATCCAATGAATACGAATTCCCTTCCCATGACATGTCTTGGGTCCGCAAGACTCCGGAGAAGAGGCTGGAGTTGGTCGCAGCCATTAATAGTGATGGTGGTAGCACCTACTATCCAGACACCATGGAGAGACGATTCATCATCTCCAGAGACAATACCAAGAAGACCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACAGCCTTGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 2492456,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 143068,
             "functionality": "P",
             "id": "IGHV10-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV10-4*01",
             "imgt family name": "IGHV10",
             "length": 299,
@@ -5904,8 +6092,8 @@
             "source": "imgt",
             "start": 142769,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF303853",
@@ -5921,15 +6109,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACATTCACTGACTATGTTATAAGCTGGGTGAAGCAGAGAACTGGACAGGGCCTTGAGTGGATTGGAGAGATTTATCCTGGAAGTGGTAGTACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAACACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 12408,
             "functionality": "F",
             "id": "IGHV6-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-5*01",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -5941,8 +6129,8 @@
             "source": "imgt",
             "start": 12108,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -5958,15 +6146,15 @@
             "sequence": "CAGGTGCAGCTGAAGCAGTCAGGACCTGGCCTAGTGCAGCCCTCACAGAGCCTGTCCATCACCTGCACAGTCTCTGGTTTCTCATTAACTAGCTATGGTGTACACTGGGTTCGCCAGTCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTGATATGGAGTGGTGGAAGCACAGACTATAATGCAGCTTTCATATCCAGACTGAGCATCAGCAAGGACAATTCCAAGAGCCAAGTTTTCTTTAAAATGAACAGTCTGCAAGCTGATGACACAGCCATATATTACTGTGCCAGA",
             "source": "igblast",
             "start": 2482696,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 862254,
             "functionality": "P",
             "id": "IGHV5-7-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-7-3*01",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -5977,8 +6165,8 @@
             "source": "imgt",
             "start": 861957,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -5994,15 +6182,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTACGATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTAGAGATGGTAGTACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCGTACATGGAGCTCCACAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 71976,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 432139,
             "functionality": "P",
             "id": "IGHV6-2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-2*02",
             "imgt family name": "IGHV6",
             "length": 291,
@@ -6013,16 +6201,16 @@
             "source": "imgt",
             "start": 431848,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 144741,
             "functionality": "P",
             "id": "IGHV4-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV4-2*01",
             "imgt family name": "IGHV4",
             "length": 296,
@@ -6034,8 +6222,8 @@
             "source": "imgt",
             "start": 144445,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -6051,7 +6239,7 @@
             "sequence": "GAGTTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGCGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGACTACAACATGAACTGGGTGAAGCAGAGCAATGGAAAGAGCCTTGAGTGGATTGGAGTAATTAATCCTAACTATGGTACTACTAGCTACAATCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACCAATCTTCCAGCACAGCCTACATGCAGCTCAACAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1156184,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303865",
@@ -6067,7 +6255,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGGTTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACATTCACCAGCTACTGGATGCACTGGATTAAGCAGAGGCCTGAGCAAGGCCTTGAGAGGATTGGAGAGATTAATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303837",
@@ -6083,15 +6271,15 @@
             "sequence": "GAGGTCCTGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATACCCTGCAAGGCTTCTGGATACACATTCACTGACTACAACATGGACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTATCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L14366",
-            "confirmed": true,
+            "confirmed": True,
             "end": 288,
             "functionality": "F",
             "id": "IGHV9-3*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV9-3*03",
             "imgt family name": "IGHV9",
             "length": 288,
@@ -6103,16 +6291,16 @@
             "source": "imgt",
             "start": 0,
             "strain": "BALB.K",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 35261,
             "functionality": "F",
             "id": "IGHV1-34*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-34*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6124,17 +6312,17 @@
             "source": "imgt",
             "start": 34967,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 2335039,
             "family": "7183",
             "functionality": "F",
             "id": "7183.14.25",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-9-1*02",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -6146,16 +6334,16 @@
             "source": "imgt",
             "start": 2334745,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 90486,
             "functionality": "P",
             "id": "IGHV1-46*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-46*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6167,17 +6355,17 @@
             "source": "imgt",
             "start": 90192,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF120474",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.7b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-6*02",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -6189,16 +6377,16 @@
             "source": "imgt",
             "start": 0,
             "strain": "C57BL/6",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 684245,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a46.75",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-15*02",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -6210,8 +6398,8 @@
             "source": "imgt",
             "start": 683949,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -6227,15 +6415,15 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGGATATTGCAGCCCTCCCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAGCACTTTTGGTATGGGTGTAGGCTGGATTCGTCAGCCTTCAGGGAAGGGTCTGGAGTGGCTGGCACACATTTGGTGGGATGATGATAAGTACTATAACCCAGCCCTGAAGAGTCGGCTCACAATCTCCAAGGATACCTCCAAAAACCAGGTATTCCTCAAGATCGCCAATGTGGACACTGCAGATACTGCCACATACTACTGTGCTCGAATAG",
             "source": "igblast",
             "start": 776715,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 98079,
             "functionality": "F",
             "id": "IGHV1-26*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-26*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6247,16 +6435,16 @@
             "source": "imgt",
             "start": 97785,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X02464",
-            "confirmed": true,
+            "confirmed": True,
             "end": 208,
             "functionality": "F",
             "id": "IGHV1S32*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S32*01",
             "imgt family name": "IGHV1",
             "length": 208,
@@ -6267,16 +6455,16 @@
             "sequence": "CTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAGATGGTAGTACTAAGTACAATGAGAAGTTCAAGGGCAAGACCACACTGACTGCAG",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 11149,
             "functionality": "P",
             "id": "IGHV1-35*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-35*01",
             "imgt family name": "IGHV1",
             "length": 296,
@@ -6288,16 +6476,16 @@
             "source": "imgt",
             "start": 10853,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 36753,
             "functionality": "F",
             "id": "IGHV5-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-2*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -6309,16 +6497,16 @@
             "source": "imgt",
             "start": 36457,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 149490,
             "functionality": "F",
             "id": "IGHV1-14*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-14*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6330,8 +6518,8 @@
             "source": "imgt",
             "start": 149196,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -6347,15 +6535,15 @@
             "sequence": "GAGGTGCAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTATGGAATGCACTGGGTTCGTCAGGCTCCAGAGAAGGGGCTGGAGTGGGTTGCATACATTAGTAGTGGCAGTAGTACCATCTACTATGCAGACACAGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTTCCTGCAAATGACCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGG",
             "source": "igblast",
             "start": 2211706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X67408",
-            "confirmed": true,
+            "confirmed": True,
             "end": 261,
             "functionality": "F",
             "id": "IGHV5-6-2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6-2*02",
             "imgt family name": "IGHV5",
             "length": 261,
@@ -6366,16 +6554,16 @@
             "sequence": "GTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATTACATGTCTTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTTGGTCGCAGCCATTAATAGTAATGGTGGTAGCACCTACTATCCAGACACTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCTTGTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 92935,
             "functionality": "P",
             "id": "IGHV5-7*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-7*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -6386,16 +6574,16 @@
             "source": "imgt",
             "start": 92639,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L26870",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1S73*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S73*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -6406,7 +6594,7 @@
             "sequence": "CAGGTCCAACTCCAGCAGCCTGGGGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCTTTGAGTGGATTGGAAGGATTCATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCACCTCAGC",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF290970",
@@ -6422,15 +6610,15 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAACCTCTGGATTCACTTTCAGTGACTATTACATGTATTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATACATTAGTAATGGTGGTGGTAGCACCTATTATCCAGACACTGTAAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCCGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 126,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 703477,
             "functionality": "P",
             "id": "IGHV2-7*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-7*02",
             "imgt family name": "IGHV2",
             "length": 135,
@@ -6441,16 +6629,16 @@
             "source": "imgt",
             "start": 703342,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 12956,
             "functionality": "F",
             "id": "IGHV1-49*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-49*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6462,16 +6650,16 @@
             "source": "imgt",
             "start": 12662,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC074329",
-            "confirmed": true,
+            "confirmed": True,
             "end": 35369,
             "functionality": "F",
             "id": "IGHV8-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-5*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -6483,16 +6671,16 @@
             "source": "imgt",
             "start": 35068,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L33953",
-            "confirmed": true,
+            "confirmed": True,
             "end": 970,
             "functionality": "P",
             "id": "IGHV1S112*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S112*01",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -6503,15 +6691,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTTGATACACATTCACTGACTACAACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGGTATTAATCCTAACAATGGTGCTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACTTTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCA",
             "source": "imgt",
             "start": 717,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 628659,
             "functionality": "P",
             "id": "IGHV5-19*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-19*02",
             "imgt family name": "IGHV5",
             "length": 288,
@@ -6522,16 +6710,16 @@
             "source": "imgt",
             "start": 628371,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "D13202",
-            "confirmed": true,
+            "confirmed": True,
             "end": 394,
             "functionality": "P",
             "id": "IGHV1-35*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-35*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6543,8 +6731,8 @@
             "source": "imgt",
             "start": 100,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303881",
@@ -6560,15 +6748,15 @@
             "sequence": "GAGGTTCAGCTCCAGCAGTCTGGGACTGTGCTGGCAGGGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTTACCAGCTACTGGATGCACTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATTGGCGCTATTTATCCTGGAAATAGTGATACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCAAACTGACTGCAGTCACATCCACCAGCACTGCCTACATGGAGCTCAGCAGCCTGACAAATGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 127922,
             "functionality": "P",
             "id": "IGHV5-10*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-10*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -6579,8 +6767,8 @@
             "source": "imgt",
             "start": 127626,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF120462",
@@ -6596,7 +6784,7 @@
             "sequence": "GGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTATGGAATGCACTGGGTTCGTCAGGCTCCAGAGAAGGGGCTGGAGTGGGTTGCATACATTAGTAGTGGCAGTAGTACCATCTACTATGCAGACACAGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTTCCTGCAAATGACCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGT",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF064443",
@@ -6612,16 +6800,16 @@
             "sequence": "GAGGTGCAGCTTGTTGAGTCTGGTGGAGGATTGGTGCAGCCTAAAGGGTCATTGAAACTCTCATGTGCAGCCTCTGGATTCAGCTTCAATACCTACGCCATGAACTGGGTCCGCCAGGCTCCAGGAAAGGGTTTGGAATGGGTTGCTCGCATAAGAAGTAAAAGTAATAATTATGCAACATATTATGCCGATTCAGTGAAAGACAGATTCACCATCTCCAGAGATGATTCAGAAAGCATGCTCTATCTGCAAATGAACAACTTGAAAACTGAGGACACAGCCATGTATTACTGTGTGAGACA",
             "source": "igblast",
             "start": 322,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 997668,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a13.37",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-9-2*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -6632,16 +6820,16 @@
             "sequence": "CAGGTGCAACTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATTACCTGCACTGTCTCTGGGTTCTCATTAACCAGCTATGATATAAGCTGGATTCGCCAGCCACCAGGAAAGGGTCTGGAGTGGCTTGGAGTAATATGGACTGGTGGAGGCACAAATTATAATTCAGCTTTCATGTCCAGACTGAGCATCAGCAAGGACAACTCCAAGAGCCAAGTTTTCTTAAAAATGAACAGTCTGCAAACTGATGACACAGCCATATATTACTGTGTAAGAGA",
             "source": "imgt",
             "start": 997375,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 146043,
             "functionality": "P",
             "id": "IGHV1-21*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-21*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6653,8 +6841,8 @@
             "source": "imgt",
             "start": 145749,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303850",
@@ -6670,15 +6858,15 @@
             "sequence": "CAGGTTCAGCTCCAGCAGTCTGGGGCTGAGCTGGCAAGACCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTTACTAGCTACTGGATGCAGTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATTGGGGCTATTTATCCTGGAGATGGTGATACTAGGTACACTCAGAAGTTCAAGGGCAAGGCCACATTGACTGCAGATAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCTTGGCATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 63957,
             "functionality": "F",
             "id": "IGHV9-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV9-1*01",
             "imgt family name": "IGHV9",
             "length": 294,
@@ -6690,17 +6878,17 @@
             "source": "imgt",
             "start": 63663,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 463903,
             "family": "VH11",
             "functionality": "F",
             "id": "VH11.a2.92",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV11-2*02",
             "imgt family name": "IGHV11",
             "length": 296,
@@ -6712,16 +6900,16 @@
             "source": "imgt",
             "start": 463607,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 81835,
             "functionality": "P",
             "id": "IGHV1-27*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-27*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6733,16 +6921,16 @@
             "source": "imgt",
             "start": 81541,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 25492,
             "functionality": "F",
             "id": "IGHV5-16*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-16*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -6754,8 +6942,8 @@
             "source": "imgt",
             "start": 25198,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -6771,7 +6959,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGGGCTGAACTGGCAAAACCTGGGGCCTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTTACTAGCTACTGGATGCACTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATTGGATACATTAATCCTAGCAGTGGTTATACTAAGTACAATCAGAAGTTCAAGGACAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTGAGCAGCCTGACATATGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1532319,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303842",
@@ -6787,15 +6975,15 @@
             "sequence": "GAGATCCAGCTGCAGCAGTCTGGACCTGAGCTGATGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTAGCTACTACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTGATCCTTTCAATGGTGGTACTAGCTACAACCAGAAATTCAAGGGCAAGGCCACATTGACTGTAGACAAATCTTCCAGCACAGCCTACATGCATCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160985",
-            "confirmed": true,
+            "confirmed": True,
             "end": 56504,
             "functionality": "P",
             "id": "IGHV(III)-8*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-8*01",
             "length": 315,
             "name": "IGHV(III)-8*01",
@@ -6805,8 +6993,8 @@
             "source": "imgt",
             "start": 56189,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF303851",
@@ -6822,15 +7010,15 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGATGATCTGGTAAAGCCTGGGGCCTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATTAACTGGATAAAACAGAGGCCTGGACAGGGCCTTGAGTGGATAGGACGTATTGCTCCTGGAAGTGGTAGTACTTACTACAATGAAATGTTCAAGGGCAAGGCAACACTGACTGTAGACACATCCTCCAGCACAGCCTACATTCAGCTCAGCAGCCTGTCATCTGAGGACTCTGCTGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 838507,
             "functionality": "P",
             "id": "IGHV5-7-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-7-4*01",
             "imgt family name": "IGHV5",
             "length": 300,
@@ -6841,16 +7029,16 @@
             "source": "imgt",
             "start": 838207,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 87768,
             "functionality": "F",
             "id": "IGHV8-8*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-8*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -6862,8 +7050,8 @@
             "source": "imgt",
             "start": 87467,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -6879,15 +7067,15 @@
             "sequence": "GATGTGCAGCTTCAGGAGTCAGGACCTAGCCTGGTGAGACCTTCTCAGACACTCTCCCTTACCTGCACTGTTACTGGCTTCTCCATCAACAGTGATTGTTACTGGATCTGGATCCGGCAGTTTCCAGGAAACAAACTGGAGTACATCGGGTACACATTCTACAGTGGTATCACTTACTACAACCCATCTCTTGAAAGTCGAACGTACATAACGCGTGACACATCTAAGAACCAGTTCTCACTGAAGTTGAGTTCTGTGACTACTGAGGACACAGCCACTTACTACTGTGCGAGAGA",
             "source": "igblast",
             "start": 1874377,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 122001,
             "functionality": "O",
             "id": "IGHV1-23*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-23*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -6899,17 +7087,17 @@
             "source": "imgt",
             "start": 121707,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 299007,
             "family": "S107",
             "functionality": "F",
             "id": "VHS107.a3.106",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-3*02",
             "imgt family name": "IGHV7",
             "length": 304,
@@ -6921,8 +7109,8 @@
             "source": "imgt",
             "start": 298703,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -6938,7 +7126,7 @@
             "sequence": "GATGTGAACCTGGAAGTGTCTGGAGGAGGCTTAGTTAAACCTGGAGGATCCATGCAACTCTTTTGTGTAGCCTCTGGATTTACTTTTGTAGATGGCTGGATGGACTGGGTCCGCCAGTCTCCAGAGAAGGGTCTTGAGTGGGTTGCTGAAATTGCAAACAAAGCTAATAATTATGCAACATATTATCCCGAGTCTGTGAAAGGCAGATTCACCATCTCAAGAGATGATTTCAAAAGTAGTGTCTACCTGCATATGAACAGCTTAAGAGCCGAAGATACAGGCATTTATTACTGTACAAGG",
             "source": "igblast",
             "start": 1664335,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -6954,7 +7142,7 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAACCTCTGGATTCACTTTCAGTGACTATTACATGTATTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATACATTAGTAATGGTGGTGGTAGCACCTATTATCCAGACACTGTAAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCCGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 1125343,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -6970,7 +7158,7 @@
             "sequence": "GAAGTGCAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGCCATGTCTTGGGTTCGCCAGACTCCGGAAAAGAGGCTGGAGTGGGTCGCAACCATTAGTGATGGTGGTAGTTACACCTACTATCCAGACAATGTAAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACAACCTGTACCTGCAAATGAGCCATCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 2473514,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "J00534",
@@ -6986,16 +7174,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGACTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAATATTAATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTATTGTGCAAGA",
             "source": "igblast",
             "start": 205,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 906547,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a30.50",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6-3*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -7007,8 +7195,8 @@
             "source": "imgt",
             "start": 906251,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF290962",
@@ -7024,7 +7212,7 @@
             "sequence": "GACGTGAAGCTCGTGGAGTCTGGGGGAGGCTTAGTGAAGCTTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATTACATGTCTTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTTGGTCGCAGCCATTAATAGTAATGGTGGTAGCACCTACTATCCAGACACTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCTTGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 131,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "J00526",
@@ -7040,16 +7228,16 @@
             "sequence": "GAGGTGAAGCTGATGGAGTCTGGAGGAGGCTTGGTACAGCCTGGGGCTTCTCTGAGACTCTCCTGTGAAGCTTCTGGATTCACCTTCACTGATTACTACATGAGCTGGGTCCGCCAGCTTCCTAGGAAGTCACCTGAGTGGTTGGCTTTGATTAGAAACAAAGCTAATGGCTATACAACAGAGTATAGTGCATCTGTTAAGGGTCGGTTCACCATCTCCAGAGATAATTCTCAAAACATCCTCTATCTTCAAATGAACACCCTGAGAGCTGAGGCCAGTGCCACTTATTACTGTGCAAAAGAT",
             "source": "igblast",
             "start": 21,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "J00507",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1242,
             "family": "J558",
             "functionality": "F",
             "id": "VH105",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S12*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -7060,17 +7248,17 @@
             "sequence": "CAGGTCCAGCTGCAGCAATCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTATACCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGATATATTTATCCTAGAGATGGTAGTACTAATTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 948,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 276450,
             "family": "SM7",
             "functionality": "F",
             "id": "VHSM7.a4.108",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV14-4*02",
             "imgt family name": "IGHV14",
             "length": 294,
@@ -7082,8 +7270,8 @@
             "source": "imgt",
             "start": 276156,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -7099,16 +7287,16 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGTGCTGGTGAAGCCTGGGCCTTCAGTGAAGATATCCTGTAAGGCTTCTGGATTCACATTCACTGACTACTACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGACTTGTTTATCCTTACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGGAGCTAAACAGCCTGACTTCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1190895,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF304558",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.n",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S137*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -7119,15 +7307,15 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGGGCTGAGCTGGTGAGGCCTGGGGTCTCAGTGAAGATTTCCTGCAAGGGTTCTGGCTACACATTCACTGATTATGCTATGCACTGGGTGAAGCAGAGTCATGCAAAGAGTCTAGAGTGGATTGGAGTTATTAGTACTTACTATGGTGATGCTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACAATGACTGTAGACAAATCCTCCAGCACAGCCTATATGGAACTTGCCAGATTGACATCTGAGGATTCTGCTGTTTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K00605",
-            "confirmed": true,
+            "confirmed": True,
             "end": 497,
             "functionality": "P",
             "id": "IGHV1S17*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S17*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -7138,17 +7326,17 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACATTCACCAGCTACTGGATGCAATGGGTGAAGCAGAGGCCGGGACAAGGCCTTGAGTGGATTGGAAATATTAATCCTAATAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTACAAGA",
             "source": "imgt",
             "start": 203,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1240989,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a2.4",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-2*02",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -7160,16 +7348,16 @@
             "source": "imgt",
             "start": 1240696,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M34981",
-            "confirmed": true,
+            "confirmed": True,
             "end": 554,
             "functionality": "P",
             "id": "IGHV1S51*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S51*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -7180,16 +7368,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAGGCCTGGGACTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTATACCTTCATCACCTACTGGATGAACTGGGTGAAGTAGAGGCCTGGACAGGGCCTNGAGTGGATTGGACAGATTTTTCCTGCAAGTGGTAGTACTAACTACAATGAGATGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTTCATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 260,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L33958",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1-18*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-18*02",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -7200,15 +7388,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTTTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACATTCACTGACTACAACATGGACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTATCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCA",
             "source": "imgt",
             "start": 715,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 37299,
             "functionality": "P",
             "id": "IGHV1-60*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-60*01",
             "imgt family name": "IGHV1",
             "length": 300,
@@ -7220,16 +7408,16 @@
             "source": "imgt",
             "start": 36999,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 139028,
             "functionality": "F",
             "id": "IGHV1-56*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-56*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -7241,8 +7429,8 @@
             "source": "imgt",
             "start": 138734,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -7258,7 +7446,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGCTATACCTTCACAAACTATGCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGAAATACACCAACACTGGAGAGCCAACATATGGTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACATGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 410073,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF304549",
@@ -7274,7 +7462,7 @@
             "sequence": "CAGGTCCAACTGCAGCAACCTGGGTCTGAGCTGGTGAGGCCTGGAGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACATTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCATGGACAAGGCCTTGAGTGGATTGGAAATATTTATCCTGGTAGTGGTAGTACTAACTACGATGAGAAGTTCAAGAGCAAGGGCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCACCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -7290,15 +7478,15 @@
             "sequence": "GATGTACAGCTTCAGGAGTCAGGACCTGCCCTGGTGAAGCCTTCTCAGACAGTGTCCCTCACCTGCACTGTCACTGGCTACTCTATCACTAATGGTAATCACTGGTGGAACTGGATCCGGCAGGTTTCAGGAAGCAAACTGGAGTGGATAGGGTACATAAGCTCCAGTGGTAGCACTGACAGCAATCCATCTCTCAAAAGTCGAATCTCCATCACTAGAGACACTTCCAAGAACCAGTTATTCCTGCAGTTGAACTCTGTGACTACTGAAGATATAGCCACATATTACTGTGCAAGAGA",
             "source": "igblast",
             "start": 1817196,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26875",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "F",
             "id": "IGHV1S78*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S78*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -7309,15 +7497,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGATGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACATTCACTGACTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATCGGAACGATTGATACTTCTGATAGTTATACTAGCTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACGAATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X02063",
-            "confirmed": true,
+            "confirmed": True,
             "end": 285,
             "functionality": "F",
             "id": "IGHV1S22*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S22*01",
             "imgt family name": "IGHV1",
             "length": 285,
@@ -7328,8 +7516,8 @@
             "sequence": "CTGCAGCAACCTGGGTCTGAGCTGGTGAGGCCTGGAGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACATTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCATGGACAAGGCCTTGAGTGGATTGGAAATATTTATCCTGGTAGTGGTAGTACTAACTACGATGAGAAGTTCAAGAGCAAGGGCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCACCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -7345,15 +7533,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCTACACTGGAGAGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 347583,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 31176,
             "functionality": "P",
             "id": "IGHV5-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-1*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -7365,16 +7553,16 @@
             "source": "imgt",
             "start": 30880,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "M17696",
-            "confirmed": true,
+            "confirmed": True,
             "end": 354,
             "functionality": "P",
             "id": "IGHV1-35*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-35*03",
             "imgt family name": "IGHV1",
             "length": 254,
@@ -7386,16 +7574,16 @@
             "source": "imgt",
             "start": 100,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 119254,
             "functionality": "F",
             "id": "IGHV10-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV10-3*01",
             "imgt family name": "IGHV10",
             "length": 301,
@@ -7407,8 +7595,8 @@
             "source": "imgt",
             "start": 118953,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -7424,15 +7612,15 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGAACTGGGTGAAGCAAAGTCCTGAAAAGAGCCTTGAGTGGATTGGAGAGATTAATCCTAGCACTGGTGGTACTACCTACAACCAGAAGTTCAAGGCCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAAGAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1133670,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 125554,
             "functionality": "P",
             "id": "IGHV5-21*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-21*02",
             "imgt family name": "IGHV5",
             "length": 171,
@@ -7443,8 +7631,8 @@
             "source": "imgt",
             "start": 125383,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "J00533",
@@ -7460,7 +7648,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCAGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 205,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -7476,15 +7664,15 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTAAGGTAGTGAATGCTGGGGCTTCCGTGAAGCTGTCCTGCAAGTCTTCTGGTTACTCATTCAGTAGATACAAAATGGAATGTGTGAAACAGAGCCATGTAAAGAGCCTTGAGTGGATTGAACATATTAATCTTTTCAATGGTATTACTAACTACAATGGAAACTTTAAAAGCAAGGCCACATTGACTGTAGACATATCCTCTAGCACAGCCTATATGGAGCTTAGCAGATTGACATCTGAAGACTCAGAGGTATATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1404942,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M17950",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "functionality": "F",
             "id": "IGHV1-20*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-20*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -7496,8 +7684,8 @@
             "source": "imgt",
             "start": 0,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -7513,7 +7701,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGACTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTAAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATCGGAGTGATTGATCCTTCTGATAGTTATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 735702,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -7529,15 +7717,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCCTCAGTGAAGATTTCCTGCAAGGCTTCTGGCTACGCATTCAGTAGCTCCTGGATGAACTGGGTGAAGCAGAGGCCTGGAAAGGGTCTTGAGTGGATTGGACGGATTTATCCTGGAGATGGAGATACTAACTACAATGGGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTACTTCTGTGCAAGA",
             "source": "igblast",
             "start": 119472,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073589",
-            "confirmed": true,
+            "confirmed": True,
             "end": 161650,
             "functionality": "P",
             "id": "IGHV12-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-2*01",
             "imgt family name": "IGHV12",
             "length": 305,
@@ -7549,17 +7737,17 @@
             "source": "imgt",
             "start": 161345,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00535",
-            "confirmed": true,
+            "confirmed": True,
             "end": 515,
             "family": "J558",
             "functionality": "F",
             "id": "V6",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S5*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -7570,16 +7758,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACTTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGAGAAGGCCTTGAGTGGATTGGAAATATTTATCCTGGTAGTAGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACACCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTATTGTGCAAGA",
             "source": "imgt",
             "start": 221,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L26873",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "P",
             "id": "IGHV1S65*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S65*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -7590,15 +7778,15 @@
             "sequence": "CCGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTAAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTTGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X05746",
-            "confirmed": true,
+            "confirmed": True,
             "end": 249,
             "functionality": "F",
             "id": "IGHV1S20*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S20*02",
             "imgt family name": "IGHV1",
             "length": 249,
@@ -7609,15 +7797,15 @@
             "sequence": "TCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGATATACATTCACAAGCTACGGTATAAACTGGGTGAAACAGAGGCCTGGACAGGGCCTGGAATGGATTGGATATATTAATCCTGGAAATGGTTATACTAAGTACAATGAGAAGTTCAAGGGCAAGACCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGAAGCCTGACATCTGAGGACTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 71730,
             "functionality": "P",
             "id": "IGHV5-19*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-19*01",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -7628,16 +7816,16 @@
             "source": "imgt",
             "start": 71433,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 190470,
             "functionality": "F",
             "id": "IGHV1-78*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-78*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -7649,17 +7837,17 @@
             "source": "imgt",
             "start": 190176,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF064444",
-            "confirmed": true,
+            "confirmed": True,
             "end": 624,
             "family": "VH10",
             "functionality": "F",
             "id": "Vh10.1a",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV10-3*03",
             "imgt family name": "IGHV10",
             "length": 302,
@@ -7671,8 +7859,8 @@
             "source": "imgt",
             "start": 322,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -7688,15 +7876,15 @@
             "sequence": "CAGATCCAGTTGGTACAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAACCTATGGAATGAGCTGGGTGAAACAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCTACTCTGGAGTGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 1930126,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1063736,
             "functionality": "P",
             "id": "IGHV5-10-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-10-1*01",
             "imgt family name": "IGHV5",
             "length": 301,
@@ -7707,8 +7895,8 @@
             "source": "imgt",
             "start": 1063435,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -7724,15 +7912,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATACCCTGCAAGGCTTCTGGATACACATTCACTGACTACAACATGGACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTATCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1388182,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF025448",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1S120*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S120*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -7743,7 +7931,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTATATGTACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGGGGGATTAATCCTAGCAATGGTGGTACTAACTTCAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -7759,15 +7947,15 @@
             "sequence": "GACGTGAAGCTCGTGGAGTCTGGGGGAGGCTTAGTGAAGCTTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATTACATGTCTTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTTGGTCGCAGCCATTAATAGTAATGGTGGTAGCACCTACTATCCAGACACTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCTTGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 983256,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 63745,
             "functionality": "F",
             "id": "IGHV3-4*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-4*02",
             "imgt family name": "IGHV3",
             "length": 299,
@@ -7779,8 +7967,8 @@
             "source": "imgt",
             "start": 63446,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AY672648",
@@ -7796,15 +7984,15 @@
             "sequence": "CCTCAGTGAAGATGTCCTGCAAGACTTCTGGATATACATTCACAAGCTACGGTATAAACTGGGTGAAGCAGAGGCCTGGACAGGGCCTGGAATGGATTGGATATATTTATATTGGAAATGGTTATACTGAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTTCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAATCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26926",
-            "confirmed": true,
+            "confirmed": True,
             "end": 974,
             "functionality": "P",
             "id": "IGHV1S88*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S88*01",
             "imgt family name": "IGHV1",
             "length": 251,
@@ -7815,7 +8003,7 @@
             "source": "imgt",
             "start": 723,
             "strain": "C57BL/6",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF455290",
@@ -7831,15 +8019,15 @@
             "sequence": "CTGCAAGGGTTCCGGCTACACATTCACTGATTATGCTATGCACTGGGTGAAACAGAGTCATGCAAAGAGTCTAGAGTGGATTGGAGTTATTAGTACTTACTATGGTGATGCTAGCTACAACCAGAAGTTCAAGGACAAGGCCACAATGACTGTAGACAAATCCTCCAGCACAGCCTATATGGAACTTGCCAGACTGACATCTGAGGACTCTGCCGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X02467",
-            "confirmed": true,
+            "confirmed": True,
             "end": 266,
             "functionality": "F",
             "id": "IGHV1S34*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S34*01",
             "imgt family name": "IGHV1",
             "length": 266,
@@ -7850,17 +8038,17 @@
             "sequence": "AGCTAGTGAAGACTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGTTACTACATGCACTGGGTCAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTAGTTGTTACAATGGTGCTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTTACTGTAGACACATCCTCCAGCACAGCCTACATGCAGTTCAACAGCCTGACATCTGAAGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 526682,
             "family": "VH11",
             "functionality": "F",
             "id": "VH11.a1.87",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV11-1*02",
             "imgt family name": "IGHV11",
             "length": 296,
@@ -7871,16 +8059,16 @@
             "sequence": "GAAGTGCAGCTGTTGGAGACTGGAGGAGGCTTGGTGCAACCTGGGGGGTCACGGGGACTCTCTTGTGAAGGCTCAGGGTTCACTTTTAGTGGCTTCTGGATGAGCTGGGTTCGACAGACACCTGGGAAGACCGTGGAGTGGATTGGAGACATTAATTCTGATGGCAGTGCAATAAACTACGCACCATCCATAAAGGATCGATTCACTATCTTCAGAGACAATGACAAGAGCACCCTGTACCTGCAGATGAGCAATGTGCGATCTGAGGACCCAGCCACGTATTTCTGTATGAGATA",
             "source": "imgt",
             "start": 526386,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L33952",
-            "confirmed": true,
+            "confirmed": True,
             "end": 969,
             "functionality": "F",
             "id": "IGHV1S111*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S111*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -7891,15 +8079,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTTTGGAGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACATTCACTGACTACAACATGGACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACTATGATAGTACTAGCTACAACCAGAAGTTCAAGGGAAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGC",
             "source": "imgt",
             "start": 717,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 47514,
             "functionality": "F",
             "id": "IGHV7-4*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-4*02",
             "imgt family name": "IGHV7",
             "length": 306,
@@ -7911,8 +8099,8 @@
             "source": "imgt",
             "start": 47208,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -7928,7 +8116,7 @@
             "sequence": "GAGGTTCAGCTGCAGCAGTCTGGGGCAGAGCTTGTGAAGCCAGGGGCCTCAGTCAAGTTGTCCTGCACAGCTTCTGGCTTCAACATTAAAGACTACTATATGCACTGGGTGAAGCAGAGGACTGAACAGGGCCTGGAGTGGATTGGAAGGATTGATCCTGAGGATGGTGAAACTAAATATGCCCCGAAATTCCAGGGCAAGGCCACTATAACAGCAGACACATCCTCCAACACAGCCTACCTGCAGCTCAGCAGCCTGACATCTGAGGACACTGCCGTCTATTACTGTGCTAGA",
             "source": "igblast",
             "start": 2076349,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169686",
@@ -7944,15 +8132,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCAACACTGGAGAGCCAACATATGCTGAAGAGTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 426,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 915496,
             "functionality": "P",
             "id": "IGHV5-7-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-7-2*01",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -7963,8 +8151,8 @@
             "source": "imgt",
             "start": 915199,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303861",
@@ -7980,7 +8168,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAACCTGGGGCTTCAGTGCGGATATCCTGCAAGGCTTTTGGGTACACCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAAATGTTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303866",
@@ -7996,15 +8184,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGTCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTATATGTACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTAATCCTAGCAATGGTGGTACTAACTTCAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCATACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTGTATTACTGTACCTAC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF025449",
-            "confirmed": true,
+            "confirmed": True,
             "end": 955,
             "functionality": "P",
             "id": "IGHV1S124*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S124*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -8015,7 +8203,7 @@
             "sequence": "CAGGCCCAAATACAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGGCTTCAGTGAAGATGCCGTGCAAGGCTTCTGGCTATACCTTCACCAGCTACAGGATGAACTGGGGGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGATATATTTATGCTGGTAGTGGTAGTACTGACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 703,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "J00536",
@@ -8031,15 +8219,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGTCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGGATTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAATGGATTGGTAACATTTACCCTTCTGATAGTGAAACTCACTACAATCAAAAGTTCAAGGACAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 205,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K00607",
-            "confirmed": true,
+            "confirmed": True,
             "end": 432,
             "functionality": "P",
             "id": "IGHV1S19*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S19*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -8050,16 +8238,16 @@
             "sequence": "CAGGCCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACAGCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGAACTTGAGTGGATTGGATGAATTTTTCTTGGAAGTGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACGGCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCCATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 138,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "K00693",
-            "confirmed": true,
+            "confirmed": True,
             "end": 178,
             "functionality": "F",
             "id": "IGHV6S3*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV6S3*01",
             "imgt family name": "IGHV6",
             "length": 165,
@@ -8070,15 +8258,15 @@
             "sequence": "GATGTGAACTTGGAAGTGTCTGGAGGAGGCTTAGTTGGGCTTGGAGGATCCATGCAACACTCTTGTGTAGACTCTGGATTTACTTTTGTAGATGGCTGGATGGACTGGGTTCGCCAGTCTCCAGAGAAGGGTCTTGAGTGGGTTGCTGAAATTGCAAACAAGCTA",
             "source": "imgt",
             "start": 13,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X05745",
-            "confirmed": true,
+            "confirmed": True,
             "end": 222,
             "functionality": "F",
             "id": "IGHV1S21*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S21*02",
             "imgt family name": "IGHV1",
             "length": 222,
@@ -8089,15 +8277,15 @@
             "sequence": "TCCTCAGTGAAGCTGTCCTGCAAGACTTCTGGATATACATTCACAAGCTATGGTATAAACTGGGTGAAACAGAGGCCTGGACAGGGCCTGGAATGGATTGGATATATTTATCCTGGAAATGGTTATACTGCGTACAATGAGCAGTTCAAGGGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGAAGCCTGACATCTGAG",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26932",
-            "confirmed": true,
+            "confirmed": True,
             "end": 960,
             "functionality": "F",
             "id": "IGHV1-53*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-53*03",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -8108,7 +8296,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGACTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAATATTAACCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCTCAGCCTACATGCAGCTCATC",
             "source": "imgt",
             "start": 708,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303855",
@@ -8124,15 +8312,15 @@
             "sequence": "CAGGTCCAGCTGAAGCAGTCTGGAGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGAAAGATTGGTCCTGGAAGTGGTAGTACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33954",
-            "confirmed": true,
+            "confirmed": True,
             "end": 969,
             "functionality": "F",
             "id": "IGHV1S113*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S113*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -8143,15 +8331,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGACTTCTGGATACACATTCACTGAATACACCATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGGTATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGC",
             "source": "imgt",
             "start": 717,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 49915,
             "functionality": "P",
             "id": "IGHV1-68*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-68*01",
             "imgt family name": "IGHV1",
             "length": 284,
@@ -8162,16 +8350,16 @@
             "source": "imgt",
             "start": 49631,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 158168,
             "functionality": "P",
             "id": "IGHV1-38*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-38*01",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -8182,8 +8370,8 @@
             "source": "imgt",
             "start": 157875,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303843",
@@ -8199,15 +8387,15 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGAGAAGCCTGGCGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACAACATGAACTGGGTGAAGCAGAGCAATGGAAAGAGCCTTGAGTGGATTGGAAATATTGATCCTTACTATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAAGAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33961",
-            "confirmed": true,
+            "confirmed": True,
             "end": 966,
             "functionality": "F",
             "id": "IGHV1-18*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-18*03",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -8218,15 +8406,15 @@
             "sequence": "GAGGTCCTGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATACCCTGCAAGGCTTCTGGATACACATTCACTGACTACAACATGGACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTATCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGC",
             "source": "imgt",
             "start": 714,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 124082,
             "functionality": "P",
             "id": "IGHV3-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-2*01",
             "imgt family name": "IGHV3",
             "length": 295,
@@ -8237,16 +8425,16 @@
             "source": "imgt",
             "start": 123787,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 635792,
             "functionality": "P",
             "id": "IGHV2-8*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-8*02",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -8257,16 +8445,16 @@
             "source": "imgt",
             "start": 635499,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC163348",
-            "confirmed": true,
+            "confirmed": True,
             "end": 30885,
             "functionality": "F",
             "id": "IGHV1-71*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-71*01",
             "imgt family name": "IGHV1",
             "length": 302,
@@ -8278,16 +8466,16 @@
             "source": "imgt",
             "start": 30583,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L26929",
-            "confirmed": true,
+            "confirmed": True,
             "end": 966,
             "functionality": "F",
             "id": "IGHV1-62-3*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-62-3*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -8298,7 +8486,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCAGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCATC",
             "source": "imgt",
             "start": 714,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -8314,7 +8502,7 @@
             "sequence": "GATGTGCAGCTTCAGGAGTCAGGACCTGGTCTGGTGAAACCTTCTCAGACAGTGTCCCTCACCTGCACTGTCACTGGCATCTCCATCACCACTGGAAATTACAGATGGAGCTGGATCCGGCAGTTTCCAGGAAACAAACTGGAGTGGATAGGGTACATATACTACAGTGGTACCATTACCTACAATCCATCTCTCACAAGTCGAACCACCATCACTAGAGACACTTCCAAGAACCAATTCTTCCTGGAAATGAACTCTTTGACTGCTGAAGACACAGCCACATACTACTGTGCACGAGA",
             "source": "igblast",
             "start": 189498,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF290961",
@@ -8330,15 +8518,15 @@
             "sequence": "GAAGTGCAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGCCATGTCTTGGGTTCGCCAGTCTCCAGAGAAGAGGCTGGAGTGGGTCGCAGAAATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACACTGTGACGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGGAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGGGA",
             "source": "igblast",
             "start": 131,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26886",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "F",
             "id": "IGHV1S65*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S65*03",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -8349,7 +8537,7 @@
             "sequence": "CCGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTAAAGCTGTCCTGTAAGGCTTCTGGCTATACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "J00525",
@@ -8365,15 +8553,15 @@
             "sequence": "GAGGTGAAGCTGGTGGAGTCTGGAGGAGGCTTGGTACAGCCTGGGGGTTCTCTGAGACTCTCCTGTGCAACTTCTGGGTTCACCTTCACTGATTACTACATGAGCTGGGTCCGCCAGCCTCCAGGAAAGGCACTTGAGTGGTTGGGTTTTATTAGAAACAAAGCTAATGGTTACACAACAGAGTACAGTGCATCTGTGAAGGGTCGGTTCACCATCTCCAGAGATAATTCCCAAAGCATCCTCTATCTTCAAATGAACACCCTGAGAGCTGAGGACAGTGCCACTTATTACTGTGCAAGAGAT",
             "source": "igblast",
             "start": 21,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M27021",
-            "confirmed": true,
+            "confirmed": True,
             "end": 659,
             "functionality": "F",
             "id": "IGHV2S3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2S3*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -8384,8 +8572,8 @@
             "sequence": "CAGGTGCAACTGAAGCAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTTCATCACATGCACCGTCTACGGGTTCTCATTAACCAGCTATGAAATAAACTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTGATATGGACTGGTGGAAGCACAAATTATAATTCAGCTCTCATATCCAGACTGAGCATCAGCAAAGACAACTCCAAGAGCCTAGTTTTCTTAAAAATGAACAGTCTGCAAACTGATGACACAGCCATATATTACTGTGTAAGAGA",
             "source": "imgt",
             "start": 366,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF459873",
@@ -8401,7 +8589,7 @@
             "sequence": "GGGGCCTCAGTCAAGTTGTCCTGCACAGCTTCTGGCTTTAACATTAAAGACGACTATATGCACTGGGTGAAGCAGAGGCCTGAACAGGGCCTGGAGTGGATTGGATGGATTGATCCTGAGAATGGTGATACTGAATATGCCTCGAAGTTCCAGGGCAAGGCCACTATAACAGCAGACACATCCTCCAACACAGCCTACCTGCAGCTCAGCAGCCTGACATCTGAGGACACTGCCGTCTATTACTGTGCTAGG",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -8417,16 +8605,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCAGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 609778,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 2308897,
             "family": "7183",
             "functionality": "F",
             "id": "7183.16.27",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-12-4*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -8438,16 +8626,16 @@
             "source": "imgt",
             "start": 2308603,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 941209,
             "functionality": "P",
             "id": "IGHV5-11-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-11-1*01",
             "imgt family name": "IGHV5",
             "length": 282,
@@ -8458,8 +8646,8 @@
             "source": "imgt",
             "start": 940927,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X00163",
@@ -8475,7 +8663,7 @@
             "sequence": "GAAGTGATGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATACCATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTGGTAACACCTACTATCCAGACAGTGTGAAGGGTCGATTCACCATCTCCAGAGACAATGCCAAGAACAACCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCTTGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 247,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -8491,7 +8679,7 @@
             "sequence": "GAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTTACTGGCTACTTTATGAACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGACGTATTAATCCTTACAATGGTGATACTTTCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCTAGCACAGCCCACATGGAGCTCCTGAGCCTGACATCTGAGGACTTTGCAGTCTATTATTGTGCAAGA",
             "source": "igblast",
             "start": 1174545,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169678",
@@ -8507,15 +8695,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGTTATACCTTCACAGACTATTCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACTGAGACTGGTGAGCCAACATATGCAGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCTAGA",
             "source": "igblast",
             "start": 426,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "CAAA01073483",
-            "confirmed": true,
+            "confirmed": True,
             "end": 19646,
             "functionality": "F",
             "id": "IGHV2-7*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-7*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -8526,16 +8714,16 @@
             "sequence": "CAAGTGCAGATGAAGGAGTCAGGACCTGACCTTGTGCAGCCATCACAGACTCTGTCTCTCACCTGCACTGTCTCTGGGTTCTCATTAAGTAGCTATGGTGTACATTGGTTTCGCAAGCCTCCGAGAAAGGGATTGGAATGGTTGGGAGGAATATGGTCTGGTGGAAGCATATACTATACTCCAGCTCTCAGTTCCCGACTGAGTGTCAGCAGGGACACCTCTAAGAGCCAAGTTTTCTTTAAAATGAGCAGTCTGCAAAGTGAAGACACGGCTGTGTACCACTGTGCCAGATA",
             "source": "imgt",
             "start": 19353,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1194535,
             "functionality": "P",
             "id": "IGHV5-7-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-7-1*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -8546,16 +8734,16 @@
             "source": "imgt",
             "start": 1194241,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 32494,
             "functionality": "P",
             "id": "IGHV2-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-1*01",
             "imgt family name": "IGHV2",
             "length": 294,
@@ -8566,16 +8754,16 @@
             "source": "imgt",
             "start": 32200,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "X03398",
-            "confirmed": true,
+            "confirmed": True,
             "end": 300,
             "functionality": "F",
             "id": "IGHV6-3*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-3*03",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -8587,16 +8775,16 @@
             "source": "imgt",
             "start": 0,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 179703,
             "functionality": "P",
             "id": "IGHV8-16*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-16*01",
             "imgt family name": "IGHV8",
             "length": 299,
@@ -8607,16 +8795,16 @@
             "source": "imgt",
             "start": 179404,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 86487,
             "functionality": "F",
             "id": "IGHV1-9*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-9*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -8628,16 +8816,16 @@
             "source": "imgt",
             "start": 86193,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073589",
-            "confirmed": true,
+            "confirmed": True,
             "end": 112745,
             "functionality": "F",
             "id": "IGHV14-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV14-4*01",
             "imgt family name": "IGHV14",
             "length": 294,
@@ -8649,8 +8837,8 @@
             "source": "imgt",
             "start": 112451,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -8666,7 +8854,7 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTATTACATGTATTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATACATTAGTAATGGTGGTGGTAGCACCTATTATCCAGACACTGTAAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCCGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 2368731,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303835",
@@ -8682,15 +8870,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACCTTCACTGACTACTACATGAAGTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGATACTTTCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAACAGCCTGACATCTGAGGACTCTGCAGTGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M34985",
-            "confirmed": true,
+            "confirmed": True,
             "end": 547,
             "functionality": "F",
             "id": "IGHV1S55*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S55*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -8701,16 +8889,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGATCTGTGCTGGTGAGGCCTGGAGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACATTCACCAGCTACTGGATGAACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGGGATTTATCCTAATAGTGGTAGTACTGACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACGACCTACATGGATCTCAGCAGCCTGACATCTAAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 253,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 790678,
             "functionality": "P",
             "id": "IGHV5-8-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-8-3*01",
             "imgt family name": "IGHV5",
             "length": 292,
@@ -8721,8 +8909,8 @@
             "source": "imgt",
             "start": 790386,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303877",
@@ -8738,15 +8926,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGTCTGGGCCTGAGCTGGTGAGGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCAGGCTATACCTTCACCAGCTACTGGATGCACTGGGTGAAACAGAGGCCTGGACAAGGCCTTGAGTGGATTGGCATGATTGATCCTTCCAATAGTGAAACTAGGTTAAATCAGAAGTTCAAGGACAAGGCCACATTGAATGTAGACAAATCCTCCAACACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 91812,
             "functionality": "P",
             "id": "IGHV10-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV10-2*01",
             "imgt family name": "IGHV10",
             "length": 298,
@@ -8757,16 +8945,16 @@
             "source": "imgt",
             "start": 91514,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 86263,
             "functionality": "P",
             "id": "IGHV5-21*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-21*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -8778,16 +8966,16 @@
             "source": "imgt",
             "start": 85967,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L27628",
-            "confirmed": true,
+            "confirmed": True,
             "end": 959,
             "functionality": "F",
             "id": "IGHV1-53*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-53*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -8798,15 +8986,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGACTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGCACAAGGCCTTGAGTGGATTGGAAATATTAATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 707,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160990",
-            "confirmed": true,
+            "confirmed": True,
             "end": 87137,
             "functionality": "P",
             "id": "IGHV1-83*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-83*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -8818,8 +9006,8 @@
             "source": "imgt",
             "start": 86843,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303860",
@@ -8835,7 +9023,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAGGATATCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAAATGTTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF120473",
@@ -8851,15 +9039,15 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTATTACATGTATTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATACATTAGTAATGGTGGTGGTAGCACCTATTATCCAGACACTGTAAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCCGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGACGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073589",
-            "confirmed": true,
+            "confirmed": True,
             "end": 66395,
             "functionality": "F",
             "id": "IGHV7-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-4*01",
             "imgt family name": "IGHV7",
             "length": 306,
@@ -8871,16 +9059,16 @@
             "source": "imgt",
             "start": 66089,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 82941,
             "functionality": "F",
             "id": "IGHV1-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-4*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -8892,16 +9080,16 @@
             "source": "imgt",
             "start": 82647,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 999732,
             "functionality": "P",
             "id": "IGHV6-1-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-1-1*01",
             "imgt family name": "IGHV6",
             "length": 295,
@@ -8912,17 +9100,17 @@
             "source": "imgt",
             "start": 999437,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF064446",
-            "confirmed": true,
+            "confirmed": True,
             "end": 622,
             "family": "VH10",
             "functionality": "F",
             "id": "Vh10.3a",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV10S3*01",
             "imgt family name": "IGHV10",
             "length": 302,
@@ -8933,8 +9121,8 @@
             "sequence": "GAGGTGCAGCTTGTTGAGACTGGTGGAGGATTGGTGCAGCCTAAAGGGTCATTGAAACTCTCATGTGCAGCCTCTGGATTCACCTTCAATACCAATGCCATGAACTGGGTCCGCCAGGCTCCAGGAAAGGGTTTGGAATGGGTTGCTCGCATAAGAAGTAAAAGTAATAATTATGCAACATATTATGCCGATTCAGTGAAAGACAGGTTCACCATCTCCAGAGATGATTCACAAAGCATGCTCTATCTGCAAATGAACAACTTGAAAACTGAGGACACAGCCATGTATTACTGTGTGAGAGA",
             "source": "imgt",
             "start": 320,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -8950,7 +9138,7 @@
             "sequence": "CAGGTTCAGCTCCAGCAGTCTGGGCCTGAGCTGGCAAGGCCTTGGGCTTCAGTGAAGATATCCTGCCAGGCTTTCTACACCTTTTCCAGAAGGGTGCACTTTGCCATTAGGGATACCAACTACTGGATGCAGTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATCGGGGCTATTTATCCTGGAAATGGTGATACTAGTTACAATCAGAAGTTCAAGGGCAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCATGA",
             "source": "igblast",
             "start": 1601713,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF459867",
@@ -8966,7 +9154,7 @@
             "sequence": "CTGTAAGGCTTCTGGATACACGTTCACTGACTACTACATGAACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -8982,15 +9170,15 @@
             "sequence": "GAAGTGAAGCTTGAGGAGTCTGGAGGAGGCTTGGTGCAACCTGGAGGATCCATGAAACTCTCTTGTGCTGCCTCTGGATTCACTTTTAGTGACGCCTGGATGGACTGGGTCCGCCAGTCTCCAGAGAAGGGGCTTGAGTGGGTTGCTGAAATTAGAAACAAAGCTAATAATCATGCAACATACTATGCTGAGTCTGTGAAAGGGAGGTTCACCATCTCAAGAGATGATTCCAAAAGTAGTGTCTACCTGCAAATGAACAGCTTAAGAGCTGAAGACACTGGCATTTATTACTGTACCAGG",
             "source": "igblast",
             "start": 1636019,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26878",
-            "confirmed": true,
+            "confirmed": True,
             "end": 960,
             "functionality": "F",
             "id": "IGHV1-72*05",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-72*05",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -9001,15 +9189,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTAAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 708,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M17575",
-            "confirmed": true,
+            "confirmed": True,
             "end": 478,
             "functionality": "F",
             "id": "IGHV1S40*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S40*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9020,16 +9208,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAATCTGGACCTGAGCTGGTGAGGCCTGGGCTTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTATATCTTCATCACCTACTGGATGAACTGGGTGAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGACAGATTTTTCCTGCAAGTGGTAGTACTAACTACAATGAGATGTTCGAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 184,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 64883,
             "functionality": "P",
             "id": "IGHV1-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-2*01",
             "imgt family name": "IGHV1",
             "length": 297,
@@ -9040,16 +9228,16 @@
             "source": "imgt",
             "start": 64586,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC160985",
-            "confirmed": true,
+            "confirmed": True,
             "end": 62340,
             "functionality": "P",
             "id": "IGHV(III)-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-1*01",
             "length": 296,
             "name": "IGHV(III)-1*01",
@@ -9059,16 +9247,16 @@
             "source": "imgt",
             "start": 62044,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 99001,
             "functionality": "F",
             "id": "IGHV7-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-2*01",
             "imgt family name": "IGHV7",
             "length": 306,
@@ -9080,17 +9268,17 @@
             "source": "imgt",
             "start": 98695,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 814177,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a19.61",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-4*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -9102,8 +9290,8 @@
             "source": "imgt",
             "start": 813884,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF459907",
@@ -9119,16 +9307,16 @@
             "sequence": "GGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACATTCACTGACTACAACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTAACCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAAACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCGGAGGATTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X01113",
-            "confirmed": true,
+            "confirmed": True,
             "end": 690,
             "family": "7183",
             "functionality": "F",
             "id": "VH81X",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-2*02",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -9140,16 +9328,16 @@
             "source": "imgt",
             "start": 394,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 106170,
             "functionality": "F",
             "id": "IGHV9-4*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV9-4*02",
             "imgt family name": "IGHV9",
             "length": 294,
@@ -9161,8 +9349,8 @@
             "source": "imgt",
             "start": 105876,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF303838",
@@ -9178,7 +9366,7 @@
             "sequence": "GAGGTCCAGCTGCAACAGTTTGGACCTGAGCTGCTGAGGCCTGGGGCTTCAGTGAAGATGTCCTGTAAGGCTTCTGGATACACATTCACTGACTACTACATGGACTGGGTGAAGCAGAGCCATGGAGAAAGCTTTGAGTGGATTGGACGTGTTAATCCTTACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGCTGACAAGTCCTCCAGCACAGCCTACATGGAGCTCAACAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -9194,15 +9382,15 @@
             "sequence": "GAGGTGCAGCTGGTGGAGTCTGGGGGAGACTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGGCATGTCTTGGGTTCGCCAGACTCCAGACAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 2445454,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF120470",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "functionality": "F",
             "id": "IGHV5-17*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-17*03",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -9213,15 +9401,15 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTATGGAATGCACTGGGTTCGTCAGGCTCCAGAGAAGGGGCTGGAGTGGGTTGCATACATTAGTAGTGGCAGTAGTACCATCTACTATGCAGACACAGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGACGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF025445",
-            "confirmed": true,
+            "confirmed": True,
             "end": 959,
             "functionality": "F",
             "id": "IGHV1S121*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S121*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -9232,15 +9420,15 @@
             "sequence": "CAGGTGCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAAGCCTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACATTTACCAGTTACAATATGCACTGGGTAAAGCAGACACCTGGACAGGGCCTGGAATGGATTGGAGCTATTTATCCAGGAAATGGTGATACTTCCTACAATCAGAAGTTCAAAGGCAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 707,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26871",
-            "confirmed": true,
+            "confirmed": True,
             "end": 962,
             "functionality": "P",
             "id": "IGHV1S74*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S74*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -9251,7 +9439,7 @@
             "sequence": "CAGGTCGAACTGCAGCAGTCTGGGCCTCAACTGGTTAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGTCTTGAGTGGATTGCAATGATTGATCCTTCCGATAGTGAAACTAAGTAAAATCAGAAGTTCAAGAGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 710,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169679",
@@ -9267,15 +9455,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGAGGATGGGCTGGATAAACACCGAGACTGGTGTGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 416,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "J00511",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1110,
             "functionality": "P",
             "id": "IGHV1S9*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S9*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9286,17 +9474,17 @@
             "sequence": "GAAGTCCAGCTGCAGCAGTCAGGACCTGAGCTGGTGAAGCCTGGCGCTTCAGTGAAGATAACCTGCAAGGCTTCTGATTACTCATTCACTGGCTACATCATGAACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAATGGATTGGAGAAATTAATCCTTACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCGTACATGGAGCTCCACAGCCTGACATCTGAGGACTCTTTGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 816,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF064442",
-            "confirmed": true,
+            "confirmed": True,
             "end": 624,
             "family": "VH10",
             "functionality": "F",
             "id": "Vh10.1b",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV10-3*02",
             "imgt family name": "IGHV10",
             "length": 302,
@@ -9308,16 +9496,16 @@
             "source": "imgt",
             "start": 322,
             "strain": "C57BL/10",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 130131,
             "functionality": "P",
             "id": "IGHV8-14*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-14*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -9329,16 +9517,16 @@
             "source": "imgt",
             "start": 129830,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1181768,
             "functionality": "P",
             "id": "IGHV(II)-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(II)-1*01",
             "length": 290,
             "name": "IGHV(II)-1*01",
@@ -9348,8 +9536,8 @@
             "source": "imgt",
             "start": 1181478,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -9365,15 +9553,15 @@
             "sequence": "GAGGTTCAGCTGCAGCAGTCTGTGGCAGAGCTTGTGAGGCCAGGGGCCTCAGTCAAGTTGTCCTGCACAGCTTCTGGCTTCAACATTAAAAACACCTATATGCACTGGGTGAAGCAGAGGCCTGAACAGGGCCTGGAGTGGATTGGAAGGATTGATCCTGCGAATGGTAATACTAAATATGCCCCGAAGTTCCAGGGCAAGGCCACTATAACTGCAGACACATCCTCCAACACAGCCTACCTGCAGCTCAGCAGCCTGACATCTGAGGACACTGCCATCTATTACTGTGCTAGA",
             "source": "igblast",
             "start": 2010973,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K02154",
-            "confirmed": true,
+            "confirmed": True,
             "end": 230,
             "functionality": "F",
             "id": "IGHV1S21*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S21*01",
             "imgt family name": "IGHV1",
             "length": 230,
@@ -9384,8 +9572,8 @@
             "sequence": "GGTCCTCAGTGAAGCTGTCCTGCAAGACTTCTGGATATACATTCACAAGCTATGGTATAAACTGGGTGAAACAGAGGCCTGGACAGGGCCTGGAATGGATTGGATATATTTATCCTGGAAATGGTTATACTGCGTACAATGAGCAGTTCAAGGGCAAGGCCACACTGACTTCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGAAGCCTGACATCTGAGGAYTCT",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -9401,15 +9589,15 @@
             "sequence": "GAGGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTACGGAATGGCGTGGGTTCGACAGGCTCCAAGGAAGGGGCCTGAGTGGGTAGCATTCATTAGTAATTTGGCATATAGTATCTACTATGCAGACACTGTGACGGGCCGATTCACCATCTCTAGAGAGAATGCCAAGAACACCCTGTACCTGGAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 2244207,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 945976,
             "functionality": "P",
             "id": "IGHV(II)-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(II)-4*01",
             "length": 290,
             "name": "IGHV(II)-4*01",
@@ -9419,16 +9607,16 @@
             "source": "imgt",
             "start": 945686,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160985",
-            "confirmed": true,
+            "confirmed": True,
             "end": 118965,
             "functionality": "P",
             "id": "IGHV(III)-10*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-10*01",
             "length": 295,
             "name": "IGHV(III)-10*01",
@@ -9438,8 +9626,8 @@
             "source": "imgt",
             "start": 118670,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF458189",
@@ -9455,15 +9643,15 @@
             "sequence": "TTGTCCTGCACAGCTTCTGGCTTTAACATTAAAGACTACTATATGCACTGGGTGAAGCAGAGGCCTGAACAGGGCCTGGAGTGGATTGGAAGGATTGATCCTGAGGATGGTGATACTGAATATGCCCCGAAGTTCCAGGGCAAGGCCACTATGACTGCAGACACATCCTCCAACACAGCCTACCTGCAGCTCAGCAGCCTGACATCTGAGGACACTGCCGTCTATTACTGTACTGGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26925",
-            "confirmed": true,
+            "confirmed": True,
             "end": 961,
             "functionality": "F",
             "id": "IGHV1S87*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S87*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -9474,15 +9662,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGACTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGAGAAGGCCTTGAGTGGATTGGAAATATTTATCCTGGTAGTAGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 709,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X02463",
-            "confirmed": true,
+            "confirmed": True,
             "end": 208,
             "functionality": "F",
             "id": "IGHV1S31*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S31*01",
             "imgt family name": "IGHV1",
             "length": 208,
@@ -9493,16 +9681,16 @@
             "sequence": "CTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAGGATATCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAAATGTTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAG",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 38094,
             "functionality": "F",
             "id": "IGHV1-69*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-69*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9514,16 +9702,16 @@
             "source": "imgt",
             "start": 37800,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 133598,
             "functionality": "P",
             "id": "IGHV1-13*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-13*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9535,16 +9723,16 @@
             "source": "imgt",
             "start": 133304,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "J00513",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1045,
             "functionality": "P",
             "id": "IGHV1S11*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S11*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9555,16 +9743,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGAACTTCAGTGAAGAAGTCCTGCAAGGCTTCTGGATACACCTTCGCTAACTACTGGATAGGTTGGGTAAAGCAGAGGCCTGGACATGGCCTTGAGTGGATTGGAGATATTTACCCTGGAGACGGTGTTACTAACTACAATGAGAAGTTCAAGGCCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTATATGGAGCTTAGTAGATTGACATCTGAGGACTCTGCAGTCTAATACTGTGCAAGA",
             "source": "imgt",
             "start": 751,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L33945",
-            "confirmed": true,
+            "confirmed": True,
             "end": 973,
             "functionality": "F",
             "id": "IGHV1-42*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-42*02",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -9575,15 +9763,15 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAACCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGAACTGGGTGAAGCAAAGTCCTGGAAAGAGCCTTGAGTGGATTGGAGAGATTAATCCTAGCACTGGTGGTACTACCTACAACCAGAAGTTCAAGGCCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAAGA",
             "source": "imgt",
             "start": 720,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294159,
             "functionality": "P",
             "id": "IGHV15-1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV15-1*02",
             "imgt family name": "IGHV15",
             "length": 291,
@@ -9594,16 +9782,16 @@
             "source": "imgt",
             "start": 293868,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X06868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 267,
             "functionality": "F",
             "id": "IGHV1S41*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S41*01",
             "imgt family name": "IGHV1",
             "length": 267,
@@ -9614,8 +9802,8 @@
             "sequence": "GATCTGGTAAAGCCTGGGGCCTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATTAACTGGATAAAACAGAGGCCTGGACAGGGCCTTGAGTGGATAGGCGCTATTGCTCCTGGAAGTGGTAGTACTTACTACAATGAAATGTTCAAGGGCAAGGCAACACTGACTGTAGACACATCCTCCAGCACAGCCTACATTCAGCTCAGCAGCCTGGCATCTGAGGACTCTGCTGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303863",
@@ -9631,15 +9819,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGAGCTGAACTGGTAAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTATGATATAAACTGGGTGAGGCAGAGGCCTGAACAGGGACTTGAGTGGATTGGATGGATTTTTCCTGGAGATGGTAGTACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTACAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGGCTGACATCTGAGGACTCTGCTGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "D14633",
-            "confirmed": true,
+            "confirmed": True,
             "end": 640,
             "functionality": "F",
             "id": "IGHV1-63*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-63*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9651,16 +9839,16 @@
             "source": "imgt",
             "start": 346,
             "strain": "MRL/lpr",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 71214,
             "functionality": "P",
             "id": "IGHV5-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-5*01",
             "imgt family name": "IGHV5",
             "length": 268,
@@ -9671,8 +9859,8 @@
             "source": "imgt",
             "start": 70946,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF458201",
@@ -9688,15 +9876,15 @@
             "sequence": "AGCTGGTGAAGCCTGGGGCATCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACTGAGTATACTATACACTGGGTAAAGCAGAGGTCTGGACAGGGTCTTGAGTGGATTGGGTGGTTTTACCCTGGAAGTGGTAGTATAAAGTACAATGAGAAATTCAAGGACAAGGCCACATTGACTGCGGACAAATCCTCCAGCACAGTCTATATGGAGCTTAGTAGATTGACATCTGAAGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 42800,
             "functionality": "P",
             "id": "IGHV1-33*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-33*01",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -9707,8 +9895,8 @@
             "source": "imgt",
             "start": 42507,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -9724,15 +9912,15 @@
             "sequence": "GAGGTGCAGCTTCAGGAGTCAGGACCTAGCCTCGTGAAACCTTCTCAGACTCTGTCCCTCACCTGTTCTGTCACTGGCGACTCCATCACCAGTGGTTACTGGAACTGGATCCGGAAATTCCCAGGGAATAAACTTGAGTACATGGGGTACATAAGCTACAGTGGTAGCACTTACTACAATCCATCTCTCAAAAGTCGAATCTCCATCACTCGAGACACATCCAAGAACCAGTACTACCTGCAGTTGAATTCTGTGACTACTGAGGACACAGCCACATATTACTGTGCAAGATA",
             "source": "igblast",
             "start": 102891,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 991851,
             "functionality": "F",
             "id": "IGHV2-3-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-3-1*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -9744,16 +9932,16 @@
             "source": "imgt",
             "start": 991558,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 140178,
             "functionality": "F",
             "id": "IGHV1-22*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-22*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9765,8 +9953,8 @@
             "source": "imgt",
             "start": 139884,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303880",
@@ -9782,7 +9970,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGTCTCTGCTGGTGAGGCCTGGAGCTTCAGTGAAGCTGTCCTGCAAGGTTTCTGGTTACACCTTCACCAGCTCCTGGATGCACTGGGGGAAGCAGAGGCCTGGACAAGGCCTCGAGTGGACTGGAGAGATTCATCCTAATAGTGGTAATACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACAATGACTGTAGACACATCCTCCAGCACAGCCTACGTGGATCTCAGCAGCCTGACATCTGAGGACTCTGCGGTGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303867",
@@ -9798,15 +9986,15 @@
             "sequence": "CCGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTAAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "CAAA01078923",
-            "confirmed": true,
+            "confirmed": True,
             "end": 5945,
             "functionality": "F",
             "id": "IGHV2-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -9818,16 +10006,16 @@
             "source": "imgt",
             "start": 5652,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 46748,
             "functionality": "F",
             "id": "IGHV1-59*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-59*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9839,16 +10027,16 @@
             "source": "imgt",
             "start": 46454,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X03256",
-            "confirmed": true,
+            "confirmed": True,
             "end": 493,
             "functionality": "F",
             "id": "IGHV7-3*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-3*03",
             "imgt family name": "IGHV7",
             "length": 304,
@@ -9860,8 +10048,8 @@
             "source": "imgt",
             "start": 189,
             "strain": "C57BL/10",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X03088",
@@ -9877,15 +10065,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCCTCAGTGAAGATTTCCTGCAAGGCTTCTGGCTACGCATTCAGTAGCTCCTGGATGAACTGGGTGAAGCAGAGGCCTGGAAAGGGTCTTGAGTGGATTGGACGGATTTATCCTGGAGATGGAGATACTAACTACAATGGGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTACTTCTGTGCAAGA",
             "source": "igblast",
             "start": 61,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 62733,
             "functionality": "P",
             "id": "IGHV5-18*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-18*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -9896,8 +10084,8 @@
             "source": "imgt",
             "start": 62437,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -9913,7 +10101,7 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGTATATTGCAGCCCTCGCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAGTACTTTTGGTATGGGTGTGAGCTGGATTCGTCAGCCTTCAGGGAAGGATCTGGAGTGGCTGGCACACATTTATTGGGATGATGACAAGCACTATAACCCATCCTTGAAGAGCCAGCTCAGAATCTCCAAGGATACCTCCAACAACCAGGTATTCCTCAAGATCACCACTGTGGACACTGTAGATACTGCCACATACTACTGTGCTCGAAGAG",
             "source": "igblast",
             "start": 905000,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF290968",
@@ -9929,16 +10117,16 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCGCTTTCAGTAGCTATGACATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAGGAACACCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCTTGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 131,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF304547",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.c",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S81*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -9949,15 +10137,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTAATCCTAGCAACGGTCGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCCGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33947",
-            "confirmed": true,
+            "confirmed": True,
             "end": 969,
             "functionality": "F",
             "id": "IGHV1S108*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S108*01",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -9968,7 +10156,7 @@
             "sequence": "GAGGTCCAGCTGCAACAATCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGTAAGGCTTCTGGATACACGTTCACTGACTACTACATGAACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGATCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCA",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169684",
@@ -9984,7 +10172,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACCAACTATGCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATATACACCAACACTGGAGAGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACATGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 426,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "U04231",
@@ -10000,15 +10188,15 @@
             "sequence": "GGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGCCATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K00603",
-            "confirmed": true,
+            "confirmed": True,
             "end": 497,
             "functionality": "P",
             "id": "IGHV1S15*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S15*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10019,16 +10207,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAACCTAGGTGAAGCAGAGGCCTGGACGAGGTCTTGAGTGGATTGGAAGGATTTATCCTAGTAGTGGTGGTACTAACTACAATGAGAAATTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTATTGTGCAATA",
             "source": "imgt",
             "start": 203,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 238690,
             "functionality": "P",
             "id": "IGHV3-3*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-3*02",
             "imgt family name": "IGHV3",
             "length": 296,
@@ -10040,8 +10228,8 @@
             "source": "imgt",
             "start": 238394,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "K01569",
@@ -10057,15 +10245,15 @@
             "sequence": "GAGGTGCAGCTTCAGGAGTCAGGACCTAGCCTCGTGAAACCTTCGCAGACTCTGTCCCTCACCTGTTCTGTCACTGGCGACTCCATCACCAGTGATTACTGGAACTGGATCCGGAAATTCCCAGGGAATAAACTTGAGTACATGGGGTACATAAGCTACAGTGGTAGCACTTACTACAATCCATCTCTCAAAAGTCGAATCTCCATCACTCGAGACACATCCAAGAACCAGTACTACCTGCAGTTGAATTCTGTGACTTCTGAGGACACAGCCACATATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 80418,
             "functionality": "P",
             "id": "IGHV3-7*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-7*01",
             "imgt family name": "IGHV3",
             "length": 296,
@@ -10077,16 +10265,16 @@
             "source": "imgt",
             "start": 80122,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 882036,
             "functionality": "P",
             "id": "IGHV(III)-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-2*01",
             "length": 288,
             "name": "IGHV(III)-2*01",
@@ -10096,17 +10284,17 @@
             "source": "imgt",
             "start": 881748,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF304548",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.d",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S36*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10117,15 +10305,15 @@
             "sequence": "CCGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTAAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAAGCCTGGACGAAGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26854",
-            "confirmed": true,
+            "confirmed": True,
             "end": 961,
             "functionality": "F",
             "id": "IGHV1-69*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-69*03",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -10136,7 +10324,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGATGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATCGGAGAGATTGATCCTTCTGATAGTTATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 709,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303846",
@@ -10152,15 +10340,15 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGATGTCCTGCAAGGCTGCTGGATACACCTTCACTAACTACTGGATAGGTTGGGTAAAGCAGAGGCCTGGACATGGCCTTGAGTGGATTGGAGATATTTACCCTGGAGGTGGTTATACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCCATCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M34978",
-            "confirmed": true,
+            "confirmed": True,
             "end": 553,
             "functionality": "P",
             "id": "IGHV1-58*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-58*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10172,17 +10360,17 @@
             "source": "imgt",
             "start": 259,
             "strain": "A/J",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF304545",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.a",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S126*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10193,15 +10381,15 @@
             "sequence": "CAGGTGCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGAACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATCGGAGAGATCGATCCTTCTGATAGTTATACTAACAACAATCAAAAGTTCAAGGACAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 320129,
             "functionality": "P",
             "id": "IGHV12-1-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-1-2*01",
             "imgt family name": "IGHV12",
             "length": 305,
@@ -10213,16 +10401,16 @@
             "source": "imgt",
             "start": 319824,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 415233,
             "functionality": "P",
             "id": "IGHV12-1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-1*02",
             "imgt family name": "IGHV12",
             "length": 305,
@@ -10234,16 +10422,16 @@
             "source": "imgt",
             "start": 414928,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 143238,
             "functionality": "P",
             "id": "IGHV1-40*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-40*01",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -10254,17 +10442,17 @@
             "source": "imgt",
             "start": 142945,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF120463",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.23b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5S21*01",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -10275,15 +10463,15 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGAAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGCCATGTCTTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATACATTAGTAGTGGTGGTGATTACATCTACTATGCAGACACTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAGGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGACGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC163348",
-            "confirmed": true,
+            "confirmed": True,
             "end": 81201,
             "functionality": "P",
             "id": "IGHV1-70*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-70*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10295,16 +10483,16 @@
             "source": "imgt",
             "start": 80907,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 637381,
             "functionality": "P",
             "id": "IGHV5-18*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-18*02",
             "imgt family name": "IGHV5",
             "length": 293,
@@ -10315,8 +10503,8 @@
             "source": "imgt",
             "start": 637088,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -10332,7 +10520,7 @@
             "sequence": "GATGTACAGCTTCAGGAGTCAGGACCTGGCCTGGTGAAGCCTTCTCAGACAGTGTCCCTCACCTGCACTGTCACTGGCTACTCTATCACTAATGGTAATCACTGGTGGAACTGGATCCGGCAGGTTTCAGGAAACAAACTGGAGTGGATGGGGTACATAAGCTCCAGTGGTAGCACTGACAGCAATCCATCTCTCAAAAGTCAAATCTCCATCACTAGAGACACTTCCAAGAACCAGTTATTCCTGCAGTTGAACTCTGTGACTATTGAAGATATAGCCACATATTACTGTGCAAGAGA",
             "source": "igblast",
             "start": 198519,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF459914",
@@ -10348,15 +10536,15 @@
             "sequence": "TCAGTGAAGATTTCCTGCAAAGCTTCTGGCTACGCATTCAGTAGCTACTGGATGAACTGGGTGAAGCAGAGGCCTGGAAAGGGTCTTGAGTGGATTGGACAGATTTATCCTGGAGATGGTGATACTAACTACAACGGAAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 751454,
             "functionality": "P",
             "id": "IGHV(III)-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-3*01",
             "length": 289,
             "name": "IGHV(III)-3*01",
@@ -10366,16 +10554,16 @@
             "source": "imgt",
             "start": 751165,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 55695,
             "functionality": "F",
             "id": "IGHV5-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-4*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -10387,17 +10575,17 @@
             "source": "imgt",
             "start": 55399,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1231770,
             "family name": "7183",
             "functionality": "F",
             "id": "VH7183.a4.6",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-4*02",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -10409,16 +10597,16 @@
             "source": "imgt",
             "start": 1231474,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC074329",
-            "confirmed": true,
+            "confirmed": True,
             "end": 126205,
             "functionality": "F",
             "id": "IGHV1-53*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-53*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10430,16 +10618,16 @@
             "source": "imgt",
             "start": 125911,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L26851",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "F",
             "id": "IGHV1-72*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-72*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -10450,15 +10638,15 @@
             "sequence": "GAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTCTAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L14547",
-            "confirmed": true,
+            "confirmed": True,
             "end": 813,
             "functionality": "F",
             "id": "IGHV1S53*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S53*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10469,16 +10657,16 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGACGCTGAGTTGGTGAAACCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACCATGCTATTCACTGGGTGAAGCAGAAGCCTGAACAGGGCCTGGAATGGATTGGATATATTTCTCCCGGAAATGGTGATATTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAACAGCCTGACATCTGAGGATTCTGCAGTGTATTTCTGTAAAAGA",
             "source": "imgt",
             "start": 519,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160985",
-            "confirmed": true,
+            "confirmed": True,
             "end": 105468,
             "functionality": "P",
             "id": "IGHV(III)-9*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-9*01",
             "length": 317,
             "name": "IGHV(III)-9*01",
@@ -10488,16 +10676,16 @@
             "source": "imgt",
             "start": 105151,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 715612,
             "functionality": "P",
             "id": "IGHV(III)-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-4*01",
             "length": 300,
             "name": "IGHV(III)-4*01",
@@ -10507,8 +10695,8 @@
             "source": "imgt",
             "start": 715312,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -10524,16 +10712,16 @@
             "sequence": "GAAGTGATGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATACCATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTGGTGGTGGTGGTAACACCTACTATCCAGACAGTGTGAAGGGTCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCTTGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 2409191,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF304546",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S127*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10544,15 +10732,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATCGGAACGATTGATCCTTCAGATAGTTATACTAGCTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAAGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 960,
             "functionality": "F",
             "id": "IGHV1S75*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S75*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -10563,15 +10751,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAAATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAAACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATATTTATCCTGGTAGAGGTATTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTCTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 708,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 13612,
             "functionality": "F",
             "id": "IGHV5-15*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-15*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -10583,16 +10771,16 @@
             "source": "imgt",
             "start": 13318,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L33960",
-            "confirmed": true,
+            "confirmed": True,
             "end": 967,
             "functionality": "F",
             "id": "IGHV1S118*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S118*01",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -10603,15 +10791,15 @@
             "sequence": "GAGGTCCTGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATAACCTGTAAGGCTTCTGGATACACATTCACTGACTACAACATGGACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTATCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCA",
             "source": "imgt",
             "start": 714,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 50626,
             "functionality": "P",
             "id": "IGHV12-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-1*01",
             "imgt family name": "IGHV12",
             "length": 305,
@@ -10623,16 +10811,16 @@
             "source": "imgt",
             "start": 50321,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ972404",
-            "confirmed": true,
+            "confirmed": True,
             "end": 67834,
             "functionality": "F",
             "id": "IGHV12-3*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-3*02",
             "imgt family name": "IGHV12",
             "length": 300,
@@ -10644,16 +10832,16 @@
             "source": "imgt",
             "start": 67534,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 98040,
             "functionality": "F",
             "id": "IGHV14-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV14-3*01",
             "imgt family name": "IGHV14",
             "length": 294,
@@ -10665,16 +10853,16 @@
             "source": "imgt",
             "start": 97746,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 46113,
             "functionality": "F",
             "id": "IGHV5-17*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-17*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -10686,8 +10874,8 @@
             "source": "imgt",
             "start": 45819,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -10703,15 +10891,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGATGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATCGGAGAGATTGATCCTTCTGATAGTTATACTAACTACAATCAAAAGTTCAAGGGCAAGTCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 447623,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X02461",
-            "confirmed": true,
+            "confirmed": True,
             "end": 377,
             "functionality": "F",
             "id": "IGHV1S29*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S29*01",
             "imgt family name": "IGHV1",
             "length": 277,
@@ -10722,16 +10910,16 @@
             "sequence": "GAGGTCCAGCTTCAGCAGTCAGGACCTGAGCTGGTGAAACCTGGGGCCTCAGTGAAGATATCCTGCAAGGCTTCTGGATACACATTCACTGACTACAACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTTATCCTTACAATGGTGGTACTGGCTACAACCAGAAGTTCAAGAGCAAGGCCACATTGACTGTAGACAATTCCTCCAGCACAGCCTACATGGACGTCCGCAGCCTGACATCTGAGGACTCTGCAG",
             "source": "imgt",
             "start": 100,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 514370,
             "functionality": "P",
             "id": "IGHV14-2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV14-2*02",
             "imgt family name": "IGHV14",
             "length": 294,
@@ -10743,8 +10931,8 @@
             "source": "imgt",
             "start": 514076,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303836",
@@ -10760,7 +10948,7 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGACTTCTGGATACACATTCACTGAATACACCATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGGTATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGATTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF455964",
@@ -10776,15 +10964,15 @@
             "sequence": "GCTGGTGAGGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACTTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGCAAGGATTTATCCTGGAAGTGGTAATACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGAAAAATCCTCCAGCACTGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCTGTCTATTTCTGTGCAAGC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 185550,
             "functionality": "F",
             "id": "IGHV1-18*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-18*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10796,8 +10984,8 @@
             "source": "imgt",
             "start": 185256,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -10813,15 +11001,15 @@
             "sequence": "GAGGTGAAGCTGATGGAATCTGGAGGAGGCTTGGTACAGCCTGGGGCTTCTCTGAGACTCTCCTGTGCAGCTTCTGGATTCACCTTTACTGATTACTACATGAGCTGGGTCCGCCAGCCTCCAGGGAAGGCACCTGAGTGGTTGGCTTTGATTAGAAACAAAGCTAATGGTTACACAACAGAGTATACTGCATCTGTTAAGGGTCGGTTCACCATCTCCAGAGATAATTCCCAAAACATCCTCTATCTTCAAATGAACACCCTGAGGGCTGAGGACAGTGCCACTTATTACTGTGTAAAA",
             "source": "igblast",
             "start": 1848018,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 77763,
             "functionality": "O",
             "id": "IGHV13-1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV13-1*02",
             "imgt family name": "IGHV13",
             "length": 304,
@@ -10833,8 +11021,8 @@
             "source": "imgt",
             "start": 77459,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF455989",
@@ -10850,7 +11038,7 @@
             "sequence": "CAAGGCTTCTGGCTACAGCTTCACAAGCTACTATATACACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAAGTGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACACATCCTCCAGCACTGCCTACATGCAGCTCAGCAGCCTAACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -10866,15 +11054,15 @@
             "sequence": "GAGGTGCAGCTTGTTGAGTCTGGTGGAGGATTGGTGCAGCCTAAAGGATCATTGAAACTCTCATGTGCCGCCTCTGGTTTCACCTTCAATACCTATGCCATGCACTGGGTCCGCCAGGCTCCAGGAAAGGGTTTGGAATGGGTTGCTCGCATAAGAAGTAAAAGTAGTAATTATGCAACATATTATGCCGATTCAGTGAAAGACAGATTCACCATCTCCAGAGATGATTCACAAAGCATGCTCTATCTGCAAATGAACAACCTGAAAACTGAGGACACAGCCATGTATTACTGTGTGAGAGA",
             "source": "igblast",
             "start": 1547366,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 99025,
             "functionality": "P",
             "id": "IGHV8-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-1*01",
             "imgt family name": "IGHV8",
             "length": 291,
@@ -10885,17 +11073,17 @@
             "source": "imgt",
             "start": 98734,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 451729,
             "family": "SM7",
             "functionality": "F",
             "id": "VHSM7.a3.93",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV14-3*02",
             "imgt family name": "IGHV14",
             "length": 294,
@@ -10907,8 +11095,8 @@
             "source": "imgt",
             "start": 451435,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -10924,7 +11112,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGGGCTGAACTGGCAAGACCTGGTGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTTACTAGCTACACGATGCACTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATTGGATACATTAATCCTAGCAGTGGTTATACTAAGTACAATCAGAAGTTCAAGGACAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAACTGAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1583679,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -10940,15 +11128,15 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGTATATTGCAGCCCTCCCAGACCCTCAGTCTGACCTGTTCTTTCTCTGTGTTTTCACTGAGCACTTTTGGTATGGGTGTGAGCTGGATTCGTCAGCCTTCAGGGAAGGGTCTGGAGTGGCTGGCACACATTTATTGGGATGAGGACAAGCACTATAAACCATCCTTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAACAACCAGGTATTCCTCAAGATCACCACTGTGGACACTGCAGATACTGCCACATACTACTCTGCTCGAAGAG",
             "source": "igblast",
             "start": 602438,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M34977",
-            "confirmed": true,
+            "confirmed": True,
             "end": 552,
             "functionality": "O",
             "id": "IGHV1S47*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S47*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -10959,16 +11147,16 @@
             "sequence": "GAGGTCCAGCTTCAGCAGTCTGGAGCTGAGCTGGGGAGGCCTGGGTCCTCAGTGAAGCTGTCCTGCAAGACTTCTGGATATACATTCACAAGCTATGGTATAAACTGGGTGAAACAGAGGCCTGGACAGGACCTGGAATGGATTGGATATATTTATCCTGGAAATGGTTATACTGCGTACAATGAGAAGTTCCAGGGAGAGGCCACACTGACTTCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGAAGCCTGACATCTGAGGACTCTGCAATCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 258,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "U23021",
-            "confirmed": true,
+            "confirmed": True,
             "end": 286,
             "functionality": "P",
             "id": "IGHV8S6*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV8S6*01",
             "imgt family name": "IGHV8",
             "length": 285,
@@ -10979,7 +11167,7 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGTATATTGCAGCCCTCCCAGACCCTCAGTCTGACCTGTTCTTTCTCTGGGTTTTCACTGAGCACTTTTGGTATGGGTGTGAGCTGGATTCGTCAGCCTTTAGGGAAGGGTCTGGAGTAGCTGGCACACATTTATTGGGATGATGACAAGCGCTATAACCCATCCCTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAGAAACCAGGTATTCCTCAAGATCACCACTGTGGACACTGCAGATACTGCCACATAC",
             "source": "imgt",
             "start": 1,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -10995,15 +11183,15 @@
             "sequence": "GAGGTTCAGCTCCAGCAGTCTGGGACTGTGCTGGCAAGGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGACTTCTGGCTACACATTTACCAGCTACTGGATGCACTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATAGGGGCTATTTATCCTGGAAATAGTGATACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCAAACTGACTGCAGTCACATCCGCCAGCACTGCCTACATGGAGCTCAGCAGCCTGACAAATGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "igblast",
             "start": 1557485,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 22690,
             "functionality": "F",
             "id": "IGHV1-61*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-61*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -11015,8 +11203,8 @@
             "source": "imgt",
             "start": 22396,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -11032,7 +11220,7 @@
             "sequence": "GATGTGCAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCGGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTTTGGAATGCACTGGGTTCGTCAGGCTCCAGAGAAGGGGCTGGAGTGGGTCGCATACATTAGTAGTGGCAGTAGTACCATCTACTATGCAGACACAGTGAAGGGCCGATTCACCATCTCCAGAGACAATCCCAAGAACACCCTGTTCCTGCAAATGACCAGTCTAAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 659161,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -11048,7 +11236,7 @@
             "sequence": "GATGTACAGCTTCAGGAGTCAGGACCTGGCCTCGTGAAACCTTCTCAGTCTCTGTCTCTCACCTGCTCTGTCACTGGCTACTCCATCACCAGTGGTTATTACTGGAACTGGATCCGGCAGTTTCCAGGAAACAAACTGGAATGGATGGGCTACATAAGCTACGATGGTAGCAATAACTACAACCCATCTCTCAAAAATCGAATCTCCATCACTCGTGACACATCTAAGAACCAGTTTTTCCTGAAGTTGAATTCTGTGACTACTGAGGACACAGCCACATATTACTGTGCAAGAGA",
             "source": "igblast",
             "start": 1782662,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303854",
@@ -11064,15 +11252,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGAGCTGAGCTGGCGAGGCCCGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGACTGGACAGGGCCTTGAGTGGATTGGAGAGATTTATCCTGGAAGTGGTAATACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTTCTGTTCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 58101,
             "functionality": "O",
             "id": "IGHV8-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-2*01",
             "imgt family name": "IGHV8",
             "length": 300,
@@ -11084,16 +11272,16 @@
             "source": "imgt",
             "start": 57801,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ223545",
-            "confirmed": false,
+            "confirmed": False,
             "end": 347,
             "functionality": "F",
             "id": "IGHV3S7*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV3S7*01",
             "imgt family name": "IGHV3",
             "length": 293,
@@ -11104,15 +11292,15 @@
             "sequence": "GAGGTGCAGCTTCAGGAGTCAGGACCTGGCCTGGCAAAACCTTCTCAGACTCTGTCCCTCACCTGTTCTGCTACTGGCTACTCCATCACCAGTGATTACTGGAACTGGATCCGGAAATTCCCAGGGAATAAACTTGAGTACATGGGGTTCATAAGCGGAAGTGGTAGCACTTACTACAATCCATCTCTCAAAAGTCGAATCTCCATAACTCGAGACACATCCAAGAACCAGTATTACCTACAGTTGAATTCTGTGACTACTGAGGACGCAGCCACATATTACTGTGCAAGAGG",
             "source": "imgt",
             "start": 54,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC087166",
-            "confirmed": true,
+            "confirmed": True,
             "end": 113406,
             "functionality": "P",
             "id": "IGHV1-57*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-57*01",
             "imgt family name": "IGHV1",
             "length": 292,
@@ -11123,16 +11311,16 @@
             "source": "imgt",
             "start": 113114,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 120393,
             "functionality": "P",
             "id": "IGHV3-7*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-7*02",
             "imgt family name": "IGHV3",
             "length": 296,
@@ -11144,8 +11332,8 @@
             "source": "imgt",
             "start": 120097,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "U23023",
@@ -11161,15 +11349,15 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGTATATTGCAGTCCTCCCAGACCCTCAGTCTGACCTGTTCTTTCTCTGTGTTTTCACTGAGCACTTTTGGTATGGGTGTGAGCTGGATTCGTCAGCCTTCAGGGAAGGGTCTGGAGTGGCTGGCACACATTTATTGGGATGAGGACAAGCACTATAAACCATCCTTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAACAACCAGGTATTCCTCAAGATCACCAGTGTGGACACTGCAGATACTGCCACATAC",
             "source": "igblast",
             "start": 1,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33950",
-            "confirmed": true,
+            "confirmed": True,
             "end": 971,
             "functionality": "P",
             "id": "IGHV1S101*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S101*02",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -11180,15 +11368,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCATGGCTTCTGGTTATCAGTTCAGTGACTACTACATGCACTGAGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTAACCCTAACAATGGTTGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCGTACATGGAGCTCCACA",
             "source": "imgt",
             "start": 718,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073561",
-            "confirmed": true,
+            "confirmed": True,
             "end": 2286,
             "functionality": "F",
             "id": "IGHV6-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-4*01",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -11200,8 +11388,8 @@
             "source": "imgt",
             "start": 1986,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -11217,16 +11405,16 @@
             "sequence": "GAGGTCAAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGCACTGGGTGAAGCAAAGTTCTGAAAAGAGCCTTGAGTGGATTGGAGAGATTAATCCTAGCACTGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTAACTGTAGACAAGTCATCCAGCACAGCCTACATGCAGCTCAAGAGCCTGACATCTGAGGACTCTGCTGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1124833,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 763061,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a23.68",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-6*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -11238,8 +11426,8 @@
             "source": "imgt",
             "start": 762768,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -11255,7 +11443,7 @@
             "sequence": "GAAGTGATGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGCCATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 1088201,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -11271,7 +11459,7 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGAGCTGAGCTGATGAAGCCTGGGGCCTCAGTGAAGCTTTCCTGCAAGGCTACTGGCTACACATTCACTGGCTACTGGATAGAGTGGGTAAAGCAGAGGCCTGGACATGGCCTTGAGTGGATTGGAGAGATTTTACCTGGAAGTGGTAGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACATTCACTGCAGATACATCCTCCAACACAGCCTACATGCAACTCAGCAGCCTGACAACTGAGGACTCTGCCATCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1487245,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -11287,7 +11475,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGTTATACCTTCACAGACTATTCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACTGAGACTGGTGAGCCAACATATGCAGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCTAGA",
             "source": "igblast",
             "start": 318072,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303872",
@@ -11303,7 +11491,7 @@
             "sequence": "CAGGCTTATCTACAGCAGTCTGGGGCTGAGCTGGTGAGGTCTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACATTTACCAGTTACAATATGCACTGGGTAAAGCAGACACCTGGACAGGGCCTGGAATGGATTGGATATATTTATCCTGGAAATGGTGGTACTAACTACAATCAGAAGTTCAAGGGCAAGGCCACATTGACTGCAGACACATCCTCCAGCACAGCCTACATGCAGATCAGCAGCCTGACATCTGAAGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303885",
@@ -11319,15 +11507,15 @@
             "sequence": "GCATTCAGTAGCTACTGGATGAACTGGGTGAAGCAGAGGCCTGGACAGGGTCTTGAGTGGATTGGACAGATTTATCCTGGAGATGGTGATACTAACTACAATGGAAAGTTCAAGGGTAAAGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTAACATCTGAGGACTCTGCGGTCTATTTCTGTGCATTA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC074329",
-            "confirmed": true,
+            "confirmed": True,
             "end": 87550,
             "functionality": "F",
             "id": "IGHV1-50*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-50*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -11339,16 +11527,16 @@
             "source": "imgt",
             "start": 87256,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 88605,
             "functionality": "F",
             "id": "IGHV3-8*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-8*01",
             "imgt family name": "IGHV3",
             "length": 293,
@@ -11360,17 +11548,17 @@
             "source": "imgt",
             "start": 88312,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF120466",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.27b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-6*03",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -11381,15 +11569,15 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGGCATGTCTTGGGTTCGCCAGACTCCAGACAAGAGGCTGGAGTGGGTCGCAACCATTAGTAGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGACGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L17134",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "functionality": "F",
             "id": "IGHV1-34*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-34*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -11401,16 +11589,16 @@
             "source": "imgt",
             "start": 0,
             "strain": "MRL/lpr",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 113197,
             "functionality": "P",
             "id": "IGHV5-8*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-8*01",
             "imgt family name": "IGHV5",
             "length": 277,
@@ -11421,17 +11609,17 @@
             "source": "imgt",
             "start": 112920,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1031295,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a19.31",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-9-3*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -11443,17 +11631,17 @@
             "source": "imgt",
             "start": 1030999,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00537",
-            "confirmed": true,
+            "confirmed": True,
             "end": 433,
             "family": "J558",
             "functionality": "F",
             "id": "V102",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-74*04",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -11464,8 +11652,8 @@
             "sequence": "CATGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGCCAAGGCCTTGAGTGGATTGGAAGGATTCATCCTTCTGATAGTGATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAATA",
             "source": "imgt",
             "start": 139,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -11481,16 +11669,16 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGAGGGAGGCTTAGTGCAGCCTGGAAGTTCCATGAAACTCTCCTGCACAGCCTCTGGATTCACTTTCAGTGACTATTACATGGCTTGGGTCCGCCAGGTTCCAGAAAAGGGTCTAGAATGGGTTGCAAACATTAATTATGATGGTAGTAGCACCTACTATCTGGACTCCTTGAAGAGCCGTTTCATCATCTCGAGAGACAATGCAAAGAACATTCTATACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCACGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 2232327,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 722936,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a24.72",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-7*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -11502,16 +11690,16 @@
             "source": "imgt",
             "start": 722643,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 781724,
             "functionality": "P",
             "id": "IGHV5-7-5*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-7-5*01",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -11522,8 +11710,8 @@
             "source": "imgt",
             "start": 781427,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -11539,7 +11727,7 @@
             "sequence": "GAGGAGAAGCTGGATGAGTCTGGAGGAGGCTTGGTGCAACCTGGGAGGTCCATGAAACTCTCCTGTGTTGCCTCTGGATTCACTTTTACTAACTCCTGGATGAACTGGTTCTGCCAGTCTCCAGAGAAAGGACTGGAGTGGGTAGCACAAATTAAAAGCAAACCTTATAATTATGAAACATATTATTCAGATTCTGTGAAAGGCAGATTCACCATCTCAAGAGATGATTCCAAAAGTAGTGTATACCTGCAAATGAACAACTTAAGAGCTGAAGACACGGGCATCTATTACTGTACATGG",
             "source": "igblast",
             "start": 1615183,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L14364",
@@ -11555,15 +11743,15 @@
             "sequence": "GTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAGGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAACTGCTGGAATGCAGTGGGTGCAAAAGATGCCAGGAAAGGGTTTGAAGTGGATTGGCTGGATAAACACCCACTCTGGAGTGCCAAAATATGCAGAAGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCATATTTACAGATAAGCAACCTCAAAAATGAGGACACGGCTACATATTTCTGT",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26856",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "F",
             "id": "IGHV1S65*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S65*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -11574,15 +11762,15 @@
             "sequence": "CCGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTAAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "J00502",
-            "confirmed": true,
+            "confirmed": True,
             "end": 700,
             "functionality": "F",
             "id": "IGHV2-2*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-2*03",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -11593,16 +11781,16 @@
             "sequence": "CAGGTGCAGCTGAAGCAGTCAGGACCTGGCCTAGTGCAGCCCTCACAGAGCCTGTCCATCACCTGCACAGTCTCTGGTTTCTCATTAACTAGCTATGGTGTACACTGGGTTCGCCAGTCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTGATATGGAGTGGTGGAAGCACAGACTATAATGCAGCTTTCATATCCAGACTGAGCATCAGCAAGGACAATTCCAAGAGCCAAGTTTTCTTTAAAATGAACAGTCTGCAATCTAATGACACAGCCATATATTACTGTGCCAGAAA",
             "source": "imgt",
             "start": 407,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 118917,
             "functionality": "F",
             "id": "IGHV14-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV14-1*01",
             "imgt family name": "IGHV14",
             "length": 294,
@@ -11614,8 +11802,8 @@
             "source": "imgt",
             "start": 118623,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -11631,7 +11819,7 @@
             "sequence": "GAGGTGAAGCTGGTGGAATCTGGAGGAGGCTTGGTACAGTCTGGGCGTTCTCTGAGACTCTCCTGTGCAACTTCTGGGTTCACCTTCAGTGATTTCTACATGGAGTGGGTCCGCCAAGCTCCAGGGAAGGGACTGGAGTGGATTGCTGCAAGTAGAAACAAAGCTAATGATTATACAACAGAGTACAGTGCATCTGTGAAGGGTCGGTTCATCGTCTCCAGAGACACTTCCCAAAGCATCCTCTACCTTCAGATGAATGCCCTGAGAGCTGAGGACACTGCCATTTATTACTGTGCAAGAGATG",
             "source": "igblast",
             "start": 2174435,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303864",
@@ -11647,15 +11835,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTAATCCTAGCAACGGTCGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 129200,
             "functionality": "P",
             "id": "IGHV1-65*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-65*01",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -11666,16 +11854,16 @@
             "source": "imgt",
             "start": 128907,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ972404",
-            "confirmed": true,
+            "confirmed": True,
             "end": 116201,
             "functionality": "F",
             "id": "IGHV6-5*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-5*02",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -11687,8 +11875,8 @@
             "source": "imgt",
             "start": 115901,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -11704,15 +11892,15 @@
             "sequence": "CAGATCCAGCTGCAACAGTCAGGAGCTGAGCTGGCGAGTCCTGGGGCATCAGTGACACTGTCCTGCAAGGCTTCTGGCTACACATTTACTGACCATATTATGAATTGGGTAAAAAAGAGGCCTGGACAGGGCCTTGAGTGGATTGGAAGGATTTATCCAGTAAGTGGTGAAACTAACTACAATCAAAAGTTCATGGGCAAGGCCACATTCTCTGTAGACCGGTCCTCCAGCACAGTGTACATGGTGTTGAACAGCCTGACATCTGAGGACCCTGCTGTCTATTACTGTGGAAGG",
             "source": "igblast",
             "start": 1458571,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 145447,
             "functionality": "P",
             "id": "IGHV5-11*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-11*01",
             "imgt family name": "IGHV5",
             "length": 265,
@@ -11723,17 +11911,17 @@
             "source": "imgt",
             "start": 145182,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 966675,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a25.43",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-9-5*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -11745,8 +11933,8 @@
             "source": "imgt",
             "start": 966379,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -11762,7 +11950,7 @@
             "sequence": "CAGGTTCACCTACAACAGTCTGGTTCTGAACTGAGGAGTCCTGGGTCTTCAGTAAAGCTGTCATGCAAGGATTTTGATTCAGAAGTCTTCCCTATTGCTTATATGAGTTGGGTAAGGCAGAAGCCTGGGCATGGATTTGAATGGATTGGAGGCATACTCCCAAGTATTGGTAGAACAATCTATGGAGAGAAGTTTGAGGACAAAGCCACATTGGATGCAGACACACTGTCCAACACAGCCTACTTGGAGCTCAACAGTCTGACATCCGAGGACTCTGCTATCTACTACTGTGCAAGG",
             "source": "igblast",
             "start": 1506233,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -11778,15 +11966,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGAGCTGAGCTGGCGAGGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACAAGCTATGGTATAAGCTGGGTGAAGCAGAGAACTGGACAGGGCCTTGAGTGGATTGGAGAGATTTATCCTAGAAGTGGTAATACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCGTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 151722,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 68145,
             "functionality": "F",
             "id": "IGHV1-66*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-66*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -11798,8 +11986,8 @@
             "source": "imgt",
             "start": 67851,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -11815,15 +12003,15 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGATACGCCTTCACTAATTACTTGATAGAGTGGGTAAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGAGTGATTAATCCTGGAAGTGGTGGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCAACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 877109,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 192908,
             "functionality": "O",
             "id": "IGHV8-9*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-9*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -11835,16 +12023,16 @@
             "source": "imgt",
             "start": 192607,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF025447",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1S67*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S67*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -11855,15 +12043,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGTACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGAGGATTGGAGAGATTAATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M12376",
-            "confirmed": true,
+            "confirmed": True,
             "end": 399,
             "functionality": "F",
             "id": "IGHV1S35*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S35*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -11874,16 +12062,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGTGCTGGTGAGGCATGGAGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTCATGGATGCACTGGGCGAAGCAGAGGCATGGACAAGGCCTTGAGTGGATTGGAGAGATTCATCCTAATAGTGGTAATACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACGTGGATCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 105,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 112291,
             "functionality": "P",
             "id": "IGHV1-73*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-73*01",
             "imgt family name": "IGHV1",
             "length": 295,
@@ -11894,8 +12082,8 @@
             "source": "imgt",
             "start": 111996,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -11911,15 +12099,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAGAATATCCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTCAAGTGGATGGGCATGATATACACCGACACTGGAGAGCCAACATATGCTGAAGAGTTCAAGGGACGGTTTGCCTTCTCTTTGGAGACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGTAAGA",
             "source": "igblast",
             "start": 1976890,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "V00767",
-            "confirmed": true,
+            "confirmed": True,
             "end": 561,
             "functionality": "F",
             "id": "IGHV2-6-7*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-7*02",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -11930,16 +12118,16 @@
             "sequence": "CAGGTACAGCTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATCACATGCACCGTCTCAGGGTTCTCATTAACCGGCTATGGTGTAAACTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGGAGTGGCTGGGAATGATATGGGGTGATGGAAGCACAGACTATAATTCAGCTCTCAAATCCAGACTGAGCATCAGCAAGGACAACTCCAAGAGCCAAGTTTTCTTAAAAATGAACAGTCTGCAAACTGATGACACAGCCAGGTACTACTGTGCCAGAGA",
             "source": "imgt",
             "start": 268,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 46513,
             "functionality": "F",
             "id": "IGHV2-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-2*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -11951,8 +12139,8 @@
             "source": "imgt",
             "start": 46220,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "U23024",
@@ -11968,7 +12156,7 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGGATATTGCAGTCCTCCCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAACACTTCTGGTATGGGTGTGAGCTGGATTCGTCAGCCTTCAGGAAAGGGTCTGGAGTGGCTGGCACACATTTACTGGGATGATGACAAGCGCTATAACCCATCCCTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAGAAACCAGGTATTCCTCAAGATCACCAGTGTGGACACTGCAGATACTGCCACATAC",
             "source": "igblast",
             "start": 1,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303883",
@@ -11984,15 +12172,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGGGCTGAGCTGGTGAAGCCTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTTTGGCTACACCTTCACTACCTATCCAATAGAGTGGATGAAGCAGAATCATGGGAAGAGCCTAGAGTGGATTGGAAATTTTCATCCTTACAATGATGATACTAAGTACAATGAAAAATTCAAGGGCAAGGCCAAATTGACTGTAGAAAAATCCTCTAGCACAGTCTACTTGGAGCTCAGCCGATTAACATCTGATGACTCTGCTGTTTATTACTGTGCAAGG",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26858",
-            "confirmed": true,
+            "confirmed": True,
             "end": 977,
             "functionality": "F",
             "id": "IGHV1S67*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S67*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -12003,15 +12191,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGTACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGAGGATTGGAGAGATTAATCCTGGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 725,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M34982",
-            "confirmed": true,
+            "confirmed": True,
             "end": 549,
             "functionality": "F",
             "id": "IGHV1S52*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S52*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -12022,16 +12210,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGACCTGGGACTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGATACGTCTTCACTAATTACTTGATAGAGTGGGTAAAGCAGAGGCCTGGACAGGGCCTGGAGTGGATTGGAGTGATTAATCCTGGAAGTGGTGGTACTAACTACAATGAGAAGTTCAAGGGCAAGGCAACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAGCAGCCTGACATCTGATGACTCTGCGGTCTATTTCTGCGCAAGA",
             "source": "imgt",
             "start": 255,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 601235,
             "functionality": "P",
             "id": "IGHV7-2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-2*02",
             "imgt family name": "IGHV7",
             "length": 310,
@@ -12042,8 +12230,8 @@
             "source": "imgt",
             "start": 600925,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303849",
@@ -12059,15 +12247,15 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCCTCAGTGAAGATTTCCTGCAAAGCTTCTGGCTACGCATTCAGTAGCTCTTGGATGAACTGGGTGAAGCAGAGGCCTGGACAGGGTCTTGAGTGGATTGGACGGATTTATCCTGGAGATGGAGATACTAACTACAATGGGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGTGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26933",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1-74*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-74*03",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -12078,7 +12266,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGGTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGCCAAGGCCTTGAGTGGATTGGAAGGATTCATCCTTCTGATAGTGATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCATC",
             "source": "imgt",
             "start": 716,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -12094,15 +12282,15 @@
             "sequence": "GAGGTGCAGCTTCAGGAGTCAGGACCTGGCCTGGCAAAACCTTCTCAGACTCTGTCCCTCACCTGTTCTGTCACTGGCTACTCCATCACCAGTGATTACTGGAACTGGATCCGGAAATTCCCAGGGAATAAACTTGAGTACATGGGGTACATAAGCTACAGTGGTAGCACTTACTACAATCCATCTCTCAAAAGTCGAATCTCCATAACTCGAGACACATCCAAGAACCAGTATTACCTGCAGTTGAATTCTGTGACTACTGAGGACACAGCCACATATTACTGTGCAAGATA",
             "source": "igblast",
             "start": 1748442,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1256326,
             "functionality": "P",
             "id": "IGHV5-1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-1*02",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -12114,16 +12302,16 @@
             "source": "imgt",
             "start": 1256030,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 89057,
             "functionality": "F",
             "id": "IGHV16-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV16-1*01",
             "imgt family name": "IGHV16",
             "length": 299,
@@ -12135,16 +12323,16 @@
             "source": "imgt",
             "start": 88758,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 51228,
             "functionality": "P",
             "id": "IGHV1-32*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-32*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -12156,16 +12344,16 @@
             "source": "imgt",
             "start": 50934,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 135248,
             "functionality": "F",
             "id": "IGHV4-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV4-1*01",
             "imgt family name": "IGHV4",
             "length": 294,
@@ -12177,8 +12365,8 @@
             "source": "imgt",
             "start": 134954,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF303871",
@@ -12194,15 +12382,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAAACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATCGGAAATATTTATCCTTCTGATAGTTATACTAACTACAATCAAAAGTTCAAGGACAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCCGACATCTGAGGACTCTGCGGTCTATTACTGTATAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26952",
-            "confirmed": true,
+            "confirmed": True,
             "end": 961,
             "functionality": "F",
             "id": "IGHV1-55*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-55*03",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -12213,15 +12401,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAACTTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATATTTATCCTGGTAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCATC",
             "source": "imgt",
             "start": 709,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ223544",
-            "confirmed": false,
+            "confirmed": False,
             "end": 348,
             "functionality": "F",
             "id": "IGHV3-6*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV3-6*03",
             "imgt family name": "IGHV3",
             "length": 294,
@@ -12233,7 +12421,7 @@
             "source": "imgt",
             "start": 54,
             "strain": "BALB/c",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -12249,7 +12437,7 @@
             "sequence": "CAGGTGCAGCTGAAGCAGTCAGGACCTGGCCTAGTGCAGCCCTCACAGAGCCTGTCCATCACCTGCACAGTCTCTGGTTTCTCATTAACTAGCTATGGTGTACACTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTGATATGGAGTGGTGGAAGCACAGACTATAATGCTGCTTTCATATCCAGACTGAGCATCAGCAAGGACAACTCCAAGAGCCAAGTTTTCTTTAAAATGAACAGTCTGCAAGCTGATGACACTGCCATATACTACTGTGCCAAAAA",
             "source": "igblast",
             "start": 2417672,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303879",
@@ -12265,15 +12453,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGACGCTGAGTTGGTGAAACCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACCATGCTATTCACTGGGTGAAGCAGAAGCCTGAACAGGGCCTGGAATGGATTGGATATATTTCTCCCGGAAATGGTGATATTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACTGCCTACATGCAGCTCAACAGCCTGACATCTGAGGATTCTGCAGTGTATTTCTGCTATAGC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160990",
-            "confirmed": true,
+            "confirmed": True,
             "end": 162858,
             "functionality": "P",
             "id": "IGHV1-79*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-79*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -12285,16 +12473,16 @@
             "source": "imgt",
             "start": 162564,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 124345,
             "functionality": "F",
             "id": "IGHV1-74*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-74*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -12306,16 +12494,16 @@
             "source": "imgt",
             "start": 124051,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "M20774",
-            "confirmed": true,
+            "confirmed": True,
             "end": 679,
             "functionality": "F",
             "id": "IGHV1S46*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S46*01",
             "imgt family name": "IGHV1",
             "length": 295,
@@ -12326,7 +12514,7 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGATTCACATTCACTGACTATGTCATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGACTTATTATTCCTTACAATGGTGATACTTTCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGGAGCTCAACAGCCTGACATCTGAGGACTTTGCAGTCTATTACTGTGCAAGAT",
             "source": "imgt",
             "start": 384,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169681",
@@ -12342,15 +12530,15 @@
             "sequence": "CAGATCCATTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCCAGGCTTCTGGGTATACCTTCACAGGCTATTCAATGCACTGGGTGAAGCAGGCTCCAAGAAAGGGTTTAAAGTGGATGGGCTTGATATACACCAACACTGGAGAGCCAACATATGATGAAGAGTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACATGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 411,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "U23025",
-            "confirmed": true,
+            "confirmed": True,
             "end": 289,
             "functionality": "P",
             "id": "IGHV8-9*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV8-9*02",
             "imgt family name": "IGHV8",
             "length": 288,
@@ -12362,16 +12550,16 @@
             "source": "imgt",
             "start": 1,
             "strain": "C57BL/6",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 478686,
             "family": "36-60",
             "functionality": "F",
             "id": "VH36-60.a2.90",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-2*02",
             "imgt family name": "IGHV3",
             "length": 294,
@@ -12383,8 +12571,8 @@
             "source": "imgt",
             "start": 478392,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AY169685",
@@ -12400,7 +12588,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGTTATACCTTCACAGGCTATTCAATGCAGTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCGAGACTGGTGTGCCAACATATGCAGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 425,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -12416,15 +12604,15 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGGATATTGCAGCCCTCCCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAGCACTTCTAATATGGGTATAGGCTGGATTCGTCAGCCTTCAGGGAAGGGTCTAGAGTGGCTGGCACACATTTGGTGGAATGATGATAAGTACTATAACCCATCCCTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAACAACCAGGTATTCCTCAAGATCACCAGTGTGGACACTGCAGATACTGCCACATACTACTGTGCTCAAATAG",
             "source": "igblast",
             "start": 1003217,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26882",
-            "confirmed": true,
+            "confirmed": True,
             "end": 957,
             "functionality": "F",
             "id": "IGHV1S83*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S83*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -12435,16 +12623,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGTCTGAGCTTGTGAGGCCTGGAGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTCCTGGATGCACTGGGCGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAGAATTGATCCTAATAGTGGTAATACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACGTGGATCTCAGC",
             "source": "imgt",
             "start": 705,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF120461",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.21b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-4*03",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -12456,15 +12644,15 @@
             "source": "imgt",
             "start": 0,
             "strain": "C57BL/6",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090887",
-            "confirmed": true,
+            "confirmed": True,
             "end": 120018,
             "functionality": "F",
             "id": "IGHV5-9*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-9*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -12476,16 +12664,16 @@
             "source": "imgt",
             "start": 119722,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ972403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 94361,
             "functionality": "F",
             "id": "IGHV3-6*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-6*02",
             "imgt family name": "IGHV3",
             "length": 296,
@@ -12497,16 +12685,16 @@
             "source": "imgt",
             "start": 94065,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ972404",
-            "confirmed": true,
+            "confirmed": True,
             "end": 106532,
             "functionality": "F",
             "id": "IGHV6-4*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-4*02",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -12518,8 +12706,8 @@
             "source": "imgt",
             "start": 106232,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -12535,15 +12723,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAACTGCTGGAATGCAGTGGGTGCAAAAGATGCCAGGAAAGGGTTTTAAGTGGATTGGCTGGATAAACACCCACTCTGGAGAGCCAAAATATGCAGAAGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTACAGATAAGCAACCTCAAAAATGAGGACACGGCTACGTATTTCTGTGCGAGA",
             "source": "igblast",
             "start": 1770854,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M19403",
-            "confirmed": true,
+            "confirmed": True,
             "end": 678,
             "functionality": "F",
             "id": "IGHV1S45*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S45*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -12554,16 +12742,16 @@
             "sequence": "GAAGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACATTCACTGACTATGTTATGCACTGGGTGAAGCAGAGCAATGGAAAGAGCCTTGAGTGGATTGGATATATTAATCCTTATAATGATTATACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAACAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 384,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X02066",
-            "confirmed": true,
+            "confirmed": True,
             "end": 293,
             "functionality": "F",
             "id": "IGHV1-71*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-71*02",
             "imgt family name": "IGHV1",
             "length": 293,
@@ -12574,8 +12762,8 @@
             "sequence": "CTGCAGCAGTCTGGAGCTGGGCTGGTGAAACCCGGGGCATCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACTGAGTATATTATACACTGGGTAAAGCAGAGGTCTGGACAGGGTCTTGAGTGGATTGGGTGGTTTTCACCTGGAAGTGGTAGTATAAAGTACAATGAGAAATTCAAGGACAAGGCCACATTGACTGCGGACAAATCCTCCAGCACAGTCTATATGGAGCTTAGTAGATTGACATCTGAAGACTCTGCGGTCTATTTCTGTGCAAGACACGAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -12591,7 +12779,7 @@
             "sequence": "GATGTGCAGCTTCAGGAGTCAGGACCTGGCATGGTGAAACCTTCTCAGTCACTTTCCCTCACCTGCACTGTCACTGGCTACTCCATCACCAGTGGTTATGACTGGCACTGGATCCGACATTTTCCAGGAAACAAACTGGAGTGGATGGGCTACATAAGCTACAGTGGTAGCACTAACTACAACCCATCCCTCAAAAGTCGAATCTCCATCACTCATGACACATCTAAGAACCATTTCTTCCTGAAGTTGAATTCTGTGACTACTGAGGACACAGCCACATATTACTGTGCAAGAGA",
             "source": "igblast",
             "start": 2106468,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -12607,16 +12795,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACCTTCACTAACTACTGGATAGGTTGGGCAAAGCAGAGGCCTGGACATGGCCTTGAGTGGATTGGAGATATTTACCCTGGAGGTGGTTATACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGTTCAGCAGCCTGACATCTGAGGACTCTGCCATCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 575151,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 585258,
             "family": "SM7",
             "functionality": "F",
             "id": "VHSM7.a1.83",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV14-1*02",
             "imgt family name": "IGHV14",
             "length": 294,
@@ -12628,16 +12816,16 @@
             "source": "imgt",
             "start": 584964,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 4705,
             "functionality": "F",
             "id": "IGHV7-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-3*01",
             "imgt family name": "IGHV7",
             "length": 304,
@@ -12649,16 +12837,16 @@
             "source": "imgt",
             "start": 4401,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958765,
             "functionality": "P",
             "id": "IGHV5-10-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-10-2*01",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -12669,16 +12857,16 @@
             "source": "imgt",
             "start": 958471,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 100811,
             "functionality": "P",
             "id": "IGHV1-10*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-10*01",
             "imgt family name": "IGHV1",
             "length": 308,
@@ -12689,16 +12877,16 @@
             "source": "imgt",
             "start": 100503,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "D14634",
-            "confirmed": true,
+            "confirmed": True,
             "end": 577,
             "functionality": "F",
             "id": "IGHV1S61*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S61*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -12709,8 +12897,8 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGTGCTGAGCTTGTGAAGCCTGGGGCCTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACTTTCACCAGCTACTGGATAAACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAATATTTATCCTGGTAGTAGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGACGACTCTGCGGTCTATTATTGTGCAAGA",
             "source": "imgt",
             "start": 283,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF459896",
@@ -12726,7 +12914,7 @@
             "sequence": "TCAGTGAAGATGTCCTGCAAGGCTTTTGGCTACGCTTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAATGATTCATCCTAATAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGC",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -12742,15 +12930,15 @@
             "sequence": "GAGGTGCAGCTTGTTGAGTCTGGTGGAGGATTGGTGCAGCCTAAAGGGTCATTGAAACTCTCATGTGCAGCCTCTGGATTCAGCTTCAATACCTACGCCATGAACTGGGTCCGCCAGGCTCCAGGAAAGGGTTTGGAATGGGTTGCTCGCATAAGAAGTAAAAGTAATAATTATGCAACATATTATGCCGATTCAGTGAAAGACAGATTCACCATCTCCAGAGATGATTCAGAAAGCATGCTCTATCTGCAAATGAACAACTTGAAAACTGAGGACACAGCCATGTATTACTGTGTGAGACA",
             "source": "igblast",
             "start": 1591802,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 361460,
             "functionality": "F",
             "id": "IGHV12-1-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-1-1*01",
             "imgt family name": "IGHV12",
             "length": 305,
@@ -12762,16 +12950,16 @@
             "source": "imgt",
             "start": 361155,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X16801",
-            "confirmed": false,
+            "confirmed": False,
             "end": 375,
             "functionality": "P",
             "id": "IGHV10S5*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV10S5*01",
             "imgt family name": "IGHV10",
             "length": 299,
@@ -12782,15 +12970,15 @@
             "source": "imgt",
             "start": 76,
             "strain": "MRL/lpr",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26860",
-            "confirmed": true,
+            "confirmed": True,
             "end": 969,
             "functionality": "F",
             "id": "IGHV1S68*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S68*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -12801,15 +12989,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGACTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAAACTGGGTGAAGCTGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATATTTATCCTGGTAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 717,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M21470",
-            "confirmed": false,
+            "confirmed": False,
             "end": 357,
             "functionality": "F",
             "id": "IGHV10S4*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV10S4*01",
             "imgt family name": "IGHV10",
             "length": 300,
@@ -12820,7 +13008,7 @@
             "sequence": "GAGGTGCAGCTTGTTGAGACTGGTGGAGGATTGGTGCAGCCTAAAGGGTCATTGAAACTCTCATGTCCAGCCTCTGGATTCAGCTTCAATACCAATGCCATGAACTGGGTCCGCCAGGCTCCAGGAAAGGGTTTGGAATGGGTTGCTCGCATAAGAAGTAAAAGTAATAATTATGCAACATATTATGCCGATTCAGTGAAAGACAGGTTCACCATCTCCAGAGATGATTCACAAAGCATGCTCTATCTGCAAATGAACAACTTGAAAACTGAGGACACAGCCATGTATTACTGTGTGAGA",
             "source": "imgt",
             "start": 57,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -12836,7 +13024,7 @@
             "sequence": "TCCCAGGTGCAGAATAAGTCAGGACCTGGCCTGGTGGAGCCCTCACAGAGCCTTTCCATCACATGCACTGTCTATTGGTTCTCGTTAACCAGCTATGGTGTAAGCTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGAAGTGGCTGGGAGTAATATGGGCTGGTGGAAGCACAAATTATAATTCAGCTCTCATATCCAGACTGAGCATCAGCAAGGACAACTCCAAGAGCCAAGTTTTCTTAAAAATGAACAGTCTGCAAACTGATGACACAGCCATATACTACTGTGTAAGA",
             "source": "igblast",
             "start": 899485,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -12852,15 +13040,15 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAGGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTCCTGGCTATACCTTCACCAGCCACTGGATGCAGTGGGTAAGACAGAGGCCTGGACAGGGCCTTGAGTGGATTGGAGAGATTTTTCCTGGAAGTGGTAGTACTTATTATAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 827982,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K00694",
-            "confirmed": true,
+            "confirmed": True,
             "end": 165,
             "functionality": "F",
             "id": "IGHV6S4*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV6S4*01",
             "imgt family name": "IGHV6",
             "length": 165,
@@ -12871,16 +13059,16 @@
             "sequence": "GAGTCTGGAGGAGGCTTGGTGCAACCTGGAGGATCCATGAAACTCTCCTGTGTTGCCTCTGGATTCACTTTCAGTAACTACTGGATGAACTGGGTCCGCCAGTCTCCAGAGAAGGGGCTTGAGTGGGTTGCTGAAATTAGATTGAAATCTGGTTATGCAACACAT",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1111091,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a8.22",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6*02",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -12892,16 +13080,16 @@
             "source": "imgt",
             "start": 1110798,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 474515,
             "functionality": "P",
             "id": "IGHV(III)-6*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-6*01",
             "length": 288,
             "name": "IGHV(III)-6*01",
@@ -12911,17 +13099,17 @@
             "source": "imgt",
             "start": 474227,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF120460",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.1b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-2*03",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -12933,15 +13121,15 @@
             "source": "imgt",
             "start": 0,
             "strain": "C57BL/6",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M13789",
-            "confirmed": true,
+            "confirmed": True,
             "end": 210,
             "functionality": "F",
             "id": "IGHV1S37*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S37*01",
             "imgt family name": "IGHV1",
             "length": 210,
@@ -12952,17 +13140,17 @@
             "sequence": "CTGCAGCAGTCTGGGCCTCAGCTGGTTAGCCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGTCTTGAGTGGATTGGCATGATTGATCCTTCCGATAGTGAAACTAGGTTAAATCAGAAGTTCAAGGACAAGGCCACATTGACTGTAGAC",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF304551",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.g",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-56*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -12974,15 +13162,15 @@
             "source": "imgt",
             "start": 0,
             "strain": "BALB/c",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 2354480,
             "functionality": "F",
             "id": "IGHV2-6*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6*03",
             "imgt family name": "IGHV2",
             "length": 291,
@@ -12994,8 +13182,8 @@
             "source": "imgt",
             "start": 2354189,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -13011,7 +13199,7 @@
             "sequence": "CAGATTCAGCTTAAGGAGTCTGGACCTGCTGTCATCAAGCCATCACAGTCACTGTCTCTCACCTGCATAGTCTCTGGATTCTCCATCACAAGTAGTAGTTATTGCTGGCACTGGATCCGCCAGCCCCCAGGAAAGGGGTTAGAGTGGATGGGGCGCATATGTTATGAAGGTTCAATATACTATAGTCCATCCATCAAAAGCCGCAGCACCATCTCCAGAGACACATCTCTGAACAAATTCTTTATCCAGCTGAGCTCTGTGACAAATGAGGACACAGCCATGTACTACTGTTCCAGGGAAAACC",
             "source": "igblast",
             "start": 361155,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -13027,15 +13215,15 @@
             "sequence": "CAGGTGCAGCTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATCACATGCACTGTCTCAGGGTTCTCATTAACCAGCTATGGTGTAAGCTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTAATATGGGGTGACGGGAGCACAAATTATCATTCAGCTCTCATATCCAGACTGAGCATCAGCAAGGATAACTCCAAGAGCCAAGTTTTCTTAAAACTGAACAGTCTGCAAACTGATGACACAGCCACGTACTACTGTGCCAAACC",
             "source": "igblast",
             "start": 2459779,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 58527,
             "functionality": "P",
             "id": "IGHV1-8*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-8*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13047,8 +13235,8 @@
             "source": "imgt",
             "start": 58233,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AF455930",
@@ -13064,7 +13252,7 @@
             "sequence": "TCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTTACTAGCTACTGGATGCACTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATTGGATACATTAATCCTAGCAGTGGTTATACTAAGTACAATCAGAAGTTCAAGGACAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTGAGCAGCCTGACATATGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "U04228",
@@ -13080,16 +13268,16 @@
             "sequence": "GGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGCCATGTCTTGGGTTCGCCAGACTCCAGAGAAGAGGCTGGAGTGGGTCGCATCCATTAGTAGTGGTGGTAGCACCTACTATCCAGACAGTGTGAAGGGCCGATTCACCATCTCCAGAGATAATGCCAGGAACATCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1080353,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a9.26",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-6-1*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -13101,17 +13289,17 @@
             "source": "imgt",
             "start": 1080060,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1203718,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a7.10",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6-1*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -13123,16 +13311,16 @@
             "source": "imgt",
             "start": 1203422,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "L26930",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "F",
             "id": "IGHV1-55*04",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-55*04",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -13143,15 +13331,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATAACCTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGATACTCATCCTGGTAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26881",
-            "confirmed": true,
+            "confirmed": True,
             "end": 954,
             "functionality": "F",
             "id": "IGHV1S82*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S82*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -13162,7 +13350,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGAGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACTCCTTCACCAGCTACTGGATGAACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGCATGATTCATCCTTCCGATAGTGAAACTAGGTTAAATCAGAAGTTCAAGGACAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 702,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303875",
@@ -13178,15 +13366,15 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGGGCTGAACTGGCAAGACCTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTTACTAGCTACACGATGCACTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATTGGATACATTAATCCTAGCAGTGGTTATACTAATTACAATCAGAAGTTCAAGGACAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAACTGAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAAT",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160990",
-            "confirmed": true,
+            "confirmed": True,
             "end": 98416,
             "functionality": "F",
             "id": "IGHV1-82*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-82*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13198,8 +13386,8 @@
             "source": "imgt",
             "start": 98122,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -13215,7 +13403,7 @@
             "sequence": "GAGGTCCAGCTTCAGCAGTCTGGAGCTGAGCTGGTGAGGCCTGGGTCCTCAGTGAAGATGTCCTGCAAGACTTCTGGATATACATTCACAAGCTACGGTATAAACTGGGTGAAGCAGAGGCCTGGACAGGGCCTGGAATGGATTGGATATATTTATATTGGAAATGGTTATACTGAGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTTCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAATCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 758618,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -13231,15 +13419,15 @@
             "sequence": "GAGGTGAAGCTTCTCGAGTCTGGAGGTGGCCTGGTGCAGCCTGGAGGATCCCTGAAACTCTCCTGTGCAGCCTCAGGATTCGATTTTAGTAAAGACTGGATGAGTTGGGTCCGGCAGGCTACAGGGAAAGGGCTAGAATGAATTGGAGAAATTAATCCAGGTAGCAGTACGATAAACTATACTCCATCTCTAAAGGATAAATTCATCATCTCCAGAGACAACGCCAAAAATACGCTGTACCTGCAAATGAGCAAAGTGAGATCTGAGGACACAGCCCTTTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 2057672,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 684383,
             "functionality": "F",
             "id": "IGHV1-62-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-62-1*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13251,8 +13439,8 @@
             "source": "imgt",
             "start": 684089,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -13268,15 +13456,15 @@
             "sequence": "CAGGTCCAGCTGAAGCAGTCTGGAGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGCCTTGAGTGGATTGGAAAGATTGGTCCTGGAAGTGGTAGTACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 209891,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 44160,
             "functionality": "O",
             "id": "IGHV8-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-4*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -13288,8 +13476,8 @@
             "source": "imgt",
             "start": 43859,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303839",
@@ -13305,16 +13493,16 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGAGCTTCAATGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACACCATGAACTGGGTGAAGCAGAGCCATGGAAAGAACCTTGAGTGGATTGGACTTATTAATCCTTACAATGGTGGTAATAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTAACTGTAGACAAGTCATCCAGCACAGCCTACATGGAGCTCCTCAGTCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 792327,
             "family": "Q52",
             "functionality": "F",
             "id": "VHQ52.a21.63",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-2-2*01",
             "imgt family name": "IGHV2",
             "length": 293,
@@ -13326,16 +13514,16 @@
             "source": "imgt",
             "start": 792034,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160990",
-            "confirmed": true,
+            "confirmed": True,
             "end": 50926,
             "functionality": "F",
             "id": "IGHV1-85*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-85*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13347,16 +13535,16 @@
             "source": "imgt",
             "start": 50632,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC079181",
-            "confirmed": true,
+            "confirmed": True,
             "end": 135808,
             "functionality": "P",
             "id": "IGHV1-41*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-41*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13367,8 +13555,8 @@
             "source": "imgt",
             "start": 135514,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -13384,15 +13572,15 @@
             "sequence": "CAGATTACTCAGAAAGAGTCTGGCCCTGGGATATTGCAGCCCTCCCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAGCACTTCTGGTATGGGTGTAGGCTGGATTCATCAGCCTTCAGGGAATGGTCTGGAGTGGCTGGCACACATTTGGTGGAATGATAATAAGTACTATAACACAGCCCTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAACAACCAGGTATTCCTCAAGATCGCCAGTGTGGACACTGCAGATACTGCCACATACTACTGTGCTCGAATAG",
             "source": "igblast",
             "start": 503628,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1019194,
             "functionality": "P",
             "id": "IGHV(II)-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(II)-3*01",
             "length": 291,
             "name": "IGHV(II)-3*01",
@@ -13402,16 +13590,16 @@
             "source": "imgt",
             "start": 1018903,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 168790,
             "functionality": "O",
             "id": "IGHV1-16*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-16*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13423,16 +13611,16 @@
             "source": "imgt",
             "start": 168496,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC074329",
-            "confirmed": true,
+            "confirmed": True,
             "end": 161477,
             "functionality": "F",
             "id": "IGHV1-54*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-54*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13444,16 +13632,16 @@
             "source": "imgt",
             "start": 161183,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AJ972404",
-            "confirmed": true,
+            "confirmed": True,
             "end": 149499,
             "functionality": "F",
             "id": "IGHV6-7*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-7*02",
             "imgt family name": "IGHV6",
             "length": 300,
@@ -13465,16 +13653,16 @@
             "source": "imgt",
             "start": 149199,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "X02460",
-            "confirmed": true,
+            "confirmed": True,
             "end": 580,
             "functionality": "P",
             "id": "IGHV1S28*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S28*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13485,8 +13673,8 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGAAGTCCTGCAAGGTTTCTGGATACACCTTCGCTAACTACTGGATAGGTTGGGTAAAGCAGAGGCCTGGACATGGCCTTGAGTGGATTGGAGATATTTACCCTGGAGACGGTGTTACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGTAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTTCGAGA",
             "source": "imgt",
             "start": 286,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -13502,7 +13690,7 @@
             "sequence": "GAGGTGAAGCTGATGGAGTCTGGAGGAGGCTTGGTACAGCCTGGGGCTTCTCTGAGACTCTCCTGTGAAGCTTCTGGATTCACCTTCACTGATTACTACATGAGCTGGGTCCGCCAGCCTCCAGGGAAGTCACCTGAGTGGTTGGCTTTGATTAGAAACAAAGCTAATGGCTATACAACAGAGTATAGTGCATCTGTTAAGGGTCGGTTCACCATCTCCAGAGATAATTCTCAAAACATCCTCTATCTTCAAATGAACACCCTGAGAGCTGAGGCCAGTGCCACTTATTACTGTGCAAAAGATGTA",
             "source": "igblast",
             "start": 214751,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -13518,7 +13706,7 @@
             "sequence": "GTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTAAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACATTCACTGACTACTACATGCACTGGGTGAAGCAGAAGCCTGGGAAGGGCCTTGAGTGGATTGGAGAGATTTATCCTGGAAGTGGTAATACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 108190,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -13534,7 +13722,7 @@
             "sequence": "CAGGTTCAGCTGCAGCAGTCTGGGGCTGAGCTGGTGAAGCCTGGGGCCTCAGTGAAGATTTCCTGCAAAGCTTCTGGCTACGCATTCAGTAGCTACTGGATGAACTGGGTGAAGCAGAGGCCTGGAAAGGGTCTTGAGTGGATTGGACAGATTTATCCTGGAGATGGTGATACTAACTACAACGGAAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 159659,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF428078",
@@ -13550,7 +13738,7 @@
             "sequence": "GGCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTTACATTCAGTAGCCATTTCATGGCATGGGTCCGCCAAACTCCAGAGAAAAGACTGGAGTGGGCCGCAAACATTTATCCTGATGGTGGTACCGCCTACTATCCAAACACTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAGGAATATCATGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGTAAGACAAGACA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -13566,15 +13754,15 @@
             "sequence": "CAGCGTGAGCTGCAGCAGTCTGGAGCTGAGTTGGTGAGACCTGGGTCCTCAGTGAAGTTGTCCTGCAAGGATTCTTACTTTGCCTTCATGGCCAGTGCTATGCACTGGGTGAAGCAAAGACCTGGACATGGCCTGGAATGGATAGGATCTTTTACTATGTACAGTGATGCTACTGAGTACAGTGAAAACTTCAAGGGCAAGGCCACATTGACTGCAAACACATCCTCGAGCACAGCCTACATGGAACTCAGCAGCCTCACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1015560,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
-            "confirmed": true,
+            "confirmed": True,
             "end": 666656,
             "functionality": "O",
             "id": "IGHV8-8-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-8-1*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -13586,16 +13774,16 @@
             "source": "imgt",
             "start": 666355,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 132758,
             "functionality": "F",
             "id": "IGHV12-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-3*01",
             "imgt family name": "IGHV12",
             "length": 300,
@@ -13607,16 +13795,16 @@
             "source": "imgt",
             "start": 132458,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC074329",
-            "confirmed": true,
+            "confirmed": True,
             "end": 113289,
             "functionality": "F",
             "id": "IGHV1-52*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-52*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13628,8 +13816,8 @@
             "source": "imgt",
             "start": 112995,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -13645,16 +13833,16 @@
             "sequence": "GAGGTCCAGCTGCAACAATCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGTAAGGCTTCTGGATACACGTTCACTGACTACTACATGAACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1282414,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF305910",
-            "confirmed": true,
+            "confirmed": True,
             "end": 608,
             "family": "J558",
             "functionality": "F",
             "id": "VHF102",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-84*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13665,15 +13853,15 @@
             "sequence": "CAGATCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACTACTATATAAACTGGGTGAAGCAGAAGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAAGCGGTAATACTAAGTACAATGAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACACTGCTGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 314,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 67499,
             "functionality": "F",
             "id": "IGHV15-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV15-2*01",
             "imgt family name": "IGHV15",
             "length": 297,
@@ -13685,16 +13873,16 @@
             "source": "imgt",
             "start": 67202,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L33959",
-            "confirmed": true,
+            "confirmed": True,
             "end": 968,
             "functionality": "F",
             "id": "IGHV1S112*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S112*02",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -13705,15 +13893,15 @@
             "sequence": "GAGGTCCAGCTGCAACAGTTTGGAGCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGATACACATTCACTGACTACAACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGGTATTAATCCTAACAATGGTGCTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCA",
             "source": "imgt",
             "start": 715,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33946",
-            "confirmed": true,
+            "confirmed": True,
             "end": 966,
             "functionality": "F",
             "id": "IGHV1S107*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S107*01",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -13724,7 +13912,7 @@
             "sequence": "GAGGTCCAGCTGCAACAATCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGTAAGGCTTCTGGATACAAATTCACTGATTACTACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAACA",
             "source": "imgt",
             "start": 713,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -13740,7 +13928,7 @@
             "sequence": "CAGGTCCAGCTGAAGCAGTCTGGGGCTGAGCTGGTGAGGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACTTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGCAAGGATTTATCCTGGAAGTGGTAATACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGAAAAATCCTCCAGCACTGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCTGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 223877,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF455976",
@@ -13756,16 +13944,16 @@
             "sequence": "CTCAGTCAAGTTGTCCTGCACAGCTTCTGGCTTCAACATTAAAGACTACTATATGCACTGGGTGAAGCAGAGGACTGAACAGGGCCTGGAGTGGATTGGAAGGATTGATCCTGAGGATGGTGAAACTAAATATGCCCCGAAATTCCAGGGCAAGGCCACTATAACAGCAGACACATCCTCCAACACAGCCTACCTGCAGCTCAGCAGCCTGACATCTGAGGACACTGCCGTCTATTACTGTGCTAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 871240,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.a33.55",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-6-4*01",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -13777,16 +13965,16 @@
             "source": "imgt",
             "start": 870944,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073589",
-            "confirmed": true,
+            "confirmed": True,
             "end": 131158,
             "functionality": "P",
             "id": "IGHV15-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV15-1*01",
             "imgt family name": "IGHV15",
             "length": 291,
@@ -13797,16 +13985,16 @@
             "source": "imgt",
             "start": 130867,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC163348",
-            "confirmed": true,
+            "confirmed": True,
             "end": 7755,
             "functionality": "P",
             "id": "IGHV8-13*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV8-13*01",
             "imgt family name": "IGHV8",
             "length": 301,
@@ -13818,17 +14006,17 @@
             "source": "imgt",
             "start": 7454,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X02458",
-            "confirmed": true,
+            "confirmed": True,
             "end": 394,
             "family": "J558",
             "functionality": "F",
             "id": "H30",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S26*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -13839,8 +14027,8 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGGGCTGAACTGGTCAAGACTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTTACTAGCTACACGATGCACTGGGTAAAACAGAGGCCTGGACAGGGTCTGGAATGGATTGGATACATTAATCCTAGCAGTGGTTATACTAATTACAATCAGAAGTTCAAGGACAAGGCCACATTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAACTGAGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 100,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "U23020",
@@ -13856,16 +14044,16 @@
             "sequence": "CAGGTTACTCTGAAAGAGTCTGGCCCTGGGATATTGCAGCCCTCCCAGACCCTCAGTCTGACTTGTTCTTTCTCTGGGTTTTCACTGAGCACTTCTAATATGGGTATAGGCTGGATTCGTCAGCCTTCAGGGAAGGGTCTAGAGTGGCTGGCACACATTTGGTGGAATGATGATAAGTACTATAACCCATCCCTGAAGAGCCGGCTCACAATCTCCAAGGATACCTCCAACAACCAGGTATTCCTCAAGATCACCACTGTGGACACTGCAGATACTGCCACATAC",
             "source": "igblast",
             "start": 1,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF120472",
-            "confirmed": true,
+            "confirmed": True,
             "end": 295,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.3b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-9*04",
             "imgt family name": "IGHV5",
             "length": 295,
@@ -13877,15 +14065,15 @@
             "source": "imgt",
             "start": 0,
             "strain": "C57BL/6",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ972404",
-            "confirmed": true,
+            "confirmed": True,
             "end": 90702,
             "functionality": "F",
             "id": "IGHV6-3*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-3*02",
             "imgt family name": "IGHV6",
             "length": 299,
@@ -13897,16 +14085,16 @@
             "source": "imgt",
             "start": 90403,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L26934",
-            "confirmed": true,
+            "confirmed": True,
             "end": 958,
             "functionality": "F",
             "id": "IGHV1S95*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S95*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -13917,15 +14105,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAAGGATTGATCCTGGTAGTAGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCATC",
             "source": "imgt",
             "start": 706,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ972404",
-            "confirmed": true,
+            "confirmed": True,
             "end": 59110,
             "functionality": "F",
             "id": "IGHV13-2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV13-2*02",
             "imgt family name": "IGHV13",
             "length": 302,
@@ -13937,8 +14125,8 @@
             "source": "imgt",
             "start": 58808,
             "strain": "129/Sv",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "X53338",
@@ -13954,15 +14142,15 @@
             "sequence": "CAGATGCAGCTTCAGGAGTCAGGACCTGGCCTGGTGAAACCCTCACAGTCACTCTTCCTTACCTGCTCTATTACTGGTTTCCCCATCACCAGTGGTTACTACTGGATCTGGATCCGTCAGTCACCTGGGAAACCCCTAGAATGGATGGGGNACATCACTCATAGTGGGGNAACTTTCTACAACCCATCTCTCCAGAGCNCCATCTCCATTACTAGAGAAACGTCAAAGAACCAGTTCTTCCTCCAATTGAACTCTGTGACCACAGAGGACACAGCCATGTATTACTGTGCAGGAGACAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 163416,
             "functionality": "F",
             "id": "IGHV14-2*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV14-2*01",
             "imgt family name": "IGHV14",
             "length": 294,
@@ -13974,8 +14162,8 @@
             "source": "imgt",
             "start": 163122,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF455983",
@@ -13991,15 +14179,15 @@
             "sequence": "CAAGGCTTCTGGATTCACATTCACTGACTACTACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGACTTGTTTATCCTTACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGGAGCTAAACAGCCTGACTTCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L33942",
-            "confirmed": true,
+            "confirmed": True,
             "end": 966,
             "functionality": "F",
             "id": "IGHV1S103*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S103*01",
             "imgt family name": "IGHV1",
             "length": 253,
@@ -14010,15 +14198,15 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGAACTGGGTGAAGCAAAGTCCTGAAAAGAGCCTTGAGTGGATTGGAGAGATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCA",
             "source": "imgt",
             "start": 713,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 990187,
             "functionality": "P",
             "id": "IGHV5-5-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-5-1*01",
             "imgt family name": "IGHV5",
             "length": 282,
@@ -14029,16 +14217,16 @@
             "source": "imgt",
             "start": 989905,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M19402",
-            "confirmed": true,
+            "confirmed": True,
             "end": 304,
             "functionality": "F",
             "id": "IGHV1S44*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S44*01",
             "imgt family name": "IGHV1",
             "length": 204,
@@ -14049,15 +14237,15 @@
             "sequence": "GAGATCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACATTCACTGACTACTACATGCACTGGGTGAAGCAGAGCAATGGAAAGAGCCTTGAGTGGATTGGATATATTAATCCTTATAATGATTATACTAGCTACAACCAGAAGTTCAATGGCAAGGCC",
             "source": "imgt",
             "start": 100,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X02462",
-            "confirmed": true,
+            "confirmed": True,
             "end": 557,
             "functionality": "P",
             "id": "IGHV1S30*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S30*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14068,17 +14256,17 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAAGCTGGGGCCTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACTCATTCACTGGCTACTACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGAGAAATTAATCCTTACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCGTACATGGAGCTCCACAGCCTGACATCTGAGGACTCTTTGGTCTATTACTGTGCAAGA",
             "source": "imgt",
             "start": 263,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "X02459",
-            "confirmed": true,
+            "confirmed": True,
             "end": 394,
             "family": "J558",
             "functionality": "F",
             "id": "H13-3",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-4*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14090,16 +14278,16 @@
             "source": "imgt",
             "start": 100,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1216283,
             "functionality": "P",
             "id": "IGHV5-5*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-5*02",
             "imgt family name": "IGHV5",
             "length": 294,
@@ -14110,8 +14298,8 @@
             "source": "imgt",
             "start": 1215989,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -14127,7 +14315,7 @@
             "sequence": "CAGGTCCAGCTACAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTACACCTTCACTGACTACTATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTTTCCTGGAAGTGGTAGTACTTACTACAATGAGAAGTTCAAGGGCAAGGCCACACTTACTGTAGACAAATCCTCCAGCACAGCCTACATGTTGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 237810,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -14143,16 +14331,16 @@
             "sequence": "CAGATTACTCTGAAACAGTCTGGCCCTGGGATAGTGCAGCCATCCCAGCCCGTCAGACTTACTTGCACTTTCTCTGGGTTTTCACTGAGCACTTCTGGTATAGGTGTAACCTGGATTCGTCAGCCCTCAGGGAAGGGTCTGGAGTGGCTGGCAACCATTTGGTGGGATGATGATAACCGCTACAACCCATCTCTAAAGAGCAGGCTCGCAGTCTCCAAAGACACCTCCAACAACCAAGCATTCCTGAATATCATCACTGTGGAAACTGCAGATACTGCCATATACTACTGTGCTCAGAGTG",
             "source": "igblast",
             "start": 1046757,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF304554",
-            "confirmed": true,
+            "confirmed": True,
             "end": 294,
             "family": "J558",
             "functionality": "F",
             "id": "J558.j",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S134*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14163,15 +14351,15 @@
             "sequence": "GAGGTCCAGCTTCAGCAGTCTGGAGCTGAGCTGGGGAGGCCTGGGTCCTCAGTGAAGCTGTCCTGCAAGACTTCTGGATATACATTCACAAGCTATGGTATAAAGTGGGTGAAACAGAGGCCTGGACAGGGCCTGGAATGGATTGGATATATTTATCCTGGAAATGGTTATACTGTGTACAATGAGAAGTTCCAGGGCAAGGCCACACTGACTTCAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGAAGCCTGACATCTGAGGACTCTGCAATCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26877",
-            "confirmed": true,
+            "confirmed": True,
             "end": 961,
             "functionality": "F",
             "id": "IGHV1-55*02",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1-55*02",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -14182,15 +14370,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGACCTGGGTGAAGCAGAGGCCTGGACAAGGTCTTGAGTGGATTGGAGATATTTATCCTGGTAGTGGTAGTACTAACTACAATGAGAAATTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGC",
             "source": "imgt",
             "start": 709,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 816422,
             "functionality": "P",
             "id": "IGHV5-13*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-13*02",
             "imgt family name": "IGHV5",
             "length": 295,
@@ -14201,16 +14389,16 @@
             "source": "imgt",
             "start": 816127,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160990",
-            "confirmed": true,
+            "confirmed": True,
             "end": 41295,
             "functionality": "P",
             "id": "IGHV1-86*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-86*01",
             "imgt family name": "IGHV1",
             "length": 296,
@@ -14221,8 +14409,8 @@
             "source": "imgt",
             "start": 40999,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AF303878",
@@ -14238,7 +14426,7 @@
             "sequence": "GAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTAAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACATTCACTAGCTATGTTATGCACTGGGTGAAGCAGAAGCCTGGGCAGGGCCTTGAGTGGATTGGATATATTAATCCTTACAATGATGGTACTAAGTACAATGAGAAGTTCAAAGGCAAGGCCACACTGACTTCAGACAAATCCTCCAGCACAGCCTACATGGAGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AY169688",
@@ -14254,7 +14442,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCTACACTGGAGAGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACATGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 425,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303847",
@@ -14270,7 +14458,7 @@
             "sequence": "CAGGTCCAGTTGCAGCAGTCTGGAGCTGAGCTGGTAAGGCCTGGGACTTCAGTGAAGATATCCTGCAAGGCTTCTGGTTACACCTTCACTAACTACTGGCTAGGTTGGGTAAAGCAGAGGCCTGGACATGGACTTGAGTGGATTGGAGATATTTACCCTGGAGGTGGTTATACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACACATCCTCCAGCACTGCCTACATGCAGCTCAGTAGCCTGACATCTGAGGACTCTGCTGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -14286,7 +14474,7 @@
             "sequence": "CAGGTGCAGCTGAAGGAGTCAGGACCTGGCCTGGTGGCGCCCTCACAGAGCCTGTCCATCACATGCACCGTCTCAGGGTTCTCATTAACCAGCTATGGTGTACACTGGGTTCGCCAGCCTCCAGGAAAGGGTCTGGAGTGGCTGGTAGTGATATGGAGTGATGGAAGCACAACCTATAATTCAGCTCTCAAATCCAGACTGAGCATCAGCAAGGACAACTCCAAGAGCCAAGTTTTCTTAAAAATGAACAGTCTCCAAACTGATGACACAGCCATGTACTACTGTGCCAGACA",
             "source": "igblast",
             "start": 2354189,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -14302,7 +14490,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAGGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAACTGCTGGAATGCAGTGGGTGCAAAAGATGCCAGGAAAGGGTTTGAAGTGGATTGGCTGGATAAACACCCACTCTGGAGTGCCAAAATATGCAGAAGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCATATTTACAGATAAGCAACCTCAAAAATGAGGACACGGCTACGTATTTCTGTGCGAGA",
             "source": "igblast",
             "start": 156087,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -14318,7 +14506,7 @@
             "sequence": "GAGGTCCAGCTGCAACAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACATTCACTGACTACAACATGCACTGGGTGAAGCAGAGCCATGGAAAGAGCCTTGAGTGGATTGGATATATTAACCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAAACAAGTCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCGGAGGATTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 1324513,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "U39294",
@@ -14334,15 +14522,15 @@
             "sequence": "CAGGTTCACCTACAACAGTCTGGTTCTGAACTGAGGAGTCCTGGGTCTTCAGTAAAGCTTTCATGCAAGGATTTTGATTCAGAAGTCTTCCCTATTGCTTATATGAGTTGGGTTAGGCAGAAGCCTGGGCATGGATTTGAATGGATTGGAGACATACTCCCAAGTATTGGTAGAACAATCTATGGAGAGAAGTTTGAGGACAAAGCCACACTGGATGCAGACACAGTGTCCAACACAGCCTACTTGGAGCTCAACAGTCTGACATCTGAGGACTCTGCTATCTACTACTGTGCAAGG",
             "source": "igblast",
             "start": 54,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC079273",
-            "confirmed": true,
+            "confirmed": True,
             "end": 83384,
             "functionality": "P",
             "id": "IGHV7-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV7-1*01",
             "imgt family name": "IGHV7",
             "length": 300,
@@ -14354,16 +14542,16 @@
             "source": "imgt",
             "start": 83084,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "X00163",
-            "confirmed": true,
+            "confirmed": True,
             "end": 543,
             "functionality": "F",
             "id": "IGHV5-9*03",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5-9*03",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -14375,8 +14563,8 @@
             "source": "imgt",
             "start": 247,
             "strain": "BALB/c",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "J00530",
@@ -14392,16 +14580,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTATTGTGCAAGA",
             "source": "igblast",
             "start": 205,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF120459",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "family": "7183",
             "functionality": "F",
             "id": "VH7183.11b",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-15*04",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -14413,17 +14601,17 @@
             "source": "imgt",
             "start": 0,
             "strain": "C57BL/6",
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF290967",
             "allele name": "VH37.1",
-            "confirmed": true,
+            "confirmed": True,
             "end": 427,
             "family name": "7183",
             "functionality": "F",
             "id": "VH37.1",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV5S4*02",
             "imgt family name": "IGHV5",
             "length": 296,
@@ -14434,8 +14622,8 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGAAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGGCATGTCTTGGGTTCGCCAGACTCCGGAGAAGAGGCTGGAGTGGGTCGCAACCATTAGTGGTGGTGGTAGTTACACCTACTATCCAGACAGTGTGAAGGGGCGATTCACCATCTCCAGAGACAATGCCAAGAACAACCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACGGCCTTGTATTACTGTGCAAGACA",
             "source": "imgt",
             "start": 131,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ240294",
@@ -14451,7 +14639,7 @@
             "sequence": "CAGCAGCCTGGGGCTGAGCTGGTGAGGCCTGGGACTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTAAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATCGGAGTGATTGATCCTTCTGATAGTTATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -14467,7 +14655,7 @@
             "sequence": "CAGGTTCAACTGCAGCAGTCTGGGGCTGAGCTGGTGAGGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCGGGCTACACATTTACTGACTATGAAATGCACTGTGTGAAGCAGACACCTGTGCACGGCCTGGAATGGATTGGAGCTATTGATCCTGAAACTTGTGGTACTGCCTACAATCAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCCGTCTATTACTGTACAAGA",
             "source": "igblast",
             "start": 1306336,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -14483,15 +14671,15 @@
             "sequence": "CAGGCTTATCTACAGCAGTCTGGGGCTGAGCTGGTGAGGCCTGGGGCCTCAGTGAAGATGTCCTGCAAGGCTTCTGGCTACACATTTACCAGTTACAATATGCACTGGGTAAAGCAGACACCTAGACAGGGCCTGGAATGGATTGGAGCTATTTATCCAGGAAATGGTGATACTTCCTACAATCAGAAGTTCAAGGGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAAGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 1454964,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K00604",
-            "confirmed": true,
+            "confirmed": True,
             "end": 498,
             "functionality": "P",
             "id": "IGHV1S16*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S16*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14502,16 +14690,16 @@
             "sequence": "CAGGTCCAACTCCAGCAGCCTGGGGCTAAGCTGGTGAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGGAGTAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTAATCCTAGCAATGGTGGTACTAACTACAATGAGAAGTTCAAGAGAAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTACAATA",
             "source": "imgt",
             "start": 204,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073563",
-            "confirmed": true,
+            "confirmed": True,
             "end": 176006,
             "functionality": "F",
             "id": "IGHV11-1*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV11-1*01",
             "imgt family name": "IGHV11",
             "length": 296,
@@ -14523,16 +14711,16 @@
             "source": "imgt",
             "start": 175710,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "M13788",
-            "confirmed": true,
+            "confirmed": True,
             "end": 474,
             "functionality": "F",
             "id": "IGHV1S36*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S36*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14543,8 +14731,8 @@
             "sequence": "CCGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTAAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAATATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAACCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTACAAGA",
             "source": "imgt",
             "start": 180,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AY169680",
@@ -14560,15 +14748,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACCAACTATGCAATGCACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATATACACCAACACTGGAGAGCCAACATATGCTGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACATGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 426,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 392230,
             "functionality": "P",
             "id": "IGHV12-2*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV12-2*02",
             "imgt family name": "IGHV12",
             "length": 312,
@@ -14579,16 +14767,16 @@
             "source": "imgt",
             "start": 391918,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC090843",
-            "confirmed": true,
+            "confirmed": True,
             "end": 118768,
             "functionality": "F",
             "id": "IGHV1-12*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-12*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14600,16 +14788,16 @@
             "source": "imgt",
             "start": 118474,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "J00532",
-            "confirmed": true,
+            "confirmed": True,
             "end": 499,
             "functionality": "F",
             "id": "IGHV1-72*04",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-72*04",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14620,16 +14808,16 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACGAGGCCTTGAGTGGATTGGAAGGATTGATCCTAATAGTGGTGGTACTAAGTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCCGCGGTCCATTATTGTGCAAGA",
             "source": "imgt",
             "start": 205,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 19852,
             "functionality": "F",
             "id": "IGHV3-4*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV3-4*01",
             "imgt family name": "IGHV3",
             "length": 299,
@@ -14641,16 +14829,16 @@
             "source": "imgt",
             "start": 19553,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 57187,
             "functionality": "F",
             "id": "IGHV1-31*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-31*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14662,8 +14850,8 @@
             "source": "imgt",
             "start": 56893,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -14679,7 +14867,7 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACCAACACTGGAGAGCCAACATATGCTGAAGAGTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 372039,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X01437",
@@ -14695,7 +14883,7 @@
             "sequence": "GAGGTGAAGCTTCTCGAGTCTGGAGGTGGCCTGGTGCAGCCTGGAGGATCCCTGAATCTCTCCTGTGCAGCCTCAGGATTCGATTTTAGTAGATACTGGATGAGTTGGGCTCGGCAGGCTCCAGGGAAAGGGCAGGAATGGATTGGAGAAATTAATCCAGGAAGCAGTACGATAAACTATACGCCATCTCTAAAGGATAAATTCATCATCTCCAGAGACAACGCCAAAAATACGCTGTACCTGCAAATGAGCAAAGTGAGATCTGAGGACACAGCCCTTTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "U04230",
@@ -14711,15 +14899,15 @@
             "sequence": "GGCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTAGCTATGGCATGTCTTGGGTTCGCCAGACTCCAGACAAGAGGCTGGAGTTGGTCGCAACCATTAATAGTAATGGTGGTAGCACCTATTATCCAGACAGTGTGAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGCAAATGAGCAGTCTGAAGTCTGAGGACACAGCCATGTATTACTGTGCAAGAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "X02465",
-            "confirmed": true,
+            "confirmed": True,
             "end": 268,
             "functionality": "F",
             "id": "IGHV1S33*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S33*01",
             "imgt family name": "IGHV1",
             "length": 268,
@@ -14730,8 +14918,8 @@
             "sequence": "CTGCAGCAGTCTGGACCTGAGCTGGTGAAGCCTGGGGCTTTAGTGAAGATATCCTGCAAGGCTTCTGGTTACACCTTCACAAGCTACGATATAAACTGGGTGAAGCAGAGGCCTGGACAGGGACTTGAGTGGATTGGATGGATTTATCCTGGAGATGGTAGTACTAAGTACAATGAGAAATTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACTTCTGAGAACTCTGCAG",
             "source": "imgt",
             "start": 0,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
@@ -14747,7 +14935,7 @@
             "sequence": "CAGGTGCAGCTGAAGCAGTCAGGACCTGGCCTAGTGCAGCCCTCACAGAGCCTGTCCATAACCTGCACAGTCTCTGGTTTCTCATTAACTAGCTATGGTGTACACTGGGTTCGCCAGTCTCCAGGAAAGGGTCTGGAGTGGCTGGGAGTGATATGGAGAGGTGGAAGCACAGACTACAATGCAGCTTTCATGTCCAGACTGAGCATCACCAAGGACAACTCCAAGAGCCAAGTTTTCTTTAAAATGAACAGTCTGCAAGCTGATGACACTGCCATATACTACTGTGCCAAAAA",
             "source": "igblast",
             "start": 1143446,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ240382",
@@ -14763,15 +14951,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTTGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCAGTGGGTAAAACAGAGGCCTGGACAGGGCCTTGAGTGGATCGGAGAGATTGATCCTTCTGATAGCTATACTAACTACAATCAAAAGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "K00692",
-            "confirmed": true,
+            "confirmed": True,
             "end": 179,
             "functionality": "F",
             "id": "IGHV6S2*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV6S2*01",
             "imgt family name": "IGHV6",
             "length": 165,
@@ -14782,7 +14970,7 @@
             "sequence": "GATGTGAACTTGGAAGTGTCTGGAGGAGGCTTAGTTGGGCTTGGAGGATCCATGCAACGCTCTTGTGTAGACTCTGGATTTACTTTTGTAGATGGCTGGATGGACTGGGTCTGCCAGTCTCCAGAGAAGGGTCTTGAGTGGGTTGCTGAAATTGCAAACAAGCTA",
             "source": "imgt",
             "start": 14,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF459908",
@@ -14798,7 +14986,7 @@
             "sequence": "ACTTCAGTGAAGATGTCCTGCAAGGCTTCTGGATACACCTTCACTAACTACTGGATAGGTTGGGCAAAGCAGAGGCCTGGACATGGCCTTGAGTGGATTGGAGATATTTACCCTGGAGGTGGTTATACTAACTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTGCAGACAAATCCTCCAGCACAGCCTACATGCAGTTCAGCAGCCTGACATCTGAGGACTCTGCCATCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "BN000872",
@@ -14814,15 +15002,15 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAGCTGGTAAAGCCTGGGGCTTCAGTGAAGTTGTCCTGCAAGGCTTCTGGCTACACTTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAATGATTCATCCTAATAGTGGTAGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 563239,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC160985",
-            "confirmed": true,
+            "confirmed": True,
             "end": 131647,
             "functionality": "P",
             "id": "IGHV(III)-11*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV(III)-11*01",
             "length": 298,
             "name": "IGHV(III)-11*01",
@@ -14832,8 +15020,8 @@
             "source": "imgt",
             "start": 131349,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "L14368",
@@ -14849,15 +15037,15 @@
             "sequence": "CAGATCCAGTTGGTGCAGTCTGGACCTGAGCTGAAGAAGCCTGGAGAGACAGTCAAGATCTCCTGCAAGGCTTCTGGGTATACCTTCACAAACTATGGAATGAACTGGGTGAAGCAGGCTCCAGGAAAGGGTTTAAAGTGGATGGGCTGGATAAACACTGAGACTGGTGAGCCAACATATGCAGATGACTTCAAGGGACGGTTTGCCTTCTCTTTGGAAACCTCTGCCAGCACTGCCTATTTGCAGATCAACAACCTCAAAAATGAGGACACGGCTACATATTTCTGT",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "L26880",
-            "confirmed": true,
+            "confirmed": True,
             "end": 966,
             "functionality": "F",
             "id": "IGHV1S81*01",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV1S81*01",
             "imgt family name": "IGHV1",
             "length": 252,
@@ -14868,7 +15056,7 @@
             "sequence": "CAGGTCCAACTGCAGCAGCCTGGGGCTGAACTGGTGAAGCCTGGGGCTTCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACCAGCTACTGGATGCACTGGGTGAAGCAGAGGCCTGGACAAGGCCTTGAGTGGATTGGAGAGATTAATCCTAGCAATGGTCGTACTAACTACAATGAGAAGTTCAAGAGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAACTCAGC",
             "source": "imgt",
             "start": 714,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF303834",
@@ -14884,15 +15072,15 @@
             "sequence": "GAGGTCCAGCTGCAACAATCTGGACCTGAGCTGGTGAAGCCTGGGGCTTCAGTGAAGATGTCCTGTAAGGCTTCTGGATACACATTCACTGACTACTACATGAAGTGGGTGAAGCAGAGTCATGGAAAGAGCCTTGAGTGGATTGGAGATATTAATCCTAACAATGGTGGTACTAGCTACAACCAGAAGTTCAAGGGCAAGGCCACATTGACTGTAGACAAATCCTCCAGCACAGCCTACATGCAGCTCAACAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
             "source": "igblast",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AC073590",
-            "confirmed": true,
+            "confirmed": True,
             "end": 157949,
             "functionality": "F",
             "id": "IGHV6-3*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV6-3*01",
             "imgt family name": "IGHV6",
             "length": 299,
@@ -14904,8 +15092,8 @@
             "source": "imgt",
             "start": 157650,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -14921,15 +15109,15 @@
             "sequence": "GAGGTTCAGCTGCAGCAGTCTGGGGCAGAGCTTGTGAGGCCAGGGGCCTCAGTCAAGTTGTCCTGCACAGCTTCTGGCTTCAACATTAAAGACTACTATATGCACTGGGTGAAGCAGAGGCCTGAACAGGGCCTGGAGTGGATTGGAAGGATTGATCCTGAGGATGGTGATACTGAATATGCCCCGAAGTTCCAGGGCAAGGCCACTATGACTGCAGACACATCCTCCAACACAGCCTACCTGCAGCTCAGCAGCCTGACATCTGAGGACACTGCCGTCTATTACTGTACTACA",
             "source": "igblast",
             "start": 2138902,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M17574",
-            "confirmed": true,
+            "confirmed": True,
             "end": 479,
             "functionality": "P",
             "id": "IGHV1S10*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S10*02",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14940,16 +15128,16 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGACCTGAGCTGGTGAGGCCTGGGACTTCAGTGAAGATATCCTGCAAGGCTTCTGGCTATACCTTCCTCACCTACTGGATGAACTGGGTGAAGTAGAGGCCTGCACAGGGCCTTGAGTGGATTGGACAGATTTTTCCTGCAAGTGGTAGTACTAACTACAATGAGATGTTCAAGGGCAAGGCCACATTGACTGTAGACACATCCTCCAGCACAGCCTACATGCAGCTAAGCAGCCTGACATCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "imgt",
             "start": 185,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC073565",
-            "confirmed": true,
+            "confirmed": True,
             "end": 77030,
             "functionality": "P",
             "id": "IGHV1-28*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-28*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14961,16 +15149,16 @@
             "source": "imgt",
             "start": 76736,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AC160473",
-            "confirmed": true,
+            "confirmed": True,
             "end": 169578,
             "functionality": "F",
             "id": "IGHV1-76*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-76*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -14982,16 +15170,16 @@
             "source": "imgt",
             "start": 169284,
             "strain": "C57BL/6",
-            "strand": false,
-            "verified": true
+            "strand": False,
+            "verified": True
         },
         {
             "accession": "AC073939",
-            "confirmed": true,
+            "confirmed": True,
             "end": 165614,
             "functionality": "F",
             "id": "IGHV1-63*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1-63*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -15003,8 +15191,8 @@
             "source": "imgt",
             "start": 165320,
             "strain": "C57BL/6",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "BN000872",
@@ -15020,7 +15208,7 @@
             "sequence": "CAGGTCCAGCTGCAGCAGTCTGGAGCTGAGCTGGTGAAACCCGGGGCATCAGTGAAGCTGTCCTGCAAGGCTTCTGGCTACACCTTCACTGAGTATACTATACACTGGGTAAAGCAGAGGTCTGGACAGGGTCTTGAGTGGATTGGGTGGTTTTACCCTGGAAGTGGTAGTATAAAGTACAATGAGAAATTCAAGGACAAGGCCACATTGACTGCGGACAAATCCTCCAGCACAGTCTATATGGAGCTTAGTAGATTGACATCTGAAGACTCTGCGGTCTATTTCTGTGCAAGA",
             "source": "igblast",
             "start": 328571,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AJ851868",
@@ -15036,15 +15224,15 @@
             "sequence": "GAGGTGCAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGAGTCCCTGAAACTCTCCTGTGAATCCAATGAATACGAATTCCCTTCCCATGACATGTCTTGGGTCCGCAAGACTCCGGAGAAGAGGCTGGAGTTGGTCGCAGCCATTAATAGTGATGGTGGTAGCACCTACTATCCAGACACCATGGAGAGACGATTCATCATCTCCAGAGACAATACCAAGAAGACCCTGTACCTGCAAATGAGCAGTCTGAGGTCTGAGGACACAGCCTTGTATTACTGTGCAAGACA",
             "source": "igblast",
             "start": 1250458,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "AF120465",
-            "confirmed": true,
+            "confirmed": True,
             "end": 297,
             "functionality": "F",
             "id": "IGHV5-12*03",
-            "identified": false,
+            "identified": False,
             "imgt allele name": "IGHV5-12*03",
             "imgt family name": "IGHV5",
             "length": 297,
@@ -15055,15 +15243,15 @@
             "sequence": "GAAGTGAAGCTGGTGGAGTCTGGGGGAGGCTTAGTGCAGCCTGGAGGGTCCCTGAAACTCTCCTGTGCAGCCTCTGGATTCACTTTCAGTGACTATTACATGTATTGGGTTCGCCAGACTCCAGAGAAGAGACTGGAGTGGGTCGCATACATTAGTAATGGTGGTGGTAGCACCTATTATCCAGACACTGTAAAGGGCCGATTCACCATCTCCAGAGACAATGCCAAGAACACCCTGTACCTGGAAATGAGCAGTCTGAGGTCTGAGGACACGGCCATGTATTACTGTGCAAGACGA",
             "source": "imgt",
             "start": 0,
-            "strand": true
+            "strand": True
         },
         {
             "accession": "M34979",
-            "confirmed": true,
+            "confirmed": True,
             "end": 552,
             "functionality": "F",
             "id": "IGHV1S49*01",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV1S49*01",
             "imgt family name": "IGHV1",
             "length": 294,
@@ -15074,16 +15262,16 @@
             "sequence": "GAGGTCCAGCTTCAGCAGTCTGGAGCTGAGCTGGTGAGGCCTGGGTCCTCAGTGAAGCTGTCCTGCAAGACTTCTGGATATACATTCACAAGCTATGGTATAAACTGGGTGAAACAGAGGCCTGGACAGGGCCTGGAATGGATTGGATATATTTATCTTGGAAATGGTTATACTGCGTACAATGAGAAGTTCAAGGGCAAGGCCACACTGACTTCAGACACATCCTCCAGCACAGCGTACATGCAGCTCAGAAGCCTGACATCTGAGGACTCTGTGATCAAGTTCTGCGCAAGA",
             "source": "imgt",
             "start": 258,
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         },
         {
             "accession": "AJ851868",
-            "confirmed": true,
+            "confirmed": True,
             "end": 1255014,
             "functionality": "P",
             "id": "IGHV2-1*02",
-            "identified": true,
+            "identified": True,
             "imgt allele name": "IGHV2-1*02",
             "imgt family name": "IGHV2",
             "length": 296,
@@ -15094,8 +15282,23 @@
             "source": "imgt",
             "start": 1254718,
             "strain": "129/Sv",
-            "strand": true,
-            "verified": true
+            "strand": True,
+            "verified": True
         }
     ]
 }
+
+
+lookup = {
+    'key': {},
+    'seq': {},
+    'name': {}
+}
+
+documents = {}
+# for k,region in genes.items():
+#     for gene in region:
+#         validate(gene)
+print(to_json(genes))
+
+

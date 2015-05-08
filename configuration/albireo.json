@@ -1,0 +1,53 @@
+{
+    "database": {
+        "albireo": {
+            "database": "tubo", 
+            "host": "babylon.bio.nyu.edu", 
+            "password": "9c8e07483851fc8ab3d963fdaeccc62e", 
+            "username": "tubo"
+        }
+    },
+    "table": [
+        "ncbi accession": {
+            "collection": "ncbi_accession",
+            "index": [
+                { "key": [[ "head.id", 1 ]], "unique": true, "name": "ncbi accession id" }
+            ]
+        },
+        "accession": {
+            "collection": "accession",
+            "index": [
+                { "key": [[ "head.id", 1 ]], "unique": true, "name": "accession id" },
+                { "key": [[ "head.organism name", 1 ]], "unique": false, "name": "accession organism name" },
+                { "key": [[ "head.strain", 1 ]], "unique": false, "name": "accession strain" },
+                { "key": [[ "head.format", 1 ]], "unique": false, "name": "accession format" }
+            ]
+        },
+        "reference": {
+            "collection": "reference",
+            "index": [
+                { "key": [[ "head.id", 1 ]], "unique": true, "name": "reference id" },
+                { "key": [[ "head.accession", 1 ]], "unique": false, "name": "reference accession" },
+                { "key": [[ "head.organism name", 1 ]], "unique": false, "name": "reference organism name" },
+                { "key": [[ "head.region", 1 ]], "unique": false, "name": "reference region" },
+                { "key": [[ "head.verified", 1 ]], "unique": false, "name": "reference verified" },
+                { "key": [[ "head.functionality", 1 ]], "unique": false, "name": "reference functionality" },
+            ]
+        },
+        "sample": {
+            "collection": "sample",
+            "index": [
+                { "key": [[ "head.id", 1 ], [ "head.library", 1 ]], "unique": true, "name": "sample in library" },
+                { "key": [[ "head.id", 1 ]], "unique": false, "name": "sample id" },
+                { "key": [[ "head.framed", 1 ]], "unique": false, "name": "sample framed" },
+                { "key": [[ "head.in frame", 1 ]], "unique": false, "name": "sample in frame" },
+                { "key": [[ "head.premature", 1 ]], "unique": false, "name": "sample premature" },
+                { "key": [[ "head.library", 1 ]], "unique": false, "name": "sample library" },
+                { "key": [[ "head.gapped", 1 ]], "unique": false, "name": "sample gapped" },
+                { "key": [[ "head.valid", 1 ]], "unique": false, "name": "sample valid" },
+                { "key": [[ "head.palindromic", 1 ]], "unique": false, "name": "sample palindromic" },
+                { "key": [[ "head.productive", 1 ]], "unique": false, "name": "sample productive" }
+            ]
+        }
+    ]
+}
