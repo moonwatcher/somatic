@@ -984,7 +984,7 @@ configuration = {
                     ],
                     'instruction': {
                         'help': 'load gene sequences from JSON file',
-                        'name': 'ref-populate'
+                        'name': 'gene-populate'
                     }
                 },
                 {
@@ -996,7 +996,7 @@ configuration = {
                     ],
                     'instruction': {
                         'help': 'view JSON gene records',
-                        'name': 'ref-info'
+                        'name': 'gene-info'
                     }
                 },
                 {
@@ -1008,7 +1008,7 @@ configuration = {
                     ],
                     'instruction': {
                         'help': 'count gene records',
-                        'name': 'ref-count'
+                        'name': 'gene-count'
                     }
                 },
                 {
@@ -1021,7 +1021,7 @@ configuration = {
                     ],
                     'instruction': {
                         'help': 'align gene sequences to genome',
-                        'name': 'ref-align'
+                        'name': 'gene-align'
                     }
                 },
                 {
@@ -1034,7 +1034,7 @@ configuration = {
                     ],
                     'instruction': {
                         'help': 'dump gene sequences to fasta',
-                        'name': 'ref-fasta'
+                        'name': 'gene-fasta'
                     }
                 },
                 {
@@ -1046,7 +1046,7 @@ configuration = {
                     ],
                     'instruction': {
                         'help': 'dump gene sequences to igblast auxiliary file',
-                        'name': 'ref-igblast-aux'
+                        'name': 'gene-igblast-aux'
                     }
                 },
                 {
@@ -3537,8 +3537,6 @@ class Resolver(object):
                 }
                 self.database['ncbi_accession'].save(document)
         return document
-        
-    
 
     def save_accession(self, accession):
         if accession is not None:
@@ -3641,14 +3639,14 @@ class Resolver(object):
                     
                 if gene.strain is None and accession.strain is not None:
                     gene.strain = accession.strain
-                    self.log.debug('strain %s assigned to gene %s from %s', gene.strain, gene.id, gene.accession)
+                    self.log.info('strain %s assigned to gene %s from %s', gene.strain, gene.id, gene.accession)
                     
                 if accession.strain is None and gene.strain is not None:
                     accession.strain = gene.strain
                     self.save_accession(accession)
                     self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, gene.id)
             else:
-                self.log.error('accession %s is missing', gene.head['accession'])
+                self.log.error('accession %s is missing', gene.accession)
 
     def save_gene(self, node):
         if node is not None:
@@ -3667,7 +3665,7 @@ class Resolver(object):
             ]:
                 if k in node:
                     document['head'][k] = node[k]
-            
+                    
             node['length'] = node['end'] - node['start'] 
             if 'strand' not in node:
                 node['strand'] = True
@@ -3768,11 +3766,14 @@ class Pipeline(object):
         self.resolver.rebuild()
 
     def populate_gene(self, path):
+        count = 0
         with io.open(path, 'rb') as file:
             content = StringIO(file.read().decode('utf8'))
             document = json.loads(content.getvalue())
             for node in document:
                 self.resolver.save_gene(node)
+                count += 1
+        self.log.info('populated %d genes', count)
 
     def accession_to_fasta(self, query, profile):
         q = self.build_query(query, profile, 'accession')
@@ -3971,33 +3972,33 @@ class Pipeline(object):
         if cmd.action == 'accession-fasta':
             self.accession_to_fasta(cmd.query, cmd.instruction['profile'])
             
-        if cmd.action == 'ref-populate':
+        if cmd.action == 'gene-populate':
             for path in cmd.instruction['path']:
                 self.populate_gene(path)
                 
-        elif cmd.action == 'ref-info':
+        elif cmd.action == 'gene-info':
             self.gene_to_json(
                 cmd.query,
                 cmd.instruction['profile'])
 
-        elif cmd.action == 'ref-count':
+        elif cmd.action == 'gene-count':
             self.gene_count(
                 cmd.query,
                 cmd.instruction['profile'])
 
-        elif cmd.action == 'ref-fasta':
+        elif cmd.action == 'gene-fasta':
             self.gene_to_fasta(
                 cmd.query,
                 cmd.instruction['profile'],
                 cmd.instruction['flanking'])
             
-        elif cmd.action == 'ref-align':
+        elif cmd.action == 'gene-align':
             self.align_gene(
                 cmd.query, 
                 cmd.instruction['profile'],
                 cmd.instruction['flanking'])
             
-        elif cmd.action == 'ref-igblast-aux':
+        elif cmd.action == 'gene-igblast-aux':
             self.gene_to_auxiliary(
                 cmd.query, 
                 cmd.instruction['profile'])
