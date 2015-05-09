@@ -42,7 +42,7 @@ def search(path, query):
         except OSError as e:
             print('{} {}'.format(e.strerror, path))
 
-if len(sys.argv) > 1:
-    path = sys.argv[1]
-    query = sys.argv[2]
+path = sys.argv[1]
+for query in sys.stdin:
+    query = query.strip()
     search(path, query)

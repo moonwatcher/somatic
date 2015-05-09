@@ -136,24 +136,26 @@ configuration = {
                 ]
             },
         },
-        'b6~': {
+        'not-c57bl6': {
             'reference': {
-                'head.verified': True,
                 'head.organism name': 'mus musculus',
-                '$or': [ { 'head.strain': { '$ne': 'C57BL/6' } }, { 'head.strain': { '$exists': False } } ]
+                '$or': [
+                    { '$and': [ { 'head.strain': { '$ne': 'C57BL/6' } }, { 'head.strain': { '$ne': 'C57BL/6J' } } ] },
+                    { 'head.strain': { '$exists': False } }
+                ]
             },
         },
-        'b6': {
+        'unknown': {
             'reference': {
-                'head.verified': True,
                 'head.organism name': 'mus musculus',
-                'head.strain': 'C57BL/6'
+                'head.strain': { '$exists': False }
             },
         },
-        'mouse': {
+        'c57bl6': {
             'reference': {
                 'head.verified': True,
                 'head.organism name': 'mus musculus',
+                '$or': [ { 'head.strain': 'C57BL/6' }, { 'head.strain': 'C57BL/6J' } ]
             },
         },
         'default': {
@@ -201,7 +203,7 @@ configuration = {
                 ]
             },
         },
-        'productive!': {
+        'not-productive': {
             'sample': {
                 'head.valid': True,
                 'head.productive': False,
@@ -221,7 +223,7 @@ configuration = {
                 ]
             },
         },
-        'productive~': {
+        'dropped-productive': {
             'sample': {
                 'head.valid': True,
                 'head.productive': True,
@@ -995,6 +997,18 @@ configuration = {
                     'instruction': {
                         'help': 'view JSON gene records',
                         'name': 'ref-info'
+                    }
+                },
+                {
+                    'argument': [
+                        'region',
+                        'strain',
+                        'profile',
+                        'id'
+                    ],
+                    'instruction': {
+                        'help': 'count gene records',
+                        'name': 'ref-count'
                     }
                 },
                 {
@@ -3654,6 +3668,7 @@ class Resolver(object):
                 if k in node:
                     document['head'][k] = node[k]
             
+            node['length'] = node['end'] - node['start'] 
             if 'strand' not in node:
                 node['strand'] = True
                 
@@ -3663,7 +3678,7 @@ class Resolver(object):
                 document['head']['framed'] = False
                 node['read frame'] = 0
                 
-            if 'sequence' in node:
+            if 'sequence' in node and isinstance(node['sequence'], str):
                 node['sequence'] = {
                     'nucleotide': node['sequence'],
                     'strand': node['strand'],
@@ -3833,9 +3848,20 @@ class Pipeline(object):
         collection = self.resolver.database['reference']
         cursor = collection.find(q)
         for node in cursor:
-            buffer.append(node['body'])
+            document = node['body'].copy()
+            document.update(node['head'])
+            buffer.append(document)
         cursor.close()
+        #buffer = sorted(buffer, key=lambda x: x['gene'])
+        #buffer = sorted(buffer, key=lambda x: x['family'])
+        #buffer = sorted(buffer, key=lambda x: x['strain'])
         print(to_json(buffer))
+
+    def reference_count(self, query, profile):
+        q = self.build_query(query, profile, 'reference')
+        buffer = []
+        collection = self.resolver.database['reference']
+        print(collection.count(q))
 
     def reference_to_auxiliary(self, query=None, profile='default'):
         q = self.build_query(query, profile, 'reference')
@@ -3951,6 +3977,11 @@ class Pipeline(object):
                 
         elif cmd.action == 'ref-info':
             self.reference_to_json(
+                cmd.query,
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'ref-count':
+            self.reference_count(
                 cmd.query,
                 cmd.instruction['profile'])
 
