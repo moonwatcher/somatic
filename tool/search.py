@@ -32,7 +32,7 @@ def search(path, query):
                 if line[0] != '>':
                     reference.write(line)
             reference.seek(0)
-            reference = reference.getvalue()
+            reference = reference.getvalue().upper()
             start = reference.find(query)
             while start >= 0:
                 end = start + len(query)

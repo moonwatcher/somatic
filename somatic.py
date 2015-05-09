@@ -36,6 +36,7 @@ from bson.objectid import ObjectId
 from pymongo.son_manipulator import SONManipulator
 from pymongo import MongoClient, DESCENDING, ASCENDING
 from pymongo.errors import BulkWriteError
+from operator import itemgetter, attrgetter
 
 import xmltodict
 import urllib.request, urllib.parse, urllib.error
@@ -43,7 +44,7 @@ import urllib.parse
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from http.client import BadStatusLine
-
+from copy import deepcopy
 
 
 BIN_BASE = '/Users/lg/code/somatic/bin'
@@ -980,8 +981,20 @@ configuration = {
                         'path'
                     ],
                     'instruction': {
-                        'help': 'load imgt reference sequences from fasta file',
+                        'help': 'load reference sequences from JSON file',
                         'name': 'ref-populate'
+                    }
+                },
+                {
+                    'argument': [
+                        'region',
+                        'strain',
+                        'profile',
+                        'id'
+                    ],
+                    'instruction': {
+                        'help': 'view JSON gene records',
+                        'name': 'ref-info'
                     }
                 },
                 {
@@ -1063,7 +1076,7 @@ configuration = {
         'B': {  'code':'asx',                                   'name': 'Aspartic acid or Asparagine' },
         'Z': {  'code':'glx',                                   'name': 'Glutamine or Glutamic acid' },
         'J': {  'code':'xle',                                   'name': 'Leucine or Isoleucine' },
-        'X': {  'code':'xaa',	                                'name': 'Any amino acid' }
+        'X': {  'code':'xaa',                                   'name': 'Any amino acid' }
     },
     'iupac nucleic acid notation': {
         'A': {  'reverse': 'T',  'option':[ 'A' ],                  'name': 'Adenine' },
@@ -1682,72 +1695,74 @@ class Blat(object):
         return orientation
 
     def crop(self, query):
-        query['objective'] = []
-        for hit in query['hit']:
-            orientation = self.orientation(query, hit)
-                
-            # extract both query and target sequence for the contiguous blocks
-            for block in hit['block']:
-                self.target.seek(block['target start'])
-                block['target sequence'] = self.target.read(block['size'])
-                block['query sequence'] = orientation['flanking'].nucleotide[block['query start']:block['query start'] + block['size']]
-                
-            objective = {
-                'block': [],
-                'match': 0,
-                'mismatch': 0,
-                'block count': 0,
-                'query start': orientation['start'],
-                'query end': orientation['end'],
-                'repeat match': hit['repeat match'],
-                'inserted base in query': 0,
-                'inserted base in target': 0,
-                'inserts in query': 0,
-                'inserts in target': 0,
-            }
-
-            for block in hit['block']:
-                o = {
+        if 'hit' in query:
+            for hit in query['hit']:
+                orientation = self.orientation(query, hit['flanked'])
+                    
+                # extract both query and target sequence for the contiguous blocks
+                for block in hit['flanked']['block']:
+                    self.target.seek(block['target start'])
+                    block['target sequence'] = self.target.read(block['size'])
+                    block['query sequence'] = orientation['flanking'].nucleotide[block['query start']:block['query start'] + block['size']]
+                    
+                hit['objective'] = {
+                    'block': [],
+                    'score': 0,
+                    'identical': 0.0,
                     'match': 0,
                     'mismatch': 0,
-                    'query start': max(block['query start'], orientation['start']),
-                    'query end': min(block['query start'] + block['size'], orientation['end'])
+                    'block count': 0,
+                    'query start': orientation['start'],
+                    'query end': orientation['end'],
+                    'repeat match': hit['flanked']['repeat match'],
+                    'inserted base in query': 0,
+                    'inserted base in target': 0,
+                    'inserts in query': 0,
+                    'inserts in target': 0,
                 }
-                if o['query end'] > o['query start']:
-                    o['size'] = o['query end'] - o['query start']
-                    o['query sequence'] = orientation['flanking'].nucleotide[o['query start']:o['query end']]
-                    o['target start'] = o['query start'] + block['target start'] - block['query start']
-                    o['target end'] = o['target start'] + o['size']
 
-                    self.target.seek(o['target start'])
-                    o['target sequence'] = self.target.read(o['size'])
-                    for i in range(o['size']):
-                        if o['target sequence'][i] == o['query sequence'][i]:
-                            o['match'] += 1
-                        else:
-                            o['mismatch'] += 1
-                    objective['match'] += o['match']
-                    objective['mismatch'] += o['mismatch']
-                    objective['block count'] += 1
-                    objective['block'].append(o)
+                # project the contiguous blocks on the objective region
+                for block in hit['flanked']['block']:
+                    o = {
+                        'match': 0,
+                        'mismatch': 0,
+                        'query start': max(block['query start'], orientation['start']),
+                        'query end': min(block['query start'] + block['size'], orientation['end'])
+                    }
+                    if o['query end'] > o['query start']:
+                        o['size'] = o['query end'] - o['query start']
+                        o['query sequence'] = orientation['flanking'].nucleotide[o['query start']:o['query end']]
+                        o['target start'] = o['query start'] + block['target start'] - block['query start']
+                        o['target end'] = o['target start'] + o['size']
 
-            if objective['block']:
-                objective['target start'] = min([ b['target start'] for b in objective['block'] ])
-                objective['target end'] = max([ b['target end'] for b in objective['block'] ])
-                
-                # infer the gaps
-                for i in range(len(objective['block']) - 1):
-                    gap = objective['block'][i + 1]['query start'] - objective['block'][i]['query end']
-                    if gap:
-                        objective['inserts in query'] += 1
-                        objective['inserted base in query'] += gap
+                        self.target.seek(o['target start'])
+                        o['target sequence'] = self.target.read(o['size'])
+                        for i in range(o['size']):
+                            if o['target sequence'][i] == o['query sequence'][i]:
+                                o['match'] += 1
+                            else:
+                                o['mismatch'] += 1
+                        hit['objective']['match'] += o['match']
+                        hit['objective']['mismatch'] += o['mismatch']
+                        hit['objective']['block count'] += 1
+                        hit['objective']['block'].append(o)
 
-                    gap = objective['block'][i + 1]['target start'] - objective['block'][i]['target end']
-                    if gap:
-                        objective['inserts in target'] += 1
-                        objective['inserted base in target'] += gap
-                self.normalize_hit(objective, orientation)
-            query['objective'].append(objective,)
+                if hit['objective']['block']:
+                    hit['objective']['target start'] = min([ b['target start'] for b in hit['objective']['block'] ])
+                    hit['objective']['target end'] = max([ b['target end'] for b in hit['objective']['block'] ])
+                    
+                    # infer the gaps
+                    for i in range(len(hit['objective']['block']) - 1):
+                        gap = hit['objective']['block'][i + 1]['query start'] - hit['objective']['block'][i]['query end']
+                        if gap:
+                            hit['objective']['inserts in query'] += 1
+                            hit['objective']['inserted base in query'] += gap
+
+                        gap = hit['objective']['block'][i + 1]['target start'] - hit['objective']['block'][i]['target end']
+                        if gap:
+                            hit['objective']['inserts in target'] += 1
+                            hit['objective']['inserted base in target'] += gap
+                    self.normalize_hit(hit['objective'], orientation)
 
     def normalize_hit(self, hit, orientation):
         # construct a consensus sequence for both query and target
@@ -1799,15 +1814,16 @@ class Blat(object):
         hit['identical'] = 100.0 - millibad * 0.1
         return hit
 
-    def parse_hit(self, query, hit):
-        hit['query strand'] = hit['query strand'] == '+'
+    def parse_flanked_hit(self, query, flanked):
+        flanked['query strand'] = flanked['query strand'] == '+'
         
         for k in [
             'block size',
             'query block start',
             'target block start',
         ]:
-            if k in hit: hit[k] = [ int(v) for v in hit[k].split(',') if v ]
+            if k in flanked:
+                flanked[k] = [ int(v) for v in flanked[k].split(',') if v ]
             
         for k in [
             'block count',
@@ -1826,26 +1842,47 @@ class Blat(object):
             'target size',
             'target start',
         ]:
-            if k in hit: hit[k] = int(hit[k])
+            if k in flanked:
+                flanked[k] = int(flanked[k])
             
-        hit['block'] = []
-        orientation = self.orientation(query, hit)
-        for i in range(hit['block count']):
+        flanked['block'] = []
+        orientation = self.orientation(query, flanked)
+        for i in range(flanked['block count']):
             block = {
-                'size': hit['block size'][i],
-                'query start': hit['query block start'][i],
-                'target start': hit['target block start'][i],
+                'size': flanked['block size'][i],
+                'query start': flanked['query block start'][i],
+                'target start': flanked['target block start'][i],
             }
             self.target.seek(block['target start'])
             block['target sequence'] = self.target.read(block['size'])
             block['query sequence'] = orientation['flanking'].nucleotide[block['query start']:block['query start'] + block['size']]
-            hit['block'].append(block)
-        del hit['block size']
-        del hit['query block start']
-        del hit['target block start']
-        del hit['query name']
+            flanked['block'].append(block)
+        del flanked['block size']
+        del flanked['query block start']
+        del flanked['target block start']
+        del flanked['query name']
         if 'hit' not in query: query['hit'] = []
-        query['hit'].append(self.normalize_hit(hit, orientation))
+        query['hit'].append({'flanked': self.normalize_hit(flanked, orientation)})
+
+    def summarize(self, query):
+        if query is not None:
+            query['summary'] = []
+            for hit in query['hit']:
+                if ('objective' in hit and len(hit['objective']['block']) > 0 and
+                    hit['objective']['score'] == query['hit'][0]['objective']['score'] and
+                    abs(hit['flanked']['score'] - query['hit'][0]['flanked']['score']) < 0.5 and
+                    hit['objective']['identical'] == query['hit'][0]['objective']['identical'] and
+                    abs(hit['flanked']['identical'] - query['hit'][0]['flanked']['identical']) < 0.5):
+
+                    match = deepcopy(hit['objective'])
+                    match['flanked score'] = hit['flanked']['score']
+                    match['flanked identical'] = hit['flanked']['identical']
+                    match['flanked query size'] = hit['flanked']['query size']
+                    match['flanked target length'] = hit['flanked']['target length']
+                    query['summary'].append(match)
+
+            if not query['summary']:
+                del query['summary']
 
     def search(self):
         command = self.configuration['command']['blat']
@@ -1864,12 +1901,17 @@ class Blat(object):
                 hit = parse_match(self.configuration['expression']['blat hit'].search(line.strip()))
                 if hit:
                     query = self.instruction['record'][hit['query name']]
-                    hit = self.parse_hit(query, hit)
+                    self.parse_flanked_hit(query, hit)
 
+            # for every query sort the results by the objective score and than the flanked score
             for query in self.instruction['record'].values():
                 if 'hit' in query:
-                    query['hit'].sort(reverse=True, key=lambda x: x['score'])
                     self.crop(query)
+                    query['hit'] = sorted(query['hit'], key=lambda x: x['flanked']['identical'], reverse=True)
+                    query['hit'] = sorted(query['hit'], key=lambda x: x['objective']['identical'], reverse=True)
+                    query['hit'] = sorted(query['hit'], key=lambda x: x['flanked']['score'], reverse=True)
+                    query['hit'] = sorted(query['hit'], key=lambda x: x['objective']['score'], reverse=True)
+                    self.summarize(query)
 
 
 class Reference(object):
@@ -3598,16 +3640,16 @@ class Resolver(object):
         if node is not None:
             document = { 'head': {}, 'body': node }
             for k in [
-        		'accession',
-        		'framed',
-        		'region',
-        		'id',
-        		'verified',
-        		'confirmed',
-        		'functionality',
-        		'organism name',
-        		'strain',
-        		'identified'
+                'accession',
+                'framed',
+                'region',
+                'id',
+                'verified',
+                'confirmed',
+                'functionality',
+                'organism name',
+                'strain',
+                'identified'
             ]:
                 if k in node:
                     document['head'][k] = node[k]
@@ -3748,17 +3790,52 @@ class Pipeline(object):
         self.log.info('aligning %s sequences with %s flanking', instruction['total'], instruction['flank'])
         blat = Blat(self, instruction)
         blat.search()
-        print(to_json(blat.instruction))
+
+        breakdown = {
+            'sequence': {},
+            'position': {}
+        }
+        for k,query in blat.instruction['record'].items():
+            if 'summary' in query:
+                q = { 'reference': query['reference'], 'summary': query['summary'] }
+
+                if q['reference'].sequence.nucleotide not in breakdown['sequence']:
+                    breakdown['sequence'][q['reference'].sequence.nucleotide] = {}
+                breakdown['sequence'][q['reference'].sequence.nucleotide][q['reference'].id] = q
+
+                for hit in q['summary']:
+                    if str(hit['target start']) not in breakdown['position']:
+                        breakdown['position'][str(hit['target start'])] = []
+                    breakdown['position'][str(hit['target start'])].append(q)
+
+                for position, options in breakdown['position'].items():
+                    options = sorted(options, key=lambda x: x['summary'][0]['flanked identical'], reverse=True)
+                    options = sorted(options, key=lambda x: x['summary'][0]['identical'], reverse=True)
+                    options = sorted(options, key=lambda x: x['summary'][0]['flanked score'], reverse=True)
+                    options = sorted(options, key=lambda x: x['summary'][0]['score'], reverse=True)
+                    breakdown['position'][position] = options
+
+        print(to_json(breakdown))
+        # print(to_json(blat.instruction))
 
     def reference_to_fasta(self, query, profile, flanking=0):
         q = self.build_query(query, profile, 'reference')
-        buffer = StringIO()
         collection = self.resolver.database['reference']
         cursor = collection.find(q)
         for node in cursor:
             reference = Reference(self, node)
             print(reference.to_fasta(flanking))
         cursor.close()
+
+    def reference_to_json(self, query, profile):
+        q = self.build_query(query, profile, 'reference')
+        buffer = []
+        collection = self.resolver.database['reference']
+        cursor = collection.find(q)
+        for node in cursor:
+            buffer.append(node['body'])
+        cursor.close()
+        print(to_json(buffer))
 
     def reference_to_auxiliary(self, query=None, profile='default'):
         q = self.build_query(query, profile, 'reference')
@@ -3872,14 +3949,27 @@ class Pipeline(object):
             for path in cmd.instruction['path']:
                 self.populate_reference(path)
                 
+        elif cmd.action == 'ref-info':
+            self.reference_to_json(
+                cmd.query,
+                cmd.instruction['profile'])
+
         elif cmd.action == 'ref-fasta':
-            self.reference_to_fasta(cmd.query, cmd.instruction['profile'], cmd.instruction['flanking'])
+            self.reference_to_fasta(
+                cmd.query,
+                cmd.instruction['profile'],
+                cmd.instruction['flanking'])
             
         elif cmd.action == 'ref-align':
-            self.align_reference(cmd.query, cmd.instruction['profile'], cmd.instruction['flanking'])
+            self.align_reference(
+                cmd.query, 
+                cmd.instruction['profile'],
+                cmd.instruction['flanking'])
             
         elif cmd.action == 'ref-igblast-aux':
-            self.reference_to_auxiliary(cmd.query, cmd.instruction['profile'])
+            self.reference_to_auxiliary(
+                cmd.query, 
+                cmd.instruction['profile'])
             
         elif cmd.action == 'populate':
             self.populate(
