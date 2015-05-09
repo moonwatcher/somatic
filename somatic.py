@@ -120,7 +120,7 @@ configuration = {
     'profile': {
         'all': {
             'accession': {},
-            'reference': {},
+            'gene': {},
             'sample': {},
             'diagram': {
                 'track': {},
@@ -137,7 +137,7 @@ configuration = {
             },
         },
         'not-c57bl6': {
-            'reference': {
+            'gene': {
                 'head.organism name': 'mus musculus',
                 '$or': [
                     { '$and': [ { 'head.strain': { '$ne': 'C57BL/6' } }, { 'head.strain': { '$ne': 'C57BL/6J' } } ] },
@@ -146,13 +146,13 @@ configuration = {
             },
         },
         'unknown': {
-            'reference': {
+            'gene': {
                 'head.organism name': 'mus musculus',
                 'head.strain': { '$exists': False }
             },
         },
         'c57bl6': {
-            'reference': {
+            'gene': {
                 'head.verified': True,
                 'head.organism name': 'mus musculus',
                 '$or': [ { 'head.strain': 'C57BL/6' }, { 'head.strain': 'C57BL/6J' } ]
@@ -161,7 +161,7 @@ configuration = {
         'default': {
             'accession': {
             },
-            'reference': {
+            'gene': {
                 'head.verified': True,
             },
             'sample': {
@@ -455,7 +455,7 @@ configuration = {
             """,
             re.VERBOSE
         ),
-        'imgt reference': re.compile(
+        'imgt gene': re.compile(
             r"""
             ^>
             (?P<accession>[^|]*)\|
@@ -983,7 +983,7 @@ configuration = {
                         'path'
                     ],
                     'instruction': {
-                        'help': 'load reference sequences from JSON file',
+                        'help': 'load gene sequences from JSON file',
                         'name': 'ref-populate'
                     }
                 },
@@ -1020,7 +1020,7 @@ configuration = {
                         'flanking',
                     ],
                     'instruction': {
-                        'help': 'align reference sequences to genome',
+                        'help': 'align gene sequences to genome',
                         'name': 'ref-align'
                     }
                 },
@@ -1033,7 +1033,7 @@ configuration = {
                         'flanking',
                     ],
                     'instruction': {
-                        'help': 'dump reference sequences to fasta',
+                        'help': 'dump gene sequences to fasta',
                         'name': 'ref-fasta'
                     }
                 },
@@ -1045,7 +1045,7 @@ configuration = {
                         'id',
                     ],
                     'instruction': {
-                        'help': 'dump reference sequences to igblast auxiliary file',
+                        'help': 'dump gene sequences to igblast auxiliary file',
                         'name': 'ref-igblast-aux'
                     }
                 },
@@ -1222,14 +1222,14 @@ configuration = {
             ]
         },
         {
-            'collection': 'reference',
+            'collection': 'gene',
             'index': [
-                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'reference id' },
-                { 'key': [( 'head.accession', ASCENDING )], 'unique': False, 'name': 'reference accession' },
-                { 'key': [( 'head.organism name', ASCENDING )], 'unique': False, 'name': 'reference organism name' },
-                { 'key': [( 'head.region', ASCENDING )], 'unique': False, 'name': 'reference region' },
-                { 'key': [( 'head.verified', ASCENDING )], 'unique': False, 'name': 'reference verified' },
-                { 'key': [( 'head.functionality', ASCENDING )], 'unique': False, 'name': 'reference functionality' },
+                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'gene id' },
+                { 'key': [( 'head.accession', ASCENDING )], 'unique': False, 'name': 'gene accession' },
+                { 'key': [( 'head.organism name', ASCENDING )], 'unique': False, 'name': 'gene organism name' },
+                { 'key': [( 'head.region', ASCENDING )], 'unique': False, 'name': 'gene region' },
+                { 'key': [( 'head.verified', ASCENDING )], 'unique': False, 'name': 'gene verified' },
+                { 'key': [( 'head.functionality', ASCENDING )], 'unique': False, 'name': 'gene functionality' },
             ]
         },
         {
@@ -1285,7 +1285,7 @@ def transform_to_document(node):
     elif isinstance(node, Sample):
         return node.document
         
-    elif isinstance(node, Reference):
+    elif isinstance(node, Gene):
         return node.document
         
     elif isinstance(node, Accession):
@@ -1680,7 +1680,7 @@ class Blat(object):
         self.fasta = []
 
         for record in self.instruction['record'].values():
-            record['flanking'] = record['reference'].to_flanking_fasta(instruction['flank'])
+            record['flanking'] = record['gene'].to_flanking_fasta(instruction['flank'])
             self.fasta.append(to_fasta(record['flanking']['id'], record['flanking']['sequence'].nucleotide))
         self.fasta = '\n'.join(self.fasta)
 
@@ -1928,9 +1928,9 @@ class Blat(object):
                     self.summarize(query)
 
 
-class Reference(object):
+class Gene(object):
     def __init__(self, pipeline, node=None):
-        self.log = logging.getLogger('Reference')
+        self.log = logging.getLogger('Gene')
         self.pipeline = pipeline
         self.node = node
         
@@ -2342,7 +2342,7 @@ class Sample(object):
 
     def analyze(self, strain):
         self.reset()
-        if self.valid: self._load_reference()
+        if self.valid: self._load_gene()
         if self.valid: self._pick_jh_region(strain)
         if self.valid: self._pick_vh_region(strain)
         if self.valid: self._check_for_aligned_frames()
@@ -2445,27 +2445,27 @@ class Sample(object):
             if hit['valid']:
                 hit['query'] = self.sequence.crop(hit['query start'], hit['query end'])
 
-    def _load_reference(self):
+    def _load_gene(self):
         for hit in self.hit:
             if hit['valid']:
                 if 'subject id' in hit:
-                    reference = self.pipeline.fetch_reference(hit['subject id'])
-                    if reference:
-                        if hit['subject strand'] == reference.sequence.strand:
-                            ref = reference.sequence
+                    gene = self.pipeline.fetch_gene(hit['subject id'])
+                    if gene:
+                        if hit['subject strand'] == gene.sequence.strand:
+                            ref = gene.sequence
                             hit['subject start'] -= 1
                         else:
-                            ref = reference.sequence.reversed
+                            ref = gene.sequence.reversed
                             hit['subject start'] = ref.length - hit['subject start']
                             hit['subject end'] = ref.length - hit['subject end'] + 1
                             
                         hit['subject'] = ref.crop(hit['subject start'], hit['subject end'])
-                        hit['framed'] = reference.framed
-                        hit['functionality'] = reference.functionality
-                        if reference.strain: hit['strain'] = reference.strain
+                        hit['framed'] = gene.framed
+                        hit['functionality'] = gene.functionality
+                        if gene.strain: hit['strain'] = gene.strain
                         
                         # only DH regions are allowed to align to the oposite strand
-                        if hit['region'] != 'DH' and hit['subject strand'] != reference.sequence.strand:
+                        if hit['region'] != 'DH' and hit['subject strand'] != gene.sequence.strand:
                             self.invalidate_hit(hit, 'hit aligns to the wrong strand')
 
     def _assign_frame(self):
@@ -2556,7 +2556,7 @@ class Sample(object):
                         if k not in ('query', 'subject', 'overlap'):
                             trimmed[k] = v
                             
-                    reference = self.pipeline.fetch_reference(hit['subject id'])
+                    gene = self.pipeline.fetch_gene(hit['subject id'])
                     
                     # check for overlap with VH
                     if 'VH' in self.region and self.region['VH']['query end'] > hit['query start']:
@@ -2577,10 +2577,10 @@ class Sample(object):
                     trimmed['alignment length'] = trimmed['query end'] - trimmed['query start']
                     trimmed['query'] = self.sequence.crop(trimmed['query start'], trimmed['query end'])
                     
-                    if trimmed['subject strand'] == reference.sequence.strand:
-                        trimmed['subject'] = reference.sequence.crop(trimmed['subject start'], trimmed['subject end'])
+                    if trimmed['subject strand'] == gene.sequence.strand:
+                        trimmed['subject'] = gene.sequence.crop(trimmed['subject start'], trimmed['subject end'])
                     else:
-                        trimmed['subject'] = reference.sequence.reversed.crop(trimmed['subject start'], trimmed['subject end'])
+                        trimmed['subject'] = gene.sequence.reversed.crop(trimmed['subject start'], trimmed['subject end'])
                         
                     # filter DH hits that match the criteria
                     if trimmed['query end'] > trimmed['query start']:
@@ -2669,12 +2669,12 @@ class Sample(object):
         for hit in self.hit:
             if hit['valid']:
                 if 'subject id' in hit:
-                    reference = self.pipeline.fetch_reference(hit['subject id'])
-                    if reference:
-                        if hit['subject strand'] == reference.sequence.strand:
-                            ref = reference.sequence
+                    gene = self.pipeline.fetch_gene(hit['subject id'])
+                    if gene:
+                        if hit['subject strand'] == gene.sequence.strand:
+                            ref = gene.sequence
                         else:
-                            ref = reference.sequence.reversed
+                            ref = gene.sequence.reversed
                             
                         if hit['region'] == 'VH' or hit['region'] == 'DH':
                             if hit['subject end'] < ref.length:
@@ -3390,7 +3390,7 @@ class Resolver(object):
         self.pipeline = pipeline
         self._connection = None
         self.cache = {
-            'reference':{},
+            'gene':{},
             'sample': {},
             'accession': {}
         }
@@ -3453,14 +3453,14 @@ class Resolver(object):
                 self.log.info('building index %s on collection %s', definition['name'], table['collection'])
                 collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
 
-    def fetch_reference(self, id):
-        if id not in self.cache['reference']:
-            document = self.database['reference'].find_one({'head.id': id})
+    def fetch_gene(self, id):
+        if id not in self.cache['gene']:
+            document = self.database['gene'].find_one({'head.id': id})
             if document:
-                reference = Reference(self.pipeline, document)
-                self.cache['reference'][id] = reference
-        if id in self.cache['reference']:
-            return self.cache['reference'][id]
+                gene = Gene(self.pipeline, document)
+                self.cache['gene'][id] = gene
+        if id in self.cache['gene']:
+            return self.cache['gene'][id]
         else:
             return None
 
@@ -3626,31 +3626,31 @@ class Resolver(object):
             
         return result
 
-    def complement_from_accesion(self, reference):
-        if reference is not None:
-            accession = self.fetch_accession(reference.accession)
+    def complement_from_accesion(self, gene):
+        if gene is not None:
+            accession = self.fetch_accession(gene.accession)
             if accession is not None:
-                matching = accession.sequence.crop(reference.start, reference.end)
-                if not reference.strand:
+                matching = accession.sequence.crop(gene.start, gene.end)
+                if not gene.strand:
                     matching = matching.reversed
                 
-                if matching.nucleotide != reference.sequence.nucleotide:
-                    self.log.error('reference sequence for %s does not match accession %s:%d:%d', reference.id, accession.id, reference.start, reference.end)
+                if matching.nucleotide != gene.sequence.nucleotide:
+                    self.log.error('gene sequence for %s does not match accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
                 else:
-                    self.log.debug('reference sequence for %s matched to accession %s:%d:%d', reference.id, accession.id, reference.start, reference.end)
+                    self.log.debug('gene sequence for %s matched to accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
                     
-                if reference.strain is None and accession.strain is not None:
-                    reference.strain = accession.strain
-                    self.log.debug('strain %s assigned to reference %s from %s', reference.strain, reference.id, reference.accession)
+                if gene.strain is None and accession.strain is not None:
+                    gene.strain = accession.strain
+                    self.log.debug('strain %s assigned to gene %s from %s', gene.strain, gene.id, gene.accession)
                     
-                if accession.strain is None and reference.strain is not None:
-                    accession.strain = reference.strain
+                if accession.strain is None and gene.strain is not None:
+                    accession.strain = gene.strain
                     self.save_accession(accession)
-                    self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, reference.id)
+                    self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, gene.id)
             else:
-                self.log.error('accession %s is missing', reference.head['accession'])
+                self.log.error('accession %s is missing', gene.head['accession'])
 
-    def save_reference(self, node):
+    def save_gene(self, node):
         if node is not None:
             document = { 'head': {}, 'body': node }
             for k in [
@@ -3684,17 +3684,17 @@ class Resolver(object):
                     'strand': node['strand'],
                     'read frame': node['read frame']
                 }
-            reference = Reference(self.pipeline, document)
-            existing = self.fetch_reference(reference.id)
+            gene = Gene(self.pipeline, document)
+            existing = self.fetch_gene(gene.id)
             if existing:
-                self.log.debug('existing reference found for %s', reference.id)
-                reference.node['_id'] = existing.node['_id']
+                self.log.debug('existing gene found for %s', gene.id)
+                gene.node['_id'] = existing.node['_id']
                 
-            self.complement_from_accesion(reference)
-            self.database['reference'].save(reference.document)
+            self.complement_from_accesion(gene)
+            self.database['gene'].save(gene.document)
             
-            if reference.id in self.cache['reference']:
-                del self.cache['reference'][reference.id]
+            if gene.id in self.cache['gene']:
+                del self.cache['gene'][gene.id]
 
 
 class Pipeline(object):
@@ -3743,8 +3743,8 @@ class Pipeline(object):
             feature['space'] |= set(codon['possible'])
         return feature
 
-    def fetch_reference(self, id):
-        return self.resolver.fetch_reference(id)
+    def fetch_gene(self, id):
+        return self.resolver.fetch_gene(id)
 
     def fetch_accession(self, id):
         return self.resolver.fetch_accession(id)
@@ -3767,12 +3767,12 @@ class Pipeline(object):
     def rebuild(self):
         self.resolver.rebuild()
 
-    def populate_reference(self, path):
+    def populate_gene(self, path):
         with io.open(path, 'rb') as file:
             content = StringIO(file.read().decode('utf8'))
             document = json.loads(content.getvalue())
             for node in document:
-                self.resolver.save_reference(node)
+                self.resolver.save_gene(node)
 
     def accession_to_fasta(self, query, profile):
         q = self.build_query(query, profile, 'accession')
@@ -3783,7 +3783,7 @@ class Pipeline(object):
             print(accession.fasta)
         cursor.close()
 
-    def align_reference(self, query, profile, flank=0):
+    def align_gene(self, query, profile, flank=0):
         instruction = {
             'record': {}, 
             'total': 0, 
@@ -3791,17 +3791,17 @@ class Pipeline(object):
             'target path': self.configuration['constant']['mouse chromosome 12']
         }
         
-        # load the reference sequences
-        q = self.build_query(query, profile, 'reference')
-        collection = self.resolver.database['reference']
+        # load the gene sequences
+        q = self.build_query(query, profile, 'gene')
+        collection = self.resolver.database['gene']
         cursor = collection.find(q)
         for node in cursor:
-            reference = Reference(self, node)
-            instruction['record'][reference.id] = { 'reference': reference }
+            gene = Gene(self, node)
+            instruction['record'][gene.id] = { 'gene': gene }
             instruction['total'] += 1
         cursor.close()
         
-        # execute blat and add the hits to each reference sequence in the buffer
+        # execute blat and add the hits to each gene sequence in the buffer
         self.log.info('aligning %s sequences with %s flanking', instruction['total'], instruction['flank'])
         blat = Blat(self, instruction)
         blat.search()
@@ -3812,11 +3812,11 @@ class Pipeline(object):
         }
         for k,query in blat.instruction['record'].items():
             if 'summary' in query:
-                q = { 'reference': query['reference'], 'summary': query['summary'] }
+                q = { 'gene': query['gene'], 'summary': query['summary'] }
 
-                if q['reference'].sequence.nucleotide not in breakdown['sequence']:
-                    breakdown['sequence'][q['reference'].sequence.nucleotide] = {}
-                breakdown['sequence'][q['reference'].sequence.nucleotide][q['reference'].id] = q
+                if q['gene'].sequence.nucleotide not in breakdown['sequence']:
+                    breakdown['sequence'][q['gene'].sequence.nucleotide] = {}
+                breakdown['sequence'][q['gene'].sequence.nucleotide][q['gene'].id] = q
 
                 for hit in q['summary']:
                     if str(hit['target start']) not in breakdown['position']:
@@ -3833,19 +3833,19 @@ class Pipeline(object):
         print(to_json(breakdown))
         # print(to_json(blat.instruction))
 
-    def reference_to_fasta(self, query, profile, flanking=0):
-        q = self.build_query(query, profile, 'reference')
-        collection = self.resolver.database['reference']
+    def gene_to_fasta(self, query, profile, flanking=0):
+        q = self.build_query(query, profile, 'gene')
+        collection = self.resolver.database['gene']
         cursor = collection.find(q)
         for node in cursor:
-            reference = Reference(self, node)
-            print(reference.to_fasta(flanking))
+            gene = Gene(self, node)
+            print(gene.to_fasta(flanking))
         cursor.close()
 
-    def reference_to_json(self, query, profile):
-        q = self.build_query(query, profile, 'reference')
+    def gene_to_json(self, query, profile):
+        q = self.build_query(query, profile, 'gene')
         buffer = []
-        collection = self.resolver.database['reference']
+        collection = self.resolver.database['gene']
         cursor = collection.find(q)
         for node in cursor:
             document = node['body'].copy()
@@ -3857,25 +3857,25 @@ class Pipeline(object):
         #buffer = sorted(buffer, key=lambda x: x['strain'])
         print(to_json(buffer))
 
-    def reference_count(self, query, profile):
-        q = self.build_query(query, profile, 'reference')
+    def gene_count(self, query, profile):
+        q = self.build_query(query, profile, 'gene')
         buffer = []
-        collection = self.resolver.database['reference']
+        collection = self.resolver.database['gene']
         print(collection.count(q))
 
-    def reference_to_auxiliary(self, query=None, profile='default'):
-        q = self.build_query(query, profile, 'reference')
+    def gene_to_auxiliary(self, query=None, profile='default'):
+        q = self.build_query(query, profile, 'gene')
         buffer = StringIO()
-        collection = self.database['reference']
+        collection = self.database['gene']
         cursor = collection.find(q)
         for node in cursor:
-            reference = Reference(self, node)
-            if reference.framed:
-                buffer.write(reference.id)
+            gene = Gene(self, node)
+            if gene.framed:
+                buffer.write(gene.id)
                 buffer.write('\t')
-                buffer.write(str(reference.sequence.read_frame))
+                buffer.write(str(gene.sequence.read_frame))
                 buffer.write('\t')
-                buffer.write(reference.region)
+                buffer.write(gene.region)
                 buffer.write('\n')
         buffer.seek(0)
         print(buffer.read())
@@ -3973,32 +3973,32 @@ class Pipeline(object):
             
         if cmd.action == 'ref-populate':
             for path in cmd.instruction['path']:
-                self.populate_reference(path)
+                self.populate_gene(path)
                 
         elif cmd.action == 'ref-info':
-            self.reference_to_json(
+            self.gene_to_json(
                 cmd.query,
                 cmd.instruction['profile'])
 
         elif cmd.action == 'ref-count':
-            self.reference_count(
+            self.gene_count(
                 cmd.query,
                 cmd.instruction['profile'])
 
         elif cmd.action == 'ref-fasta':
-            self.reference_to_fasta(
+            self.gene_to_fasta(
                 cmd.query,
                 cmd.instruction['profile'],
                 cmd.instruction['flanking'])
             
         elif cmd.action == 'ref-align':
-            self.align_reference(
+            self.align_gene(
                 cmd.query, 
                 cmd.instruction['profile'],
                 cmd.instruction['flanking'])
             
         elif cmd.action == 'ref-igblast-aux':
-            self.reference_to_auxiliary(
+            self.gene_to_auxiliary(
                 cmd.query, 
                 cmd.instruction['profile'])
             
