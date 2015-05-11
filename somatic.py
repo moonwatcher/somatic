@@ -3227,7 +3227,8 @@ class Block(object):
         buffer = StringIO()
         for sample in self.buffer:
             if query is None or all([k in sample.head and sample.head[k] == v for k,v in query.items()]):
-                buffer.write(to_fasta(sample.id, sample.sequence))
+                buffer.write(to_fasta(sample.id, sample.sequence.nucleotide))
+                buffer.write('\n')
         buffer.seek(0)
         return buffer
 
