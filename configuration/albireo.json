@@ -7,7 +7,7 @@
             "username": "tubo"
         }
     },
-    "table": [
+    "table": {
         "ncbi accession": {
             "collection": "ncbi_accession",
             "index": [
@@ -49,5 +49,5 @@
                 { "key": [[ "head.productive", 1 ]], "unique": false, "name": "sample productive" }
             ]
         }
-    ]
+    }
 }

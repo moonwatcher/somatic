@@ -180,8 +180,6 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
-                    'strand',
                     'functionality',
                     'in frame',
                     'gapped',
@@ -202,9 +200,7 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
                     'functionality',
-                    'strand',
                 ]
             },
         },
@@ -221,8 +217,6 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
-                    'strand',
                     'functionality',
                     'in frame',
                 ]
@@ -241,8 +235,6 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
-                    'strand',
                     'functionality',
                     'in frame',
                 ]
@@ -262,9 +254,7 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
                     'functionality',
-                    'strand',
                 ]
             },
         },
@@ -280,9 +270,7 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
                     'functionality',
-                    'strand',
                 ]
             },
         },
@@ -299,8 +287,6 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
-                    'strand',
                     'functionality',
                     'in frame',
                 ]
@@ -319,8 +305,6 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
-                    'strand',
                     'functionality',
                 ]
             },
@@ -338,14 +322,11 @@ configuration = {
                 'feature': [
                     'region',
                     'name',
-                    'strain',
-                    'strand',
                     'functionality',
                 ]
             },
         },
     },
-    'yes/no question': ['Y', 'N'],
     'expression': {
         'ncbi accession url': 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}',
         'gapped sequence': re.compile('^\s+Query_[0-9]+\s+(?P<offset>[0-9]+)\s+(?P<sequence>[ATCGN-]+)\s+[0-9]+$'),
@@ -2911,7 +2892,7 @@ class Diagram(object):
         b.append(self.sample.id)
         for r in ('VH', 'DH', 'JH'):
             if r in self.sample.region:
-                b.append('{} : {}'.format(r, self.sample.region[r]['subject id']))
+                b.append('{} : {}'.format(r, self.sample.region[r]['gene']))
                 
         if self.sample.productive:
             b.append('productive')
