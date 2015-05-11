@@ -71,7 +71,7 @@ configuration = {
                 'format': lambda x: x,
                 'title': 'name',
                 'width': 'auto',
-                'value': 'subject id'
+                'value': 'gene'
             },
             'strain': {
                 'format': lambda x: x,
@@ -174,7 +174,8 @@ configuration = {
             },
             'diagram': {
                 'track': {
-                    'valid': True
+                    'valid': True,
+                    'picked': True,
                 },
                 'feature': [
                     'region',
@@ -2457,6 +2458,9 @@ class Sample(object):
                 if 'subject id' in hit:
                     gene = self.pipeline.fetch_gene(hit['subject id'])
                     if gene:
+                        hit['gene'] = gene.body['gene']
+                        hit['family'] = gene.body['family']
+                        hit['allele'] = gene.body['allele']
                         if hit['subject strand'] == gene.sequence.strand:
                             ref = gene.sequence
                             hit['subject start'] -= 1
