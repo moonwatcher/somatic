@@ -11,7 +11,6 @@
         "identified": true,
         "imgt allele name": "IGHD1-3*01",
         "length": 23,
-        "name": "DFL16.3",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -20,7 +19,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 1300351,
         "strain": "129S1",
         "strand": true,
@@ -34,11 +32,10 @@
         "framed": true,
         "functionality": "F",
         "gene": "DSP2.11",
-        "id": "IGHD2-14*01-129S1",
+        "id": "DSP2.11-129S1",
         "identified": true,
         "imgt allele name": "IGHD2-14*01",
         "length": 17,
-        "name": "IGHD2-14*01",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -47,7 +44,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 1381715,
         "strain": "129S1",
         "strand": true,
@@ -64,7 +60,6 @@
         "id": "DSP2.2a-129S1",
         "identified": true,
         "length": 17,
-        "name": "DSP2.2a",
         "organism name": "mus musculus",
         "read frame": "0",
         "region": "DH",
@@ -73,7 +68,6 @@
             "read frame": "0",
             "strand": true
         },
-
         "start": 1377037,
         "strain": "129S1",
         "strand": true,
@@ -90,7 +84,6 @@
         "id": "DSP2.2b-129S1",
         "identified": true,
         "length": 17,
-        "name": "DSP2.2b",
         "organism name": "mus musculus",
         "read frame": "0",
         "region": "DH",
@@ -99,7 +92,6 @@
             "read frame": "0",
             "strand": true
         },
-
         "start": 1386707,
         "strain": "129S1",
         "strand": true,
@@ -117,7 +109,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-1*01",
         "length": 17,
-        "name": "IGHD2-1*01",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -126,7 +117,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 1372389,
         "strain": "129S1",
         "strand": true,
@@ -144,7 +134,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-11*02",
         "length": 17,
-        "name": "IGHD2-11*02",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -153,7 +142,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 1396828,
         "strain": "129S1",
         "strand": true,
@@ -171,7 +159,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-10*02",
         "length": 17,
-        "name": "IGHD2-10*02",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -180,7 +167,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 1391367,
         "strain": "129S1",
         "strand": true,
@@ -198,7 +184,6 @@
         "identified": true,
         "imgt allele name": "IGHD3-3*01",
         "length": 17,
-        "name": "DST4.3",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -207,7 +192,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 1366199,
         "strain": "129S1",
         "strand": true,
@@ -221,11 +205,10 @@
         "framed": true,
         "functionality": "F",
         "gene": "DFL16.e",
-        "id": "IGHD1-1*02",
+        "id": "DFL16.e-A/J",
         "identified": true,
         "imgt allele name": "IGHD1-1*02",
         "length": 23,
-        "name": "DFL16.e",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -234,7 +217,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 106,
         "strain": "A/J",
         "strand": true,
@@ -252,7 +234,6 @@
         "identified": true,
         "imgt allele name": "IGHD1-1*01",
         "length": 23,
-        "name": "DFL16.1 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -261,7 +242,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 47,
         "strain": "BALB/c",
         "strand": true,
@@ -279,7 +259,6 @@
         "identified": true,
         "imgt allele name": "IGHD1-2*01",
         "length": 17,
-        "name": "DFL16.2 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -288,7 +267,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 43,
         "strain": "BALB/c",
         "strand": true,
@@ -306,7 +284,6 @@
         "identified": true,
         "imgt allele name": "IGHD6-1*01",
         "length": 29,
-        "name": "DHPS1 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -315,7 +292,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 439,
         "strain": "BALB/c",
         "strand": true,
@@ -333,7 +309,6 @@
         "identified": true,
         "imgt allele name": "IGHD6-2*01",
         "length": 27,
-        "name": "DHPS2 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -342,7 +317,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 6,
         "strain": "BALB/c",
         "strand": true,
@@ -360,7 +334,6 @@
         "identified": true,
         "imgt allele name": "IGHD4-1*01",
         "length": 11,
-        "name": "DQ52 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -369,7 +342,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 2945,
         "strain": "BALB/c",
         "strand": true,
@@ -387,7 +359,6 @@
         "identified": true,
         "imgt allele name": "IGHD4-1*02",
         "length": 10,
-        "name": "DQ52.2 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -396,7 +367,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 312,
         "strain": "BALB/c",
         "strand": true,
@@ -414,7 +384,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-4*01",
         "length": 17,
-        "name": "DSP2.2 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -423,7 +392,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 479,
         "strain": "BALB/c",
         "strand": true,
@@ -441,7 +409,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-7*01",
         "length": 17,
-        "name": "DSP2.3 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -450,7 +417,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 47,
         "strain": "BALB/c",
         "strand": true,
@@ -468,7 +434,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-2*01",
         "length": 17,
-        "name": "DSP2.4 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -477,7 +442,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 34,
         "strain": "BALB/c",
         "strand": true,
@@ -495,7 +459,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-8*01",
         "length": 17,
-        "name": "DSP2.5 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -504,7 +467,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 38,
         "strain": "BALB/c",
         "strand": true,
@@ -522,7 +484,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-9*01",
         "length": 17,
-        "name": "DSP2.6 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -531,7 +492,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 31,
         "strain": "BALB/c",
         "strand": true,
@@ -549,7 +509,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-10*01",
         "length": 17,
-        "name": "DSP2.7 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -558,7 +517,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 47,
         "strain": "BALB/c",
         "strand": true,
@@ -576,7 +534,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-11*01",
         "length": 17,
-        "name": "DSP2.8 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -585,7 +542,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 47,
         "strain": "BALB/c",
         "strand": true,
@@ -603,7 +559,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-3*01",
         "length": 17,
-        "name": "DSP2.9 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -612,7 +567,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 383,
         "strain": "BALB/c",
         "strand": true,
@@ -630,7 +584,6 @@
         "identified": true,
         "imgt allele name": "IGHD3-2*01",
         "length": 16,
-        "name": "DST4 BALB/c",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -639,7 +592,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 129,
         "strain": "BALB/c",
         "strand": true,
@@ -656,7 +608,6 @@
         "id": "DFL16.1-C57BL/6",
         "identified": true,
         "length": 23,
-        "name": "DFL16.1 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -682,7 +633,6 @@
         "identified": true,
         "imgt allele name": "IGHD5-1*01",
         "length": 10,
-        "name": "DHPR1 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -708,7 +658,6 @@
         "identified": true,
         "imgt allele name": "IGHD5-2*01",
         "length": 10,
-        "name": "DHPR2 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -734,7 +683,6 @@
         "identified": true,
         "imgt allele name": "IGHD5-3*01",
         "length": 10,
-        "name": "DHPR3 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -760,7 +708,6 @@
         "identified": true,
         "imgt allele name": "IGHD5-4*01",
         "length": 10,
-        "name": "DHPR4 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -786,7 +733,6 @@
         "identified": true,
         "imgt allele name": "IGHD5-5*01",
         "length": 10,
-        "name": "DHPR5 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -812,7 +758,6 @@
         "identified": true,
         "imgt allele name": "IGHD5-6*01",
         "length": 10,
-        "name": "DHPR6 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -838,7 +783,6 @@
         "identified": true,
         "imgt allele name": "IGHD5-7*01",
         "length": 29,
-        "name": "DHPR7 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -864,7 +808,6 @@
         "identified": true,
         "imgt allele name": "IGHD5-8*01",
         "length": 29,
-        "name": "DHPR8 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -890,7 +833,6 @@
         "identified": true,
         "imgt allele name": "IGHD6-1*02",
         "length": 29,
-        "name": "DHPS1 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -916,7 +858,6 @@
         "identified": true,
         "imgt allele name": "IGHD6-2*02",
         "length": 29,
-        "name": "DHPS2 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -942,7 +883,6 @@
         "identified": true,
         "imgt allele name": "IGHD4-1*01",
         "length": 11,
-        "name": "DQ52 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -968,7 +908,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-4*01",
         "length": 17,
-        "name": "DSP2.2 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -994,7 +933,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-7*01",
         "length": 17,
-        "name": "DSP2.3 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -1020,7 +958,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-8*01",
         "length": 17,
-        "name": "DSP2.5 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -1046,7 +983,6 @@
         "identified": true,
         "imgt allele name": "IGHD2-3*01",
         "length": 17,
-        "name": "DSP2.9 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -1068,11 +1004,10 @@
         "framed": true,
         "functionality": "F",
         "gene": "DSP2.x",
-        "id": "DSP2.x.a-C57BL/6",
+        "id": "DSP2.x-C57BL/6",
         "identified": true,
         "imgt allele name": "IGHD2-5*01",
         "length": 17,
-        "name": "DSP2.x A C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -1094,11 +1029,10 @@
         "framed": true,
         "functionality": "F",
         "gene": "DSP2.x",
-        "id": "DSP2.x.b-C57BL/6",
+        "id": "DSP2.x-C57BL/6",
         "identified": true,
         "imgt allele name": "IGHD2-6*01",
         "length": 17,
-        "name": "DSP2.x B C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -1124,7 +1058,6 @@
         "identified": true,
         "imgt allele name": "IGHD3-2*02",
         "length": 16,
-        "name": "DST4 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -1150,7 +1083,6 @@
         "identified": true,
         "imgt allele name": "IGHD3-1*01",
         "length": 17,
-        "name": "DST4.2 C57BL/6",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -1172,11 +1104,10 @@
         "framed": true,
         "functionality": "F",
         "gene": "DSP2.x",
-        "id": "DSP2.x",
+        "id": "DSP2.x-CB20",
         "identified": true,
         "imgt allele name": "IGHD2-5*01",
         "length": 17,
-        "name": "DSP2.x",
         "organism name": "mus musculus",
         "read frame": 0,
         "region": "DH",
@@ -1185,7 +1116,6 @@
             "read frame": 0,
             "strand": true
         },
-
         "start": 136,
         "strain": "CB20",
         "strand": true,
@@ -1199,11 +1129,10 @@
         "framed": true,
         "functionality": "F",
         "gene": "DSP2.12",
-        "id": "DSP2.12",
+        "id": "DSP2.12-MRL/Mp-lpr",
         "identified": true,
         "imgt allele name": "IGHD2-12*01",
         "length": 26,
-        "name": "DSP2.12",
         "organism name": "mus musculus",
         "read frame": 2,
         "region": "DH",
@@ -1212,7 +1141,6 @@
             "read frame": 2,
             "strand": true
         },
-
         "start": 36,
         "strain": "MRL/Mp-lpr",
         "strand": true,
@@ -1226,11 +1154,10 @@
         "framed": true,
         "functionality": "F",
         "gene": "DSP2.13",
-        "id": "DSP2.13",
+        "id": "DSP2.13-MRL/Mp-lpr",
         "identified": true,
         "imgt allele name": "IGHD2-13*01",
         "length": 17,
-        "name": "DSP2.13",
         "organism name": "mus musculus",
         "read frame": 2,
         "region": "DH",
@@ -1239,7 +1166,6 @@
             "read frame": 2,
             "strand": true
         },
-
         "start": 36,
         "strain": "MRL/Mp-lpr",
         "strand": true,
