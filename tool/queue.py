@@ -20,6 +20,8 @@
 import sys
 import json
 
+LOG = '/volume/albireo/canal/thesis/populate'
+
 def to_json(node):
     def handler(o):
         result = None
@@ -422,7 +424,7 @@ libraries = [
     },
 ]
 
-def name(library):
+def name_library(library):
     buffer = []
     buffer.append('c57bl6')
     buffer.append('b{:0>2}t{:0>2}'.format(library['biological repetition'], library['technical repetition']))
@@ -446,6 +448,7 @@ def name(library):
     return ''.join(buffer)
 
 def populate(library):
+    name = name_library(library)
     buffer = [
         'gzcat',
         library['path'],
@@ -456,7 +459,9 @@ def populate(library):
         '--strain',
         'C57BL/6',
         '--library',
-        name(library),
+        name,
+        '>',
+        '{}/{}.log'.format(LOG, name)
     ]
     for index, literal in enumerate(buffer):
         if ' ' in literal:
@@ -464,10 +469,6 @@ def populate(library):
     return ' '.join(buffer)
 
 def execute(index):
-    for library in libraries:
-        name(library)
-        populate(library)
-
     if index is not None:
         print(populate(libraries[index]))
     else:
