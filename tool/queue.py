@@ -460,7 +460,7 @@ def populate(library):
         'C57BL/6',
         '--library',
         name,
-        '>',
+        '2>',
         '{}/{}.log'.format(LOG, name)
     ]
     for index, literal in enumerate(buffer):
