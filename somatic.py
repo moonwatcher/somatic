@@ -3895,12 +3895,15 @@ class Pipeline(object):
         for node in cursor:
             document = node['body'].copy()
             document.update(node['head'])
+            if 'allele' not in document and 'imgt allele name' in document:
+                document['allele'] = document['imgt allele name']
 
             if 'allele' not in document:
                 document['allele'] = '{}*01'.format(document['gene'])
             document['id'] = '{}-{}'.format(document['allele'], document['strain'])
             buffer.append(document)
         cursor.close()
+        buffer = sorted(buffer, key=lambda x: '' if 'allele' not in x else x['allele'])
         buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x else x['gene'])
         buffer = sorted(buffer, key=lambda x: '' if 'family' not in x else x['family'])
         buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
