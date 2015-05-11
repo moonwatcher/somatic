@@ -1,11 +1,3 @@
-IMGT resources
-==============
-```
-http://www.imgt.org/IMGT_GENE-DB/GENElect?query=7.2+IGHV&species=Mus+musculus
-http://www.imgt.org/IMGT_GENE-DB/GENElect?query=7.2+IGHD&species=Mus+musculus
-http://www.imgt.org/IMGT_GENE-DB/GENElect?query=7.2+IGHJ&species=Mus+musculus
-```
-
 Bootstrap the system
 ====================
 
