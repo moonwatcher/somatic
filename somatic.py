@@ -151,6 +151,11 @@ configuration = {
                 'head.strain': { '$exists': False }
             },
         },
+        'aligned': {
+            'gene': {
+                'head.aligned': True
+            },
+        },
         'c57bl6': {
             'gene': {
                 'head.verified': True,
@@ -544,10 +549,10 @@ configuration = {
             'cwd': DB_BASE + '/igblast',
             'arguments': [
                 BIN_BASE + '/igblastn',
-                '-germline_db_V', 'database/mouse_imgt_vh',
-                '-germline_db_J', 'database/mouse_imgt_jh',
-                '-germline_db_D', 'database/mouse_imgt_dh',
-                '-num_alignments_V', '7',
+                '-germline_db_V', 'database/mouse_c57bl6_ighv',
+                '-germline_db_J', 'database/mouse_c57bl6_ighj',
+                '-germline_db_D', 'database/mouse_c57bl6_ighd',
+                '-num_alignments_V', '3',
                 '-num_alignments_J', '3',
                 '-num_alignments_D', '5',
                 '-organism', 'mouse',
@@ -555,7 +560,6 @@ configuration = {
                 '-query', '-',
                 '-auxiliary_data', 'optional_file/mouse_gl.aux',
                 '-show_translation',
-                '-num_threads', '8',
                 '-outfmt',
                 '7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand',
             ]
@@ -564,10 +568,10 @@ configuration = {
             'cwd': DB_BASE + '/igblast',
             'arguments': [
                 BIN_BASE + '/igblastn',
-                '-germline_db_V', 'database/mouse_imgt_vh',
-                '-germline_db_J', 'database/mouse_imgt_jh',
-                '-germline_db_D', 'database/mouse_imgt_dh',
-                '-num_alignments_V', '7',
+                '-germline_db_V', 'database/mouse_c57bl6_ighv',
+                '-germline_db_J', 'database/mouse_c57bl6_ighj',
+                '-germline_db_D', 'database/mouse_c57bl6_ighd',
+                '-num_alignments_V', '3',
                 '-num_alignments_J', '3',
                 '-num_alignments_D', '5',
                 '-organism', 'mouse',
@@ -575,7 +579,6 @@ configuration = {
                 '-query', '-',
                 '-auxiliary_data', 'optional_file/mouse_gl.aux',
                 '-show_translation',
-                '-num_threads', '8',
                 '-outfmt', '4',
             ]
         }
@@ -3681,7 +3684,18 @@ class Resolver(object):
             else:
                 self.log.error('accession %s is missing', gene.accession)
 
-    def save_gene(self, node):
+    def save_gene(self, gene):
+        if gene is not None:
+            existing = self.fetch_gene(gene.id)
+            if existing:
+                self.log.debug('existing gene found for %s', gene.id)
+                gene.node['_id'] = existing.node['_id']
+                
+            self.database['gene'].save(gene.document)
+            if gene.id in self.cache['gene']:
+                del self.cache['gene'][gene.id]
+
+    def store_gene(self, node):
         if node is not None:
             document = { 'head': {}, 'body': node }
             for k in [
@@ -3716,16 +3730,7 @@ class Resolver(object):
                     'read frame': node['read frame']
                 }
             gene = Gene(self.pipeline, document)
-            existing = self.fetch_gene(gene.id)
-            if existing:
-                self.log.debug('existing gene found for %s', gene.id)
-                gene.node['_id'] = existing.node['_id']
-                
-            self.complement_from_accesion(gene)
-            self.database['gene'].save(gene.document)
-            
-            if gene.id in self.cache['gene']:
-                del self.cache['gene'][gene.id]
+            self.save_gene(gene)
 
 
 class Pipeline(object):
@@ -3804,7 +3809,7 @@ class Pipeline(object):
             content = StringIO(file.read().decode('utf8'))
             document = json.loads(content.getvalue())
             for node in document:
-                self.resolver.save_gene(node)
+                self.resolver.store_gene(node)
                 count += 1
         self.log.info('populated %d genes', count)
 
@@ -3839,44 +3844,19 @@ class Pipeline(object):
         self.log.info('aligning %s sequences with %s flanking', instruction['total'], instruction['flank'])
         blat = Blat(self, instruction)
         blat.search()
-
-        breakdown = {
-            'sequence': {},
-            'position': {}
-        }
         for k,query in blat.instruction['record'].items():
             gene = query['gene']
             if 'summary' in query and query['summary']:
                 if len(query['summary']) == 1:
                     hit = query['summary'][0]
                     self.log.info('gene %s aligned to %d %d', gene.id, hit['target start'], hit['target end'])
-
+                    gene.body['alignment'] = hit
+                    gene.head['aligned'] = True
+                    self.resolver.save_gene(gene)
                 else:
                     self.log.info('gene %s aligned to multiple locations', gene.id)
             else:
                 self.log.error('no satisfactory alignment found for gene %s',  gene.id)
-
-
-                # q = { 'gene': query['gene'], 'summary': query['summary'] }
-
-                # if q['gene'].sequence.nucleotide not in breakdown['sequence']:
-                #     breakdown['sequence'][q['gene'].sequence.nucleotide] = {}
-                # breakdown['sequence'][q['gene'].sequence.nucleotide][q['gene'].id] = q
-
-                # for hit in q['summary']:
-                #     if str(hit['target start']) not in breakdown['position']:
-                #         breakdown['position'][str(hit['target start'])] = []
-                #     breakdown['position'][str(hit['target start'])].append(q)
-
-                # for position, options in breakdown['position'].items():
-                #     options = sorted(options, key=lambda x: x['summary'][0]['flanked identical'], reverse=True)
-                #     options = sorted(options, key=lambda x: x['summary'][0]['identical'], reverse=True)
-                #     options = sorted(options, key=lambda x: x['summary'][0]['flanked score'], reverse=True)
-                #     options = sorted(options, key=lambda x: x['summary'][0]['score'], reverse=True)
-                #     breakdown['position'][position] = options
-
-        # print(to_json(breakdown))
-        # print(to_json(blat.instruction))
 
     def gene_to_fasta(self, query, profile, flanking=0):
         q = self.build_query(query, profile, 'gene')
@@ -3895,12 +3875,6 @@ class Pipeline(object):
         for node in cursor:
             document = node['body'].copy()
             document.update(node['head'])
-            if 'allele' not in document and 'imgt allele name' in document:
-                document['allele'] = document['imgt allele name']
-
-            if 'allele' not in document:
-                document['allele'] = '{}*01'.format(document['gene'])
-            document['id'] = '{}-{}'.format(document['allele'], document['strain'])
             buffer.append(document)
         cursor.close()
         buffer = sorted(buffer, key=lambda x: '' if 'allele' not in x else x['allele'])

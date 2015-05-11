@@ -3225,6 +3225,7 @@
     {
         "accession": "BN000872",
         "allele": "J558.65.163*01",
+        "region": "VH",
         "end": 610072,
         "family": "J558",
         "framed": true,
