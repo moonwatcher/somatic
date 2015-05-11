@@ -162,7 +162,6 @@ configuration = {
             'accession': {
             },
             'gene': {
-                'head.verified': True,
             },
             'sample': {
                 'head.valid': True,
@@ -1622,7 +1621,7 @@ class Accession(object):
 
     @property
     def fasta(self):
-        return to_fasta(self.id, self.sequence, self.body['description'])
+        return to_fasta(self.id, self.sequence.nucleotide, self.description)
 
     @property
     def head(self):
@@ -1657,6 +1656,12 @@ class Accession(object):
     def length(self):
         return self.sequence.length
 
+    @property
+    def description(self):
+        if 'description' in self.head:
+            return self.head['description']
+        else:
+            return None
     @property
     def strain(self):
         if 'strain' in self.head:
@@ -1977,8 +1982,6 @@ class Gene(object):
             flanking['start'] = flanking['accession start'] - flanking['flank start']
             flanking['end'] = flanking['accession end'] - flanking['flank start']
             flanking['sequence'] = accession.sequence.crop(flanking['flank start'], flanking['flank end'])
-            if self.strain:
-                flanking['strain'] = self.strain
             if not self.body['strand']:
                 flanking['sequence'] = flanking['sequence'].reversed
                 end = flanking['flank length'] - flanking['start']
@@ -3624,6 +3627,32 @@ class Resolver(object):
             
         return result
 
+    def search_accession(self, gene):
+        accession = self.fetch_accession(gene.accession)
+        positions = []
+        start = accession.sequence.nucleotide.find(gene.sequence.nucleotide)
+        while start >= 0 and start < accession.sequence.length:
+            end = start + gene.sequence.length
+            positions.append([start, end])
+            start = accession.sequence.nucleotide.find(gene.sequence.nucleotide, start + 1)
+
+        if len(positions) == 1:
+            position = positions[0]
+            self.log.info('new position found for %s in %s:%d:%d delta is %d:%d',
+                gene.id,
+                gene.accession,
+                position[0],
+                position[1],
+                gene.start - position[0],
+                gene.end - position[1])
+
+            gene.body['start'] = position[0]
+            gene.body['end'] = position[1]
+        elif len(positions) == 0:
+            self.log.error('%s not found in %s', gene.id, gene.accession)
+        else:
+            self.log.error('multiple positions found for %s in %s %s', gene.id, gene.accession, positions)
+
     def complement_from_accesion(self, gene):
         if gene is not None:
             accession = self.fetch_accession(gene.accession)
@@ -3631,20 +3660,24 @@ class Resolver(object):
                 matching = accession.sequence.crop(gene.start, gene.end)
                 if not gene.strand:
                     matching = matching.reversed
-                
-                if matching.nucleotide != gene.sequence.nucleotide:
-                    self.log.error('gene sequence for %s does not match accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
+
+                if not gene.sequence.nucleotide:
+                    gene.sequence.nucleotide = matching.nucleotide
+                    self.log.info('sequence assigned to gene %s from accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
                 else:
-                    self.log.debug('gene sequence for %s matched to accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
-                    
-                if gene.strain is None and accession.strain is not None:
-                    gene.strain = accession.strain
-                    self.log.info('strain %s assigned to gene %s from %s', gene.strain, gene.id, gene.accession)
-                    
-                if accession.strain is None and gene.strain is not None:
-                    accession.strain = gene.strain
-                    self.save_accession(accession)
-                    self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, gene.id)
+                    if gene.sequence.nucleotide and matching.nucleotide != gene.sequence.nucleotide:
+                        self.log.error('gene sequence for %s does not match accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
+                        self.search_accession(gene)
+                    else:
+                        self.log.debug('gene sequence for %s matched to accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
+                        
+                    if gene.strain is None and accession.strain is not None:
+                        gene.strain = accession.strain
+                        self.log.info('strain %s assigned to gene %s from %s', gene.strain, gene.id, gene.accession)
+                    if accession.strain is None and gene.strain is not None:
+                        accession.strain = gene.strain
+                        self.save_accession(accession)
+                        self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, gene.id)
             else:
                 self.log.error('accession %s is missing', gene.accession)
 
@@ -3777,7 +3810,7 @@ class Pipeline(object):
 
     def accession_to_fasta(self, query, profile):
         q = self.build_query(query, profile, 'accession')
-        collection = self.database['accession']
+        collection = self.resolver.database['accession']
         cursor = collection.find(q)
         for node in cursor:
             accession = Accession(self, node)
@@ -3812,26 +3845,37 @@ class Pipeline(object):
             'position': {}
         }
         for k,query in blat.instruction['record'].items():
-            if 'summary' in query:
-                q = { 'gene': query['gene'], 'summary': query['summary'] }
+            gene = query['gene']
+            if 'summary' in query and query['summary']:
+                if len(query['summary']) == 1:
+                    hit = query['summary'][0]
+                    self.log.info('gene %s aligned to %d %d', gene.id, hit['target start'], hit['target end'])
 
-                if q['gene'].sequence.nucleotide not in breakdown['sequence']:
-                    breakdown['sequence'][q['gene'].sequence.nucleotide] = {}
-                breakdown['sequence'][q['gene'].sequence.nucleotide][q['gene'].id] = q
+                else:
+                    self.log.info('gene %s aligned to multiple locations', gene.id)
+            else:
+                self.log.error('no satisfactory alignment found for gene %s',  gene.id)
 
-                for hit in q['summary']:
-                    if str(hit['target start']) not in breakdown['position']:
-                        breakdown['position'][str(hit['target start'])] = []
-                    breakdown['position'][str(hit['target start'])].append(q)
 
-                for position, options in breakdown['position'].items():
-                    options = sorted(options, key=lambda x: x['summary'][0]['flanked identical'], reverse=True)
-                    options = sorted(options, key=lambda x: x['summary'][0]['identical'], reverse=True)
-                    options = sorted(options, key=lambda x: x['summary'][0]['flanked score'], reverse=True)
-                    options = sorted(options, key=lambda x: x['summary'][0]['score'], reverse=True)
-                    breakdown['position'][position] = options
+                # q = { 'gene': query['gene'], 'summary': query['summary'] }
 
-        print(to_json(breakdown))
+                # if q['gene'].sequence.nucleotide not in breakdown['sequence']:
+                #     breakdown['sequence'][q['gene'].sequence.nucleotide] = {}
+                # breakdown['sequence'][q['gene'].sequence.nucleotide][q['gene'].id] = q
+
+                # for hit in q['summary']:
+                #     if str(hit['target start']) not in breakdown['position']:
+                #         breakdown['position'][str(hit['target start'])] = []
+                #     breakdown['position'][str(hit['target start'])].append(q)
+
+                # for position, options in breakdown['position'].items():
+                #     options = sorted(options, key=lambda x: x['summary'][0]['flanked identical'], reverse=True)
+                #     options = sorted(options, key=lambda x: x['summary'][0]['identical'], reverse=True)
+                #     options = sorted(options, key=lambda x: x['summary'][0]['flanked score'], reverse=True)
+                #     options = sorted(options, key=lambda x: x['summary'][0]['score'], reverse=True)
+                #     breakdown['position'][position] = options
+
+        # print(to_json(breakdown))
         # print(to_json(blat.instruction))
 
     def gene_to_fasta(self, query, profile, flanking=0):
@@ -3851,11 +3895,15 @@ class Pipeline(object):
         for node in cursor:
             document = node['body'].copy()
             document.update(node['head'])
+            del document['name']
+            if 'gene' not in document and 'imgt gene name' in document:
+                document['gene'] = document['imgt gene name']
+            document['id'] = '{}-{}'.format(document['gene'], document['strain'])
             buffer.append(document)
         cursor.close()
-        #buffer = sorted(buffer, key=lambda x: x['gene'])
-        #buffer = sorted(buffer, key=lambda x: x['family'])
-        #buffer = sorted(buffer, key=lambda x: x['strain'])
+        buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x else x['gene'])
+        buffer = sorted(buffer, key=lambda x: '' if 'family' not in x else x['family'])
+        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
         print(to_json(buffer))
 
     def gene_count(self, query, profile):
@@ -3867,7 +3915,7 @@ class Pipeline(object):
     def gene_to_auxiliary(self, query=None, profile='default'):
         q = self.build_query(query, profile, 'gene')
         buffer = StringIO()
-        collection = self.database['gene']
+        collection = self.resolver.database['gene']
         cursor = collection.find(q)
         for node in cursor:
             gene = Gene(self, node)
@@ -3889,7 +3937,7 @@ class Pipeline(object):
         if not library:
             raise ValueError('must specify a library to populate')
         block = Block(self)
-        collection = self.database['sample']
+        collection = self.resolver.database['sample']
         if drop:
             self.drop_library(library)
             
@@ -3904,7 +3952,7 @@ class Pipeline(object):
 
     def fasta(self, query=None, limit=None, skip=None, profile='default'):
         q = self.build_query(query, profile)
-        collection = self.database['sample']
+        collection = self.resolver.database['sample']
         cursor = collection.find(q)
         if limit is not None:
             cursor.limit(limit)
@@ -3918,7 +3966,7 @@ class Pipeline(object):
 
     def fastq(self, query=None, limit=None, skip=None, profile='default'):
         q = self.build_query(query, profile)
-        collection = self.database['sample']
+        collection = self.resolver.database['sample']
         cursor = collection.find(q)
         if limit is not None:
             cursor.limit(limit)
@@ -3932,7 +3980,7 @@ class Pipeline(object):
 
     def view(self, query=None, limit=None, skip=None, profile='default'):
         q = self.build_query(query, profile)
-        collection = self.database['sample']
+        collection = self.resolver.database['sample']
         cursor = collection.find(q)
         if limit is not None:
             cursor.limit(limit)
@@ -3946,7 +3994,7 @@ class Pipeline(object):
 
     def info(self, query, limit=None, skip=None, profile='default'):
         q = self.build_query(query, profile)
-        collection = self.database['sample']
+        collection = self.resolver.database['sample']
         cursor = collection.find(q)
         if limit is not None:
             cursor.limit(limit)
@@ -3960,7 +4008,7 @@ class Pipeline(object):
 
     def count(self, query=None, profile='default'):
         q = self.build_query(query, profile)
-        collection = self.database['sample']
+        collection = self.resolver.database['sample']
         print(collection.count(q))
 
     def simulate(self, library, strain, json, alignment, profile):

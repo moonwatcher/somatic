@@ -85,19 +85,22 @@ def fetch_from_ncbi(id):
     if id is not None:
         url = 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}'
         document = fetch(url.format(id))
-        if 'INSDSet' in document:
-            for INSDSet in document['INSDSet']:
-                if 'INSDSeq' in INSDSet:
-                    for INSDSeq in INSDSet['INSDSeq']:
-                        if 'INSDSeq_moltype' in INSDSeq and INSDSeq['INSDSeq_moltype'] in ['DNA', 'mRNA', 'RNA']:
-                            node = INSDSeq
-                            break
+        if document:
+            if 'INSDSet' in document:
+                for INSDSet in document['INSDSet']:
+                    if 'INSDSeq' in INSDSet:
+                        for INSDSeq in INSDSet['INSDSeq']:
+                            if 'INSDSeq_moltype' in INSDSeq and INSDSeq['INSDSeq_moltype'] in ['DNA', 'mRNA', 'RNA']:
+                                node = INSDSeq
+                                break
     return node
 
 def to_json(node):
     return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4)
 
-print(to_json(fetch_from_ncbi(sys.argv[1])))
+record = fetch_from_ncbi(sys.argv[1])
+if record:
+    print(to_json(record))
 
 
 
