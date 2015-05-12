@@ -40,3 +40,22 @@ somatic gene-igblast-aux -r JH --strain 'C57BL/6' >> db/igblast/optional_file/mo
 Load a sample
 =============
 ```zcat "A4G6U l01n01 b6_spf_preb_2.fastq.gz" | somatic populate --strain C57BL/6 --library c57bl6b02t01spfpreb```
+
+Look at an alignment diagram
+============================
+```
+somatic view -L 2 -S 128 -p productive
+
+R    name        F  c57bl6b03t03spffo | @M00595:21:000000000-A4G6U:1:1101:10492:4386 1:N:0:ATCAC | VH : J558.16.106 | DH : DSP2.2 | JH : IGHJ1 | productive | Q 36.25
+                    0  2   5   8   11  14  17  20  23  26  29  32  35  38  41  44  47  50  53  56  59  62  65  68  71  74  77  80  83  86  89  92  95  98  101 104 107 110 113 116 119 122 125 128 131 134 137 140 143 
+                    CC AGC ACA GCC TAC ATG GAG CTC CGC AGC CTG ACA TCT GAG GAC ACT GCA GTC TAT TAC TGT GCA AGA CGG GGT TAT GAT TAC GAC GGT TAC TGG TAC TTC GAT GTC TGG GGC ACA GGG ACC ACG GTC ACC GTC TCC TCA GGT AAG 
+                    CD DFF HG< F22 F>@ 2HH G0C B>C DGF HHH HGH HGD B3F G4? F?? BCH HHH GFH HHF HHH HGE HHG GE> GGH HHH HHH HFF F>E EEA FFG HHH HHH HFG HFF HHH GGA GDH HFF GFG HHH HGH GGG HGH GGG GGG GGG GEF FCD FFF 
+                       S   T   A   Y   M   E   L   R   S   L   T   S   E   D   T   A   V   Y   Y   C   A   R   R   G   Y   D   Y   D   G   Y   W   Y   F   D   V   W   G   T   G   T   T   V   T   V   S   S   G   K   
+VH   J558.16.106 F  -- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- 
+DH   DSP2.2      F                                                                                                     --- --- --- --- 
+JH   IGHJ1       F                                                                                                                         --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- - 
+V-D                                                                                                            --- --- 
+CDR3                                                                                               --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- 
+D-J                                                                                                                                    --- 
+                                                                                                                                       PNN 
+```
