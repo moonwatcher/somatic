@@ -39,4 +39,4 @@ somatic gene-igblast-aux -r JH --strain 'C57BL/6' >> db/igblast/optional_file/mo
 
 Load a sample
 =============
-```gzcat A4N54_l01n01_1FObB61.fastq.gz|somatic populate -l FObB61```
+```zcat "A4G6U l01n01 b6_spf_preb_2.fastq.gz" | somatic populate --strain C57BL/6 --library c57bl6b02t01spfpreb```
