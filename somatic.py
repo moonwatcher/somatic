@@ -2614,9 +2614,11 @@ class Sample(object):
                     
             if offset is not None:
                 start = self.region['VH']['query start'] + offset
+            else:
+                self.log.debug('could not locate the upstream cycteine in the VH region')
                 
             offset = None
-            # look for the most downstream tryptophan JH region
+            # look for the most downstream tryptophan in the JH region
             # followed by GG, followed by either C or T
             for index,codon in enumerate(self.region['JH']['query'].codon):
                 if codon == 'W':
@@ -2629,6 +2631,8 @@ class Sample(object):
                             
             if offset is not None:
                 end = self.region['JH']['query start'] + offset
+            else:
+                self.log.debug('could not locate the downstream tryptophan in the JH region')
                 
             if start and end:
                 self.region['CDR3'] = {
@@ -3040,10 +3044,10 @@ class Diagram(object):
         if track['query start'] > 0:
             result = track['query start']
             if self.sample.framed:
-                if self.width['sample read frame'] > 0:
+                if self.width['sample read frame'] > 0 and track['query start'] >= self.width['sample read frame']:
                     result += int((track['query start'] - self.width['sample read frame']) / 3) + 1
                 else:
-                    result += (int(track['query start'] / 3))
+                    result += int(track['query start'] / 3)
         return result
 
     def _draw_track(self, buffer, track):
