@@ -43,7 +43,7 @@ Load a sample
 
 Look at an alignment diagram
 ============================
-```somatic view -L 2 -S 128 -p productive```
+```somatic view -L 1 -S 128 -p productive```
 
 ```
 R    name        F  c57bl6b03t03spffo | @M00595:21:000000000-A4G6U:1:1101:10492:4386 1:N:0:ATCAC | VH : J558.16.106 | DH : DSP2.2 | JH : IGHJ1 | productive | Q 36.25
