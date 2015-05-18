@@ -474,6 +474,918 @@ def execute(index):
     else:
         for library in libraries:
             print(populate(library))
+
+def record():
+    record = {
+        'c57bl6spf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'exposure': 'specific pathogen free'
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_1_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 1,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_1_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 1,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_1_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 1,
+                        'technical repetition': 3,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_2_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_2_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_3_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_3_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_3_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 3,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_4_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_4_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_5_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_5_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_5_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 3,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_5_d.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 4,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_b1a_1.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 1,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_b1a_2.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_b1a_3.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_b1a_4.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_b1a_5.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_mz_1.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 1,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_mz_2.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_mz_3.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_mz_4.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_mz_5.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_preb_1.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 1,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_preb_2.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_preb_3.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_preb_4.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_preb_5.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+
+                ]
+            },
+        },
+        'c57bl6gf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'exposure': 'germ free'
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_2_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_2_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 2,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_2_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 3,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_3_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_3_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 2,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_3_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 3,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_3_d.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 4,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_4_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_4_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 2,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_4_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 3,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_4_d.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 4,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_5_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_5_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 2,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_5_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 3,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_b1a_2.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_b1a_3.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_b1a_4.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_b1a_5.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_mz_2.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_mz_3.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_mz_4.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_mz_5.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_preb_2.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_preb_3.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_preb_4.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_preb_5.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                ]
+            },
+        },
+
+
+        'c57bl6prebspf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': 'bone marrow pre b',
+                'exposure': 'specific pathogen free'
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_preb_1.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 1,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_preb_2.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_preb_3.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_preb_4.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_preb_5.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                ]
+            },
+        },
+        'c57bl6mzspf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': 'marginal zone spleen',
+                'exposure': 'specific pathogen free'
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_mz_1.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 1,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_mz_2.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_mz_3.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_mz_4.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_mz_5.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+
+                ]
+            },
+        },
+        'c57bl6b1aspf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': 'peritoneal cavity b1a',
+                'exposure': 'specific pathogen free'
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_b1a_1.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 1,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_b1a_2.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_b1a_3.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_b1a_4.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_b1a_5.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                ]
+            },
+        },
+        'c57bl6fospf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': 'follicular spleen',
+                'exposure': 'specific pathogen free'
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_1_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 1,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_1_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 1,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_1_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 1,
+                        'technical repetition': 3,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_2_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_2_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_3_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_3_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_3_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 3,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_4_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_4_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_5_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_conv_fo_5_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 2,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_5_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 3,
+                        'exposure': 'specific pathogen free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_conv_fo_5_d.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 4,
+                        'exposure': 'specific pathogen free',
+                    },
+
+                ]
+            },
+        },
+
+
+        'c57bl6prebgf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': 'bone marrow pre b',
+                'exposure': 'germ free',
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_preb_2.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_preb_3.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_preb_4.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_preb_5.fastq.gz',
+                        'tissue': 'bone marrow pre b',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                ]
+            },
+        },
+        'c57bl6mzgf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': 'marginal zone spleen',
+                'exposure': 'germ free',
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_mz_2.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_mz_3.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_mz_4.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_mz_5.fastq.gz',
+                        'tissue': 'marginal zone spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+
+                ]
+            },
+        },
+        'c57bl6b1agf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': 'peritoneal cavity b1a',
+                'exposure': 'germ free',
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_b1a_2.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_b1a_3.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_b1a_4.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_b1a_5.fastq.gz',
+                        'tissue': 'peritoneal cavity b1a',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                ]
+            },
+        },
+        'c57bl6fogf': {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': 'follicular spleen',
+                'exposure': 'germ free',
+            },
+            'body': {
+                'reference': [
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_2_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_2_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 2,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_2_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 2,
+                        'technical repetition': 3,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_3_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_3_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 2,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_3_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 3,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_3_d.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 3,
+                        'technical repetition': 4,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_4_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_4_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 2,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_4_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 3,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_4_d.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 4,
+                        'technical repetition': 4,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4N54/A4N54 l01n01 b6_gf_fo_5_a.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 1,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_5_b.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 2,
+                        'exposure': 'germ free',
+                    },
+                    {
+                        'path': '/volume/albireo/canal/thesis/library/000000000-A4G6U/A4G6U l01n01 b6_gf_fo_5_c.fastq.gz',
+                        'tissue': 'follicular spleen',
+                        'biological repetition': 5,
+                        'technical repetition': 3,
+                        'exposure': 'germ free',
+                    },
+
+                ]
+            },
+        }
+    }
+    for k,r in record.items():
+        r['head']['name'] = k
+        ref = []
+        for reference in r['body']['reference']:
+            ref.append(name_library(reference))
+        r['body']['reference'] = ref
+
+    for library in libraries:
+        name = name_library(library)
+        library['name'] = name
+        record[name] = {
+            'head': {
+                'strain': 'C57BL/6',
+                'tissue': library['tissue'],
+                'exposure': library['exposure'],
+                'name': name
+            },
+            'body': library
+        }
+    print(to_json(record))
+
 def main():
     index = None
     if len(sys.argv) > 1:
@@ -481,5 +1393,6 @@ def main():
     execute(index)
 
 if __name__ == '__main__':
-    main()
+    # main()
+    record()
 

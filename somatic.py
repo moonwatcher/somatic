@@ -27,16 +27,22 @@ import hashlib
 import math
 import pymongo
 
+from numpy import *
+import matplotlib
+import matplotlib.pyplot as pyplot
+
 from io import StringIO, BytesIO
 from datetime import timedelta, datetime
 from argparse import ArgumentParser
 from subprocess import Popen, PIPE
 
 from bson.objectid import ObjectId
+from bson.binary import Binary
+from pymongo.errors import BulkWriteError
 from pymongo.son_manipulator import SONManipulator
 from pymongo import MongoClient, DESCENDING, ASCENDING
-from pymongo.errors import BulkWriteError
 from operator import itemgetter, attrgetter
+from PIL import ImageDraw, ImageFont, Image
 
 import xmltodict
 import urllib.request, urllib.parse, urllib.error
@@ -59,6 +65,42 @@ log_levels = {
 }
 
 configuration = {
+    'scale': {
+        'color': [
+            '#00007F', '#000083', '#000087', '#00008B', '#00008F', '#000093', '#000097', '#00009B',
+            '#00009F', '#0000A3', '#0000A7', '#0000AB', '#0000AF', '#0000B3', '#0000B7', '#0000BB',
+            '#0000BF', '#0000C3', '#0000C7', '#0000CB', '#0000CF', '#0000D3', '#0000D7', '#0000DB',
+            '#0000DF', '#0000E3', '#0000E7', '#0000EB', '#0000EF', '#0000F3', '#0000F7', '#0000FB',
+            '#0000FF', '#0004FF', '#0008FF', '#000CFF', '#0010FF', '#0014FF', '#0018FF', '#001CFF',
+            '#0020FF', '#0024FF', '#0028FF', '#002CFF', '#0030FF', '#0034FF', '#0038FF', '#003CFF',
+            '#0040FF', '#0044FF', '#0048FF', '#004CFF', '#0050FF', '#0054FF', '#0058FF', '#005CFF',
+            '#0060FF', '#0064FF', '#0068FF', '#006CFF', '#0070FF', '#0074FF', '#0078FF', '#007CFF',
+            '#0080FF', '#0084FF', '#0088FF', '#008CFF', '#0090FF', '#0094FF', '#0098FF', '#009CFF',
+            '#00A0FF', '#00A4FF', '#00A8FF', '#00ACFF', '#00B0FF', '#00B4FF', '#00B8FF', '#00BCFF',
+            '#00C0FF', '#00C4FF', '#00C8FF', '#00CCFF', '#00D0FF', '#00D4FF', '#00D8FF', '#00DCFF',
+            '#00E0FF', '#00E4FF', '#00E8FF', '#00ECFF', '#00F0FF', '#00F4FF', '#00F8FF', '#00FCFF',
+            '#01FFFD', '#05FFF9', '#09FFF5', '#0DFFF1', '#11FFED', '#15FFE9', '#19FFE5', '#1DFFE1',
+            '#21FFDD', '#25FFD9', '#29FFD5', '#2DFFD1', '#31FFCD', '#35FFC9', '#39FFC5', '#3DFFC1',
+            '#41FFBD', '#45FFB9', '#49FFB5', '#4DFFB1', '#51FFAD', '#55FFA9', '#59FFA5', '#5DFFA1',
+            '#61FF9D', '#65FF99', '#69FF95', '#6DFF91', '#71FF8D', '#75FF89', '#79FF85', '#7DFF81',
+            '#81FF7D', '#85FF79', '#89FF75', '#8DFF71', '#91FF6D', '#95FF69', '#99FF65', '#9DFF61',
+            '#A1FF5D', '#A5FF59', '#A9FF55', '#ADFF51', '#B1FF4D', '#B5FF49', '#B9FF45', '#BDFF41',
+            '#C1FF3D', '#C5FF39', '#C9FF35', '#CDFF31', '#D1FF2D', '#D5FF29', '#D9FF25', '#DDFF21',
+            '#E1FF1D', '#E5FF19', '#E9FF15', '#EDFF11', '#F1FF0D', '#F5FF09', '#F9FF05', '#FDFF01',
+            '#FFFC00', '#FFF800', '#FFF400', '#FFF000', '#FFEC00', '#FFE800', '#FFE400', '#FFE000',
+            '#FFDC00', '#FFD800', '#FFD400', '#FFD000', '#FFCC00', '#FFC800', '#FFC400', '#FFC000',
+            '#FFBC00', '#FFB800', '#FFB400', '#FFB000', '#FFAC00', '#FFA800', '#FFA400', '#FFA000',
+            '#FF9C00', '#FF9800', '#FF9400', '#FF9000', '#FF8C00', '#FF8800', '#FF8400', '#FF8000',
+            '#FF7C00', '#FF7800', '#FF7400', '#FF7000', '#FF6C00', '#FF6800', '#FF6400', '#FF6000',
+            '#FF5C00', '#FF5800', '#FF5400', '#FF5000', '#FF4C00', '#FF4800', '#FF4400', '#FF4000',
+            '#FF3C00', '#FF3800', '#FF3400', '#FF3000', '#FF2C00', '#FF2800', '#FF2400', '#FF2000',
+            '#FF1C00', '#FF1800', '#FF1400', '#FF1000', '#FF0C00', '#FF0800', '#FF0400', '#FF0000',
+            '#FB0000', '#F70000', '#F30000', '#EF0000', '#EB0000', '#E70000', '#E30000', '#DF0000',
+            '#DB0000', '#D70000', '#D30000', '#CF0000', '#CB0000', '#C70000', '#C30000', '#BF0000',
+            '#BB0000', '#B70000', '#B30000', '#AF0000', '#AB0000', '#A70000', '#A30000', '#9F0000',
+            '#9B0000', '#970000', '#930000', '#8F0000', '#8B0000', '#870000', '#830000', '#7F0000',
+        ]
+    },
     'database': {
         'database': 'somatic', 
         'host': 'albireo.bio.nyu.edu', 
@@ -136,41 +178,26 @@ configuration = {
                 ]
             },
         },
-        'not-c57bl6': {
-            'gene': {
-                'head.organism name': 'mus musculus',
-                '$or': [
-                    { '$and': [ { 'head.strain': { '$ne': 'C57BL/6' } }, { 'head.strain': { '$ne': 'C57BL/6J' } } ] },
-                    { 'head.strain': { '$exists': False } }
-                ]
-            },
-        },
         'unknown': {
             'gene': {
-                'head.organism name': 'mus musculus',
-                'head.strain': { '$exists': False }
+                'organism name': 'mus musculus',
+                'strain': { '$exists': False }
             },
         },
         'aligned': {
             'gene': {
-                'head.aligned': True
-            },
-        },
-        'c57bl6': {
-            'gene': {
-                'head.verified': True,
-                'head.organism name': 'mus musculus',
-                '$or': [ { 'head.strain': 'C57BL/6' }, { 'head.strain': 'C57BL/6J' } ]
+                'aligned': True
             },
         },
         'default': {
+            'library': {},
             'accession': {
             },
             'gene': {
             },
             'sample': {
-                'head.valid': True,
-                'head.productive': True,
+                'valid': True,
+                'productive': True,
             },
             'diagram': {
                 'track': {
@@ -187,10 +214,44 @@ configuration = {
                 ]
             },
         },
+        'productive3033': {
+            'sample': {
+                'valid': True,
+                'productive': True,
+                '$and': [ { 'average phred': { '$gt': 30 } }, { 'average phred': { '$lt': 33 } } ] 
+            },
+            'diagram': {
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'functionality',
+                ]
+            },
+        },
+        'productive33+': {
+            'sample': {
+                'productive': True,
+                'average phred': { '$gt': 33 },
+            },
+            'diagram': {
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'functionality',
+                ]
+            },
+        },
         'productive': {
             'sample': {
-                'head.valid': True,
-                'head.productive': True,
+                'productive': True,
             },
             'diagram': {
                 'track': {
@@ -206,8 +267,8 @@ configuration = {
         },
         'not-productive': {
             'sample': {
-                'head.valid': True,
-                'head.productive': False,
+                'valid': True,
+                'productive': False,
             },
             'diagram': {
                 'track': {
@@ -224,8 +285,7 @@ configuration = {
         },
         'dropped-productive': {
             'sample': {
-                'head.valid': True,
-                'head.productive': True,
+                'productive': True,
             },
             'diagram': {
                 'track': {
@@ -242,9 +302,8 @@ configuration = {
         },
         'palindromic': {
             'sample': {
-                'head.valid': True,
-                'head.productive': True,
-                'head.palindromic': True,
+                'productive': True,
+                'palindromic': True,
             },
             'diagram': {
                 'track': {
@@ -260,8 +319,8 @@ configuration = {
         },
         'gapped': {
             'sample': {
-                'head.valid': True,
-                'head.gapped': True,
+                'valid': True,
+                'gapped': True,
             },
             'diagram': {
                 'track': {
@@ -276,8 +335,8 @@ configuration = {
         },
         'premature': {
             'sample': {
-                'head.valid': True,
-                'head.premature': True,
+                'valid': True,
+                'premature': True,
             },
             'diagram': {
                 'track': {
@@ -294,8 +353,8 @@ configuration = {
         },
         'in': {
             'sample': {
-                'head.valid': True,
-                'head.in frame': True,
+                'valid': True,
+                'in frame': True,
             },
             'diagram': {
                 'track': {
@@ -311,8 +370,8 @@ configuration = {
         },
         'out': {
             'sample': {
-                'head.valid': True,
-                'head.in frame': False,
+                'valid': True,
+                'in frame': False,
             },
             'diagram': {
                 'track': {
@@ -823,7 +882,17 @@ configuration = {
                     'action': 'version',
                     'version': '%(prog)s 1.0'
                 }
-            }
+            },
+            'table': {
+                'flag': [
+                    '--table'
+                ],
+                'parameter': {
+                    'dest': 'table',
+                    'help': 'table name',
+                    'nargs': '*'
+                }
+            },
         },
         'section': {
             'action': [
@@ -941,25 +1010,56 @@ configuration = {
                     'argument': [
                         'profile',
                         'library',
-                        'strain',
-                        'json',
-                        'alignment'
+                        'id',
+                        'gapped',
+                        'valid',
+                        'in frame',
+                        'premature',
+                        'limit',
+                        'skip',
+                        'productive',
                     ],
                     'instruction': {
-                        'help': 'process alignment without updating the database',
-                        'name': 'simulate'
+                        'help': 'calculate statistic for records',
+                        'name': 'statistic'
                     }
                 },
                 {
                     'argument': [
-                        'format',
                         'profile',
-                        'strain',
+                        'library',
                         'id',
+                        'gapped',
+                        'valid',
+                        'in frame',
+                        'premature',
+                        'limit',
+                        'skip',
+                        'productive',
                     ],
                     'instruction': {
-                        'help': 'dump accession sequences to fasta',
-                        'name': 'accession-fasta'
+                        'help': 'draw heatmap',
+                        'name': 'heatmap'
+                    }
+                },
+                {
+                    'argument': [
+                        'path'
+                    ],
+                    'instruction': {
+                        'help': 'load library definition from JSON file',
+                        'name': 'library-populate'
+                    }
+                },
+                {
+                    'argument': [
+                        'strain',
+                        'profile',
+                        'id'
+                    ],
+                    'instruction': {
+                        'help': 'view JSON library records',
+                        'name': 'library-info'
                     }
                 },
                 {
@@ -1023,6 +1123,18 @@ configuration = {
                 },
                 {
                     'argument': [
+                        'format',
+                        'profile',
+                        'strain',
+                        'id',
+                    ],
+                    'instruction': {
+                        'help': 'dump accession sequences to fasta',
+                        'name': 'accession-fasta'
+                    }
+                },
+                {
+                    'argument': [
                         'region',
                         'strain',
                         'profile',
@@ -1034,12 +1146,27 @@ configuration = {
                     }
                 },
                 {
-                    'argument': [],
+                    'argument': [
+                        'table',
+                    ],
                     'instruction': {
                         'help': 'rebuild database indexes',
                         'name': 'rebuild'
                     }
-                }
+                },
+                {
+                    'argument': [
+                        'profile',
+                        'library',
+                        'strain',
+                        'json',
+                        'alignment'
+                    ],
+                    'instruction': {
+                        'help': 'process alignment without updating the database',
+                        'name': 'simulate'
+                    }
+                },
             ],
             'instruction': {
                 'description': '',
@@ -1074,7 +1201,8 @@ configuration = {
         'B': {  'code':'asx',                                   'name': 'Aspartic acid or Asparagine' },
         'Z': {  'code':'glx',                                   'name': 'Glutamine or Glutamic acid' },
         'J': {  'code':'xle',                                   'name': 'Leucine or Isoleucine' },
-        'X': {  'code':'xaa',                                   'name': 'Any amino acid' }
+        'X': {  'code':'xaa',                                   'name': 'Any amino acid' },
+        '*': {  'code':'stop',                                  'name': 'Stop codon' },
     },
     'iupac nucleic acid notation': {
         'A': {  'reverse': 'T',  'option':[ 'A' ],                  'name': 'Adenine' },
@@ -1189,14 +1317,14 @@ configuration = {
             'minimum alignment': 30
         }
     },
-    'table': [
-        {
+    'table': {
+        'ncbi_accession': {
             'collection': 'ncbi_accession',
             'index': [
                 { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'accession id' }
             ]
         },
-        {
+        'accession': {
             'collection': 'accession',
             'index': [
                 { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'accession id' },
@@ -1205,7 +1333,7 @@ configuration = {
                 { 'key': [( 'head.format', ASCENDING )], 'unique': False, 'name': 'accession format' },
             ]
         },
-        {
+        'gene': {
             'collection': 'gene',
             'index': [
                 { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'gene id' },
@@ -1216,22 +1344,37 @@ configuration = {
                 { 'key': [( 'head.functionality', ASCENDING )], 'unique': False, 'name': 'gene functionality' },
             ]
         },
-        {
+        'sample': {
             'collection': 'sample',
             'index': [
+                { 'key': [( 'head.library', ASCENDING ), ( 'head.productive', ASCENDING )], 'unique': False, 'name': 'sample productive and library' },
+                { 'key': [( 'head.library', ASCENDING ), ( 'head.productive', ASCENDING ), ( 'head.average phred', ASCENDING )], 'unique': False, 'name': 'sample productive and library and phred' },
                 { 'key': [( 'head.id', ASCENDING ), ( 'head.library', ASCENDING )], 'unique': True, 'name': 'sample in library' },
+                { 'key': [( 'head.library', ASCENDING ), ( 'head.valid', ASCENDING )], 'unique': False, 'name': 'sample valid and library' },
                 { 'key': [( 'head.id', ASCENDING )], 'unique': False, 'name': 'sample id' },
+                { 'key': [( 'head.productive', ASCENDING )], 'unique': False, 'name': 'sample productive' },
+                { 'key': [( 'head.valid', ASCENDING )], 'unique': False, 'name': 'sample valid' },
                 { 'key': [( 'head.framed', ASCENDING )], 'unique': False, 'name': 'sample framed' },
                 { 'key': [( 'head.in frame', ASCENDING )], 'unique': False, 'name': 'sample in frame' },
                 { 'key': [( 'head.premature', ASCENDING )], 'unique': False, 'name': 'sample premature' },
                 { 'key': [( 'head.library', ASCENDING )], 'unique': False, 'name': 'sample library' },
                 { 'key': [( 'head.gapped', ASCENDING )], 'unique': False, 'name': 'sample gapped' },
-                { 'key': [( 'head.valid', ASCENDING )], 'unique': False, 'name': 'sample valid' },
                 { 'key': [( 'head.palindromic', ASCENDING )], 'unique': False, 'name': 'sample palindromic' },
-                { 'key': [( 'head.productive', ASCENDING )], 'unique': False, 'name': 'sample productive' }
+            ]
+        },
+        'library': {
+            'collection': 'library',
+            'index': [
+                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'library id' }
+            ]
+        },
+        'statistic': {
+            'collection': 'statistic',
+            'index': [
+                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'statistic id' }
             ]
         }
-    ]
+    }
 }
 
 def parse_match(match):
@@ -1277,7 +1420,14 @@ def transform_to_document(node):
         
     elif isinstance(node, Sequence):
         return node.document
-        
+
+    elif isinstance(node, ndarray):
+        bytesio = BytesIO()
+        save(bytesio, node)
+        bytesio.seek(0)
+        binary = Binary(bytesio.read())
+        return binary
+
     else: return node
 
 def to_json(node):
@@ -1955,7 +2105,7 @@ class Gene(object):
 
     def to_flanking_fasta(self, flank):
         flanking = None
-        accession = self.pipeline.fetch_accession(self.accession)
+        accession = self.pipeline.resolver.accession_fetch(self.accession)
         if accession is not None:
             flanking = {}
             flanking['id'] = self.id
@@ -1980,7 +2130,7 @@ class Gene(object):
         buffer = [ '>{}'.format(self.id) ]
         sequence = self.sequence
         if flank is not None and flank > 0:
-            accession = self.pipeline.fetch_accession(self.accession)
+            accession = self.pipeline.resolver.accession_fetch(self.accession)
             if accession is not None:
                 flanking = accession.sequence.crop(self.start - flank, self.end + flank)
                 if flanking is not None:
@@ -2099,20 +2249,70 @@ class Gene(object):
     def functionality(self):
         return self.head['functionality']
 
+    def check_in_accesion(self):
+            accession = self.accession_fetch(self.accession)
+            if accession is not None:
+                matching = accession.sequence.crop(self.start, self.end)
+                if not self.strand:
+                    matching = matching.reversed
+
+                if not self.sequence.nucleotide:
+                    self.sequence.nucleotide = matching.nucleotide
+                    self.log.info('sequence assigned to gene %s from accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                else:
+                    if self.sequence.nucleotide and matching.nucleotide != self.sequence.nucleotide:
+                        self.log.info('gene sequence for %s does not match accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                        self.search_in_accession()
+                    else:
+                        self.log.debug('gene sequence for %s matched to accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                        
+                    if self.strain is None and accession.strain is not None:
+                        self.strain = accession.strain
+                        self.log.info('strain %s assigned to gene %s from %s', self.strain, self.id, self.accession)
+
+                    # This should probably not be here...
+                    if accession.strain is None and self.strain is not None:
+                        accession.strain = self.strain
+                        self.pipeline.resolver.accession_save(accession)
+                        self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, self.id)
+            else:
+                self.log.error('accession %s could not be located', self.accession)
+
+    def search_in_accession(self):
+        accession = self.pipeline.resolver.accession_fetch(self.accession)
+        positions = []
+        start = accession.sequence.nucleotide.find(self.sequence.nucleotide)
+        while start >= 0 and start < accession.sequence.length:
+            end = start + self.sequence.length
+            positions.append([start, end])
+            start = accession.sequence.nucleotide.find(self.sequence.nucleotide, start + 1)
+
+        if len(positions) == 1:
+            position = positions[0]
+            self.log.info('new position found for %s in %s:%d:%d delta is %d:%d',
+                self.id,
+                self.accession,
+                position[0],
+                position[1],
+                self.start - position[0],
+                self.end - position[1])
+
+            self.body['start'] = position[0]
+            self.body['end'] = position[1]
+        elif len(positions) == 0:
+            self.log.error('%s not found in %s', self.id, self.accession)
+        else:
+            self.log.error('multiple positions found for %s in %s %s', self.id, self.accession, positions)
+
 
 class Sample(object):
     def __init__(self, pipeline, node=None, id=None, library=None):
         self.log = logging.getLogger('Sample')
         self.pipeline = pipeline
         self.node = node
+        self.index = {}
+        self._primary = None
         
-        def load_region(node):
-            if 'query' in node and isinstance(node['query'], dict):
-                node['query'] = Sequence(self.pipeline, node['query'])
-                
-            if 'subject' in node and isinstance(node['subject'], dict):
-                node['subject'] = Sequence(self.pipeline, node['subject'])
-                
         if self.node is None:
             self.node = {
                 'head': {
@@ -2124,9 +2324,9 @@ class Sample(object):
                     'premature': False,
                     'in frame': False,
                     'productive': False,
-                    'region' : []
                 }
             }
+
         if not self.id:
             raise InvalidSampleError('sample must have an id')
             
@@ -2136,29 +2336,36 @@ class Sample(object):
         if not self.library:
             raise InvalidSampleError('sample must have a library')
             
-        if 'sequence' in self.node and isinstance(self.node['sequence'], dict):
-            self.node['sequence'] = Sequence(self.pipeline, self.node['sequence'])
+        if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
+            self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
-            self.node['sequence'] = Sequence(self.pipeline)
+            self.body['sequence'] = Sequence(self.pipeline)
             
-        if 'hit' in self.node:
-            for hit in self.node['hit']:
-                load_region(hit)
-        else:
-            self.node['hit'] = []
-            
-        if 'region' in self.node:
-            for value in self.node['region'].values():
-                load_region(value)
-        else:
-            self.node['region'] = {}
+        for hit in self.hit:
+            self.load_hit(hit)
+
+    def load_hit(self, hit):
+        for k in [
+            'query',
+            'subject',
+            '3 chew',
+            '5 chew'
+        ]:
+            if k in hit and isinstance(hit[k], dict):
+                hit[k] = Sequence(self.pipeline, hit[k])
+
+        if 'uuid' not in hit:
+            hit['uuid'] = str(uuid.uuid4())
+
+        if hit['uuid'] not in self.index:
+            self.index[hit['uuid']] = hit
 
     def __str__(self):
         return self.diagram('default')
 
     @property
     def key(self):
-        if 'id sha1' not in self.head:
+        if 'id sha1' not in self.head and self.id is not None:
             self.head['id sha1'] = hashlib.sha1(self.id.encode('utf8')).hexdigest()
         return self.head['id sha1']
 
@@ -2168,32 +2375,21 @@ class Sample(object):
 
     @property
     def document(self):
-        def transform_to_document(node):
-            if isinstance(node, list):
-                return [ transform_to_document(v) for v in node ]
-                
-            elif isinstance(node, dict):
-                for key, value in node.items():
-                    node[key] = transform_to_document(value)
-                return node
-                
-            elif isinstance(node, Sequence):
-                return node.document
-                
-            else: return node
-            
         document = transform_to_document(self.node)
-        if document['hit']:
-            document['matched'] = True
-        else:
-            document['matched'] = False
-            del document['hit']
-            del document['region']
+        document['head']['matched'] = True if document['body']['hit'] else False
         return document
 
     @property
     def head(self):
+        if 'head' not in self.node:
+            self.node['head'] = {}
         return self.node['head']
+
+    @property
+    def body(self):
+        if 'body' not in self.node:
+            self.node['body'] = {}
+        return self.node['body']
 
     @property
     def id(self):
@@ -2209,11 +2405,11 @@ class Sample(object):
 
     @property
     def strand(self):
-        return self.node['strand']
+        return self.head['strand']
 
     @strand.setter
     def strand(self, value):
-        self.node['strand'] = value
+        self.head['strand'] = value
 
     @property
     def library(self):
@@ -2225,7 +2421,7 @@ class Sample(object):
 
     @property
     def sequence(self):
-        return self.node['sequence']
+        return self.body['sequence']
 
     @property
     def valid(self):
@@ -2237,13 +2433,18 @@ class Sample(object):
 
     @property
     def hit(self):
-        return self.node['hit']
+        if 'hit' not in self.body:
+            self.body['hit'] = []
+        return self.body['hit']
 
     @property
-    def region(self):
-        if 'region' not in self.node:
-            self.node['region'] = {}
-        return self.node['region']
+    def primary(self):
+        if self._primary is None:
+            if 'primary' in self.body:
+                self._primary = {}
+                for k,v in self.body['primary'].items():
+                    self._primary[k] = self.index[v]
+        return self._primary
 
     @property
     def matched(self):
@@ -2271,24 +2472,35 @@ class Sample(object):
 
     @property
     def fasta(self):
-        return to_fasta(self.id, self.sequence)
+        return to_fasta(self.id, self.sequence.nucleotide)
 
     @property
     def fastq(self):
         return '{}\n{}\n+\n{}'.format(self.id, self.sequence.nucleotide, self.sequence.quality)
 
-    def add_hit(self, hit):
+    def add_igblast_hit(self, hit):
         if hit is not None:
-            hit['query start'] -= 1
-            if 'uuid' not in hit: hit['uuid'] = str(uuid.uuid4())
+            if 'subject id' in hit:
+                gene = self.pipeline.resolver.gene_fetch(hit['subject id'])
+                # switch the hit to a zero based coordinate system
+                if gene:
+                    hit['query start'] -= 1
+                    if hit['subject strand'] == gene.sequence.strand:
+                        hit['subject start'] -= 1
+                    else:
+                        hit['subject start'] = ref.length - hit['subject start']
+                        hit['subject end'] = ref.length - hit['subject end'] + 1
+                else:
+                    self.invalidate_hit(hit, 'hit matches an unknown gene')
             self.hit.append(hit)
+            self.load_hit(hit)
 
     def reverse(self):
-        self.node['sequence'] = self.node['sequence'].reversed
+        self.body['sequence'] = self.body['sequence'].reversed
 
     def expand(self):
-        if 'hit' in self.node:
-            for hit in self.node['hit']:
+        if 'hit' in self.body:
+            for hit in self.body['hit']:
                 if 'compressed hit' in hit:
                     match = self.configuration['expression']['expand hit'].search(hit['compressed hit'])
                     if match:
@@ -2321,29 +2533,12 @@ class Sample(object):
                                 hit[k] = v
 
     def compress(self):
-        if 'hit' in self.node:
-            for hit in self.node['hit']:
+        if 'hit' in self.body:
+            for hit in self.body['hit']:
                 try:
                     hit['compressed hit'] = self.configuration['expression']['igblast compressed hit'].format(**hit)
                 except KeyError as e:
                     self.log.error('could not compress hit because %s was missing', e)
-
-    def analyze(self, strain):
-        self.reset()
-        if self.valid: self._load_gene()
-        if self.valid: self._pick_jh_region(strain)
-        if self.valid: self._pick_vh_region(strain)
-        if self.valid: self._check_for_aligned_frames()
-        if self.valid: self._pick_dh_region()
-        if self.valid: self._identify_v_j_junction()
-        if self.valid: self._identify_v_d_junction()
-        if self.valid: self._identify_d_j_junction()
-        if self.valid: self._check_for_stop_codon()
-        if self.valid: self._identify_cdr3()
-        if self.valid: self._check_productive()
-        if self.valid: self._identify_chewback()
-        if self.valid: self._index_regions()
-        if self.valid: self._analyze_quality()
 
     def to_json(self):
         def handler(o):
@@ -2391,7 +2586,7 @@ class Sample(object):
 
     def invalidate(self, message):
         self.valid = False
-        self.node['error'] = message
+        self.head['error'] = message
         self.log.warning('sample %s invalidated because %s', self.id, message)
 
     def invalidate_hit(self, hit, message):
@@ -2400,14 +2595,21 @@ class Sample(object):
         self.log.warning('%dbp %s hit to %s on %s invalidated because %s',
         hit['alignment length'], hit['region'], hit['subject id'], self.id, message)
 
-    def _set_frame(self, hit):
-        if hit['framed']:
-            self.head['framed'] = True
-            self.node['framed by'] = hit['subject id']
-            self.sequence.read_frame = (hit['query start'] + hit['subject'].read_frame) % 3
-            self.strand = hit['subject strand']
-            self._assign_frame()
-            self.log.debug('frame set for %s by %s', self.id, hit['subject id'])
+    def analyze(self, strain=None):
+        self.reset()
+        if self.valid: self._load_gene()
+        if self.valid: self._pick_jh_region(strain)
+        if self.valid: self._pick_vh_region(strain)
+        if self.valid: self._check_V_J_framing()
+        if self.valid: self._pick_dh_region()
+        if self.valid: self._identify_v_j_junction()
+        if self.valid: self._identify_v_d_junction()
+        if self.valid: self._identify_d_j_junction()
+        if self.valid: self._check_for_stop_codon()
+        if self.valid: self._identify_cdr3()
+        if self.valid: self._check_productive()
+        if self.valid: self._identify_chewback()
+        if self.valid: self._analyze_quality()
 
     def reset(self):
         self.head['valid'] = True
@@ -2417,7 +2619,16 @@ class Sample(object):
         self.head['in frame'] = False
         self.head['productive'] = False
         self.head['palindromic'] = False
-        self.head['region'] = []
+
+        if 'framed by' in self.body:
+            del self.body['framed by']
+
+        if 'matched' in self.head:
+            del self.head['matched']
+
+        if 'primary' in self.body:
+            del self.body['primary']
+
         for hit in self.hit:
             hit['valid'] = True
             hit['in frame'] = False
@@ -2433,51 +2644,86 @@ class Sample(object):
             if hit['valid']:
                 hit['query'] = self.sequence.crop(hit['query start'], hit['query end'])
 
+    def _fix(self):
+        for k in [
+            'framed by',
+            'hit',
+            'sequence'
+        ]:
+            if k in self.node:
+                self.body[k] = self.node[k]
+                del self.node[k]
+
+        for k in [
+            'matched',
+            'strand'
+        ]:
+            if k in self.node:
+                self.head[k] = self.node[k]
+                del self.node[k]
+
+        if 'region' in self.node:
+            del self.node['region']
+
+        if 'region' in self.head:
+            del self.head['region']
+
     def _load_gene(self):
         for hit in self.hit:
-            if hit['valid']:
-                if 'subject id' in hit:
-                    gene = self.pipeline.fetch_gene(hit['subject id'])
-                    if gene:
-                        hit['gene'] = gene.body['gene']
-                        hit['family'] = gene.body['family']
-                        hit['allele'] = gene.body['allele']
-                        if hit['subject strand'] == gene.sequence.strand:
-                            ref = gene.sequence
-                            hit['subject start'] -= 1
-                        else:
-                            ref = gene.sequence.reversed
-                            hit['subject start'] = ref.length - hit['subject start']
-                            hit['subject end'] = ref.length - hit['subject end'] + 1
-                            
-                        hit['subject'] = ref.crop(hit['subject start'], hit['subject end'])
-                        hit['framed'] = gene.framed
-                        hit['functionality'] = gene.functionality
-                        if gene.strain: hit['strain'] = gene.strain
-                        
-                        # only DH regions are allowed to align to the oposite strand
-                        if hit['region'] != 'DH' and hit['subject strand'] != gene.sequence.strand:
-                            self.invalidate_hit(hit, 'hit aligns to the wrong strand')
+            if hit['valid'] and 'subject id' in hit:
+                gene = self.pipeline.resolver.gene_fetch(hit['subject id'])
+                if gene:
+                    hit['framed'] = gene.framed
+                    hit['functionality'] = gene.functionality
+                    hit['strain'] = gene.strain
+                    hit['gene'] = gene.body['gene']
+                    hit['family'] = gene.body['family']
+                    hit['allele'] = gene.body['allele']
+                    if hit['subject strand'] == gene.sequence.strand:
+                        hit['subject'] = gene.sequence.crop(hit['subject start'], hit['subject end'])
+                    else:
+                        hit['subject'] = gene.sequence.reversed.crop(hit['subject start'], hit['subject end'])
 
-    def _assign_frame(self):
-        for hit in self.hit:
-            if hit['valid']:
-                hit['query'].read_frame = 2 - (hit['query start'] - self.sequence.read_frame - 1) % 3
-                if hit['framed']:
-                    if hit['query'].read_frame == hit['subject'].read_frame:
-                        hit['in frame'] = True
+                    # only DH regions are allowed to align to the oposite strand
+                    if hit['region'] != 'DH' and hit['subject strand'] != gene.sequence.strand:
+                        self.invalidate_hit(hit, 'hit aligns to the wrong strand')
+
+    def _pick_hit(self, hit):
+        if hit:
+            hit['picked'] = True
+            self.load_hit(hit)
+            self._pick_region_primary(hit)
+            self._pick_framing_region(hit)
+
+    def _pick_region_primary(self, hit):
+        if hit['region'] not in self.primary:
+            self.primary[hit['region']] = hit
+            hit['primary'] = True
+
+    def _pick_framing_region(self, hit):
+        # first hit to be picked sets the frame for the sample
+        if not self.framed and hit and hit['framed']:
+            self.head['framed'] = True
+            self.body['framed by'] = hit['uuid']
+            self.sequence.read_frame = (hit['query start'] + hit['subject'].read_frame) % 3
+            self.strand = hit['subject strand']
+            for h in self.hit:
+                if h['valid']:
+                    h['query'].read_frame = 2 - (h['query start'] - self.sequence.read_frame - 1) % 3
+                    if h['framed'] and h['query'].read_frame == h['subject'].read_frame:
+                        h['in frame'] = True
+            self.log.debug('frame set for %s by %s', self.id, hit['subject id'])
 
     def _pick_region(self, region, candidate, strain=None):
         picked = False
-        if region in self.configuration['region']:
-            region_node = self.configuration['region'][region]
+        if candidate:
             top = None
             search = { 'valid': [] }
             for hit in candidate:
                 if (hit['valid'] and
-                    hit['region'] == region_node['name'] and
-                    hit['identical'] >= region_node['minimum identity'] and
-                    hit['alignment length'] >= region_node['minimum alignment']):
+                    hit['region'] == self.configuration['region'][region]['name'] and
+                    hit['identical'] >= self.configuration['region'][region]['minimum identity'] and
+                    hit['alignment length'] >= self.configuration['region'][region]['minimum alignment']):
                     search['valid'].append(hit)
                     
             if search['valid']:
@@ -2487,18 +2733,16 @@ class Sample(object):
                 
                 if len(top) > 1:
                     search['framed'] = []
-                    sample_frame = None if not self.framed else self.sequence.read_frame
                     for hit in top:
-                        frame = hit['subject'].read_frame if hit['framed'] else sample_frame
-                        if frame is not None:
-                            subject = hit['subject'].codon_at_frame(frame)
-                            query = hit['query'].codon_at_frame(frame)
-                            hit['codon mismatch'] = 0
-                            for index,c in enumerate(subject):
-                                if c != query[index]:
-                                    hit['codon mismatch'] += 1
-                            search['framed'].append(hit)
-                            
+                        frame = self.sequence.read_frame if self.framed else hit['subject'].read_frame
+                        subject = hit['subject'].codon_at_frame(frame)
+                        query = hit['query'].codon_at_frame(frame)
+                        hit['codon mismatch'] = 0
+                        for index,c in enumerate(subject):
+                            if c != query[index]:
+                                hit['codon mismatch'] += 1
+                        search['framed'].append(hit)
+
                     if search['framed']:
                         top = search['framed']
                         top.sort(key=lambda x: x['codon mismatch'])
@@ -2508,19 +2752,21 @@ class Sample(object):
                     search['strained'] = [ hit for hit in top if 'strain' in hit and hit['strain'] == strain ]
                     if search['strained']:
                         top = search['strained']
-                        
-                if len(top) > 1:
-                    search['functional'] = [ hit for hit in top if 'functionality' in hit and hit['functionality'] == 'F' ]
-                    if search['functional']:
-                        top = search['functional']
-                        
             if top:
-                self.region[region] = top[0]
-                for hit in top: hit['picked'] = True
-                if not self.framed: self._set_frame(hit)
+                # prefer a functional gene for a leader F > O > P
+                top.sort(key=lambda x: x['functionality'])
+                for hit in top: self._pick_hit(hit)
                 picked = True
-                # if not picked: self.invalidate('no satisfactory %s region match found', region_node['name'])
         return picked
+
+    def _check_V_J_framing(self):
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+        if jh is not None and vh is not None:
+            if (jh['in frame'] and vh['in frame']):
+                self.head['in frame'] = True
+        else:
+            self.invalidate('could not establish a V/J pair for {}'.format(self.id))
 
     def _pick_jh_region(self, strain):
         return self._pick_region('JH', self.hit, strain)
@@ -2529,7 +2775,9 @@ class Sample(object):
         return self._pick_region('VH', self.hit, strain)
 
     def _pick_dh_region(self):
-        region_node = self.configuration['region']['DH']
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+
         top = None
         search = { 'valid': [], 'map': {} }
         for hit in self.hit:
@@ -2537,34 +2785,33 @@ class Sample(object):
                 search['map'][hit['uuid']] = hit
                 if hit['valid']:
                     search['valid'].append(hit)
-                    
+
         if search['valid']:
             if len(search['valid']) > 0:
                 search['trimmed'] = []
                 for hit in search['valid']:
+                    gene = self.pipeline.resolver.gene_fetch(hit['subject id'])
                     trimmed = { 'overlap': 0 }
                     for k,v in hit.items():
                         if k not in ('query', 'subject', 'overlap'):
                             trimmed[k] = v
-                            
-                    gene = self.pipeline.fetch_gene(hit['subject id'])
-                    
+
                     # check for overlap with VH
-                    if 'VH' in self.region and self.region['VH']['query end'] > hit['query start']:
-                        trimmed['query start'] = self.region['VH']['query end']
+                    if vh['query end'] > hit['query start']:
+                        trimmed['query start'] = vh['query end']
                         overlap = trimmed['query start'] - hit['query start']
                         trimmed['subject start'] += overlap
                         trimmed['overlap'] += overlap
                         
                     # check for overlap with JH
-                    if 'JH' in self.region and hit['query end'] > self.region['JH']['query start']:
-                        trimmed['query end'] = self.region['JH']['query start']
+                    if hit['query end'] > jh['query start']:
+                        trimmed['query end'] = jh['query start']
                         overlap = hit['query end'] - trimmed['query end']
                         trimmed['subject end'] -= overlap
                         trimmed['overlap'] += overlap
                         
                     # correct the score for the overlap and trim the sequences
-                    trimmed['score'] = hit['bit score'] - trimmed['overlap'] * region_node['overlap penalty factor']
+                    trimmed['score'] = hit['bit score'] - trimmed['overlap'] * self.configuration['region']['DH']['overlap penalty factor']
                     trimmed['alignment length'] = trimmed['query end'] - trimmed['query start']
                     trimmed['query'] = self.sequence.crop(trimmed['query start'], trimmed['query end'])
                     
@@ -2590,60 +2837,69 @@ class Sample(object):
                         trimmed['identical'] = float(similar) / float(trimmed['alignment length'])
                         original = search['map'][trimmed['uuid']]
                         for k,v in trimmed.items(): original[k] = v
-                        if longest >= region_node['minimum alignment']:
+                        if longest >= self.configuration['region']['DH']['minimum alignment']:
                             search['trimmed'].append(original)
-                            
                 if search['trimmed']:
                     top = search['trimmed']
-        if top:
-            return self._pick_region('DH', top)
-        else:
-            return False
+        return self._pick_region('DH', top)
 
-    def _identify_cdr3(self):
-        if 'VH' in self.region and 'JH' in self.region:
-            start = None
-            end = None
-            
-            offset = None
-            # look for the most upstream cycteine on the VH region
-            for index,codon in enumerate(reversed(self.region['VH']['query'].codon)):
-                if codon == 'C':
-                    offset = self.region['VH']['query'].read_frame + (len(self.region['VH']['query'].codon) - index - 1) * 3
-                    break
-                    
-            if offset is not None:
-                start = self.region['VH']['query start'] + offset
-            else:
-                self.log.debug('could not locate the upstream cycteine in the VH region')
-                
-            offset = None
-            # look for the most downstream tryptophan in the JH region
-            # followed by GG, followed by either C or T
-            for index,codon in enumerate(self.region['JH']['query'].codon):
-                if codon == 'W':
-                    o = self.region['JH']['query'].read_frame + (index + 1) * 3
-                    suffix = self.region['JH']['query'].nucleotide[o:o + 3]
-                    if suffix[0:2] == 'GG':
-                        if suffix[2] == 'T' or suffix[2] == 'C':
-                            offset = o
-                            break
-                            
-            if offset is not None:
-                end = self.region['JH']['query start'] + offset
-            else:
-                self.log.debug('could not locate the downstream tryptophan in the JH region')
-                
-            if start and end:
-                self.region['CDR3'] = {
+    def _identify_v_d_junction(self):
+        dh = None if 'DH' not in self.primary else self.primary['DH']
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+        if dh is not None and vh is not None:
+            if vh['query end'] < dh['query start']:
+                junction = {
+                    'valid': True,
                     'subject strand': self.strand,
                     'picked': True,
-                    'subject id': 'CDR3',
-                    'query start': start,
-                    'query end': end,
-                    'region': 'CDR3',
-                    'query': self.sequence.crop(start, end)
+                    'subject id': 'V-D',
+                    'query start': vh['query end'],
+                    'query end': dh['query start'],
+                    'region': 'V-D',
+                    'query': self.sequence.crop(vh['query end'], dh['query start'])
                 }
+                self._check_palindrome(junction, vh['query'], dh['query'])
+                self.hit.append(junction)
+                self._pick_hit(junction)
+
+    def _identify_d_j_junction(self):
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        dh = None if 'DH' not in self.primary else self.primary['DH']
+        if dh is not None and jh is not None:
+            if jh['query start'] > dh['query end']:
+                junction = {
+                    'valid': True,
+                    'subject strand': self.strand,
+                    'picked': True,
+                    'subject id': 'D-J',
+                    'query start': dh['query end'],
+                    'query end': jh['query start'],
+                    'region': 'D-J',
+                    'query': self.sequence.crop(dh['query end'], jh['query start'])
+                }
+                self._check_palindrome(junction, dh['query'], jh['query'])
+                self.hit.append(junction)
+                self._pick_hit(junction)
+
+    def _identify_v_j_junction(self):
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+        dh = None if 'DH' not in self.primary else self.primary['DH']
+        if dh is None and vh is not None and jh is not None:
+            if jh['query start'] > vh['query end']:
+                junction = {
+                    'valid': True,
+                    'subject strand': self.strand,
+                    'picked': True,
+                    'subject id': 'V-J',
+                    'query start': vh['query end'],
+                    'query end': jh['query start'],
+                    'region': 'V-J',
+                    'query': self.sequence.crop(vh['query end'], jh['query start'])
+                }
+                self._check_palindrome(junction, vh['query'], jh['query'])
+                self.hit.append(junction)
+                self._pick_hit(junction)
 
     def _check_for_stop_codon(self):
         if '*' in self.sequence.codon:
@@ -2652,58 +2908,102 @@ class Sample(object):
             self.head['premature'] = False
         return not self.head['premature']
 
+    def _identify_cdr3(self):
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+        if vh is not None and jh is not None:
+            start = None
+            end = None
+            
+            offset = None
+            # look for the most upstream cycteine on the VH region
+            for index,codon in enumerate(reversed(vh['query'].codon)):
+                if codon == 'C':
+                    offset = vh['query'].read_frame + (len(vh['query'].codon) - index - 1) * 3
+                    break
+                    
+            if offset is not None:
+                start = vh['query start'] + offset
+            else:
+                self.log.debug('could not locate the upstream cycteine in the VH region')
+                
+            offset = None
+            # look for the most downstream tryptophan in the JH region
+            # followed by GG, followed by either C or T
+            for index,codon in enumerate(jh['query'].codon):
+                if codon == 'W':
+                    o = jh['query'].read_frame + (index + 1) * 3
+                    suffix = jh['query'].nucleotide[o:o + 3]
+                    if suffix[0:2] == 'GG':
+                        if suffix[2] == 'T' or suffix[2] == 'C':
+                            offset = o
+                            break
+                            
+            if offset is not None:
+                end = jh['query start'] + offset
+            else:
+                self.log.debug('could not locate the downstream tryptophan in the JH region')
+                
+            if start and end:
+                cdr3 = {
+                    'valid': True,
+                    'subject strand': self.strand,
+                    'picked': True,
+                    'subject id': 'CDR3',
+                    'query start': start,
+                    'query end': end,
+                    'region': 'CDR3',
+                    'query': self.sequence.crop(start, end),
+                    'charge': 0,
+                    'weight': 0
+                }
+                for acid in cdr3['query'].codon:
+                    amino = self.configuration['iupac amino acid notation']
+                    if 'charge' in amino[acid]:
+                        cdr3['charge'] += amino[acid]['charge']
+                    if 'weight' in amino[acid]:
+                        cdr3['weight'] += amino[acid]['weight']
+                self.hit.append(cdr3)
+                self._pick_hit(cdr3)
+
     def _check_productive(self):
-        if (self.valid and
-            not self.premature and
-            self.in_frame and
-            'VH' in self.region and
-            'JH' in self.region):
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+        if (not self.premature and self.in_frame and vh is not None and jh is not None):
             self.head['productive'] = True
 
     def _identify_chewback(self):
         for hit in self.hit:
-            if hit['valid']:
-                if 'subject id' in hit:
-                    gene = self.pipeline.fetch_gene(hit['subject id'])
-                    if gene:
-                        if hit['subject strand'] == gene.sequence.strand:
-                            ref = gene.sequence
-                        else:
-                            ref = gene.sequence.reversed
+            if hit['valid'] and hit['region'] in ['VH', 'DH', 'JH']:
+                gene = self.pipeline.resolver.gene_fetch(hit['subject id'])
+                if gene:
+                    if hit['subject strand'] == gene.sequence.strand:
+                        ref = gene.sequence
+                    else:
+                        ref = gene.sequence.reversed
+                        
+                    if hit['region'] == 'VH' or hit['region'] == 'DH':
+                        if hit['subject end'] < ref.length:
+                            hit['3 chew'] = ref.crop(hit['subject end'], ref.length)
                             
-                        if hit['region'] == 'VH' or hit['region'] == 'DH':
-                            if hit['subject end'] < ref.length:
-                                hit['3 chew'] = ref.crop(hit['subject end'], ref.length)
-                                
-                        if hit['region'] == 'JH' or hit['region'] == 'DH':
-                            if hit['subject start'] > 0:
-                                hit['5 chew'] = ref.crop(0, hit['subject start'])
+                    if hit['region'] == 'JH' or hit['region'] == 'DH':
+                        if hit['subject start'] > 0:
+                            hit['5 chew'] = ref.crop(0, hit['subject start'])
 
     def _analyze_quality(self):
-        for name, region in self.region.items():
+        for name, region in self.primary.items():
             self.head['{} length'.format(name)] = region['query'].length
             region['average phread'] = float(sum(region['query'].phred)) / float((region['query'].length))
         self.head['average phred'] = float(sum(self.sequence.phred)) / float((self.sequence.length))
 
-    def _check_for_aligned_frames(self):
-        if 'JH' in self.region and 'VH' in self.region:
-            if self.region['VH']['in frame'] and self.region['JH']['in frame']:
-                self.head['in frame'] = True
-
-    def _index_regions(self):
-        self.head['region'] = []
-        for hit in self.hit:
-            if hit['valid'] and hit['picked']:
-                self.head['region'].append(hit['subject id'])
-        for region in [
-            'CDR3',
-            'V-D',
-            'D-J',
-            'V-J'
-        ]:
-            if region in self.region:
-                self.head['region'].append(region)
-        self.head['region'] = list(set(self.head['region']))
+    def _summary_statistics(self):
+        statistic = {
+            'VH': {}
+        }
+        for name, region in self.primary.items():
+            self.head['{} length'.format(name)] = region['query'].length
+            region['average phread'] = float(sum(region['query'].phred)) / float((region['query'].length))
+        self.head['average phred'] = float(sum(self.sequence.phred)) / float((self.sequence.length))
 
     def _check_palindrome(self, junction, left, right):
         if junction['query'].length > 0:
@@ -2740,59 +3040,469 @@ class Sample(object):
             else:
                 junction['palindrome ratio'] = 0.0
 
-    def _identify_v_d_junction(self):
-        if 'DH' in self.region and 'VH' in self.region:
-            if self.region['VH']['query end'] < self.region['DH']['query start']:
-                start = self.region['VH']['query end']
-                end = self.region['DH']['query start']
-                junction = {
-                    'subject strand': self.strand,
-                    'picked': True,
-                    'subject id': 'V-D',
-                    'query start': start,
-                    'query end': end,
-                    'region': 'V-D',
-                    'query': self.sequence.crop(start, end)
-                }
-                self._check_palindrome(junction, self.region['VH']['query'], self.region['DH']['query'])
-                self.region['V-D'] = junction
-        return True
 
-    def _identify_d_j_junction(self):
-        if 'DH' in self.region and 'JH' in self.region:
-            if self.region['JH']['query start'] > self.region['DH']['query end']:
-                start = self.region['DH']['query end']
-                end = self.region['JH']['query start']
-                junction = {
-                    'subject strand': self.strand,
-                    'picked': True,
-                    'subject id': 'D-J',
-                    'query start': start,
-                    'query end': end,
-                    'region': 'D-J',
-                    'query': self.sequence.crop(start, end)
-                }
-                self._check_palindrome(junction, self.region['DH']['query'], self.region['JH']['query'])
-                self.region['D-J'] = junction
-        return True
+class Histogram(object):
+    def __init__(self, statistic):
+        self.log = logging.getLogger('Histogram')
+        self.statistic = statistic
 
-    def _identify_v_j_junction(self):
-        if 'DH' not in self.region and 'JH' in self.region and 'VH' in self.region:
-            if self.region['JH']['query start'] > self.region['VH']['query end']:
-                start = self.region['VH']['query end']
-                end = self.region['JH']['query start']
-                junction = {
-                    'subject strand': self.strand,
-                    'picked': True,
-                    'subject id': 'V-J',
-                    'query start': start,
-                    'query end': end,
-                    'region': 'V-J',
-                    'query': self.sequence.crop(start, end)
+    @property
+    def distribution(self):
+        return self.statistic.body['distribution']
+
+    def draw(self, path):
+        matplotlib.rc('font', family='Verdana', weight='normal', size=10)
+        matplotlib.rc('axes', edgecolor='#CCCCCC', linewidth=0.5)
+        figure, axes = pyplot.subplots(nrows=3, ncols=3, figsize=(15, 15), tight_layout=True, dpi=900)
+        names = [ 'CDR3 charge', 'CDR3 length', 'N count', 'V-D length', 'D-J length', 'V-J length', 'V-D N count', 'D-J N count', 'V-J N count' ]
+        for index, name in enumerate(names):
+            feature = self.distribution[name]
+            plot = axes.flat[index]
+            bins = array(feature['histogram']['bins'])
+            edges = array(feature['histogram']['edges'])
+
+            width = 0.7 * (edges[1] - edges[0])
+            center = (edges[:-1] + edges[1:]) / 2 
+            plot.bar(
+                center,
+                bins,
+                align='center',
+                width=width,
+                edgecolor='#669803',
+                alpha=0.75,
+                facecolor='#DDE7AC',
+                linewidth=0.5)
+            plot.title.set_fontsize(10)
+            plot.set_title(name)
+            plot.fontcolor = '#222222'
+            plot.tick_params(colors='#CCCCCC')
+
+            for item in ( [ plot.xaxis.label, plot.yaxis.label ] + plot.get_xticklabels() + plot.get_yticklabels()):
+                item.set_fontsize(6)
+                item.set_color('#222222')
+        pyplot.savefig('{}.eps'.format(path), format='eps', )        
+
+class Statistic(object):
+    def __init__(self, pipeline, node=None, query=None, id=None):
+        self.log = logging.getLogger('Statistic')
+        self.pipeline = pipeline
+        self.node = node
+        self._lookup = None
+
+        if self.node is not None:
+            for slice in self.slice.values():
+                if 'correlation' in slice:
+                    for k,v in slice['correlation'].items():
+                        bytesio = BytesIO(v)
+                        bytesio.seek(0)
+                        slice['correlation'][k] = load(bytesio)
+
+            # for name, feature in self.body['feature'].items():
+            #     bytesio = BytesIO(feature)
+            #     bytesio.seek(0)
+            #     self.body['feature'][name] = load(bytesio)
+        else:
+            if query is not None:
+                self.node = {
+                    'head': {
+                        'id': id,
+                        'strain': self.strain,
+                        'sample count': 0
+                    },
+                    'body': { 'query': json.dumps(query, sort_keys=True, ensure_ascii=False)}
                 }
-                self._check_palindrome(junction, self.region['VH']['query'], self.region['JH']['query'])
-                self.region['V-J'] = junction
-        return True
+
+                self.body['repertoire'] = {
+                    'VH': self._fetch_repertoire('VH', self.strain),
+                    'DH': self._fetch_repertoire('DH', self.strain),
+                    'JH': self._fetch_repertoire('JH', self.strain),
+                }
+
+                self.body['slice'] = {
+                    'family': self._initialize_slice('family'),
+                    'allele': self._initialize_slice('allele'),
+                }
+                self.body['feature'] = {
+                    'CDR3 length': [],
+                    'CDR3 charge': [],
+                    'CDR3 weight': [],
+                    'V-D length': [],
+                    'D-J length': [],
+                    'V-J length': [],
+                    'V-D N count': [],
+                    'D-J N count': [],
+                    'V-J N count': [],
+                    'N count': [],
+                }
+            else:
+                raise ValueError('must specify a query to calculate statistic')
+    
+    @property
+    def document(self):
+        document = transform_to_document(self.node)
+        if 'feature' in document['body']: del document['body']['feature']
+        return document
+
+    @property
+    def json(self):
+        document = self.document
+        document['body']['query'] = json.loads(self.body['query'])
+        if 'feature' in document['body']: del document['body']['feature']
+        return(to_json(document))
+
+    @property
+    def query(self):
+        return json.loads(self.body['query'])
+
+    @property
+    def strain(self):
+        return 'C57BL/6'
+
+    @property
+    def feature(self):
+        return self.body['feature']
+
+    @property
+    def id(self):
+        return self.head['id']
+
+    @property
+    def repertoire(self):
+        return self.body['repertoire']
+
+    def _fetch_repertoire(self, region, strain):
+        repertoire = []
+        cursor = self.database['gene'].find({'head.region': region, 'head.strain':strain}).sort([
+            ('body.family', pymongo.ASCENDING),
+            ('body.gene', pymongo.ASCENDING),
+            ('body.allele', pymongo.ASCENDING),
+        ])
+        for gene in cursor:
+            repertoire.append({   
+                'id': gene['head']['id'],
+                'allele': gene['body']['allele'],
+                'gene': gene['body']['gene'],
+                'family': gene['body']['family'],
+            })
+        return repertoire
+
+    @property
+    def lookup(self):
+        if self._lookup is None:
+            self._lookup = {}
+            for slice in [ 'allele', 'family' ]:
+                lookup = {
+                    'VH': { 'label': [], 'name': {}, 'lookup': {}, 'index':{} },
+                    'DH': { 'label': [], 'name': {}, 'lookup': {}, 'index':{} },
+                    'JH': { 'label': [], 'name': {}, 'lookup': {}, 'index':{} },
+                }
+                for region in lookup.keys():
+                    if region == 'JH' and slice == 'family':
+                        index = 0
+                        for gene in self.repertoire[region]:
+                            if gene[slice] not in lookup[region]['name']:
+                                lookup[region]['label'].append(gene['gene'])
+                                lookup[region]['name'][gene['gene']] = index
+                                lookup[region]['index'][index] = gene['gene']
+                                index += 1
+                            lookup[region]['lookup'][gene['allele']] = lookup[region]['name'][gene['gene']]
+                    else:
+                        index = 0
+                        for gene in self.repertoire[region]:
+                            if gene[slice] not in lookup[region]['name']:
+                                lookup[region]['label'].append(gene[slice])
+                                lookup[region]['name'][gene[slice]] = index
+                                lookup[region]['index'][index] = gene[slice]
+                                index += 1
+                            lookup[region]['lookup'][gene['allele']] = lookup[region]['name'][gene[slice]]
+                self._lookup[slice] = lookup
+        return self._lookup
+
+    def _initialize_slice(self, slice):
+        node = {
+            'correlation': {
+                'VJ': None,
+                'VDJ': None,
+            },
+            'dimension': {},
+        }
+
+        for region in [ 'VH', 'DH', 'JH' ]:
+            node['dimension'][region] = len(self.lookup[slice][region]['label'])
+
+        node['correlation']['VJ'] = zeros((node['dimension']['JH'], node['dimension']['VH']))
+        self.log.debug(
+            '%s VJ correlation matrix esablished with %s JH, %s VH',
+            slice,
+            node['dimension']['JH'], 
+            node['dimension']['VH'])
+
+        node['correlation']['VDJ'] = zeros((node['dimension']['JH'], node['dimension']['DH'], node['dimension']['VH']))
+        self.log.debug(
+            '%s VDJ correlation matrix esablished with %s JH, %s DH, %s VH',
+            slice,
+            node['dimension']['JH'],
+            node['dimension']['DH'],
+            node['dimension']['VH'])
+        return node
+
+    @property
+    def database(self):
+        return self.pipeline.resolver.database
+
+    @property
+    def head(self):
+        return self.node['head']
+
+    @property
+    def body(self):
+        return self.node['body']
+
+    @property
+    def slice(self):
+        return self.body['slice']
+
+    @property
+    def family(self):
+        return self.slice['family']
+
+    @property
+    def allele(self):
+        return self.slice['allele']
+
+    def _add_sample_to_slice(self, slice, breakdown):
+        if breakdown['region']['DH']:
+            for j in range(len(breakdown['region']['JH'])):
+                for d in range(len(breakdown['region']['DH'])):
+                    for v in range(len(breakdown['region']['VH'])):
+                        ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                        di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
+                        vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                        self.slice[slice]['correlation']['VDJ'][ji][di][vi] += breakdown['portion']
+        else:
+            for j in range(len(breakdown['region']['JH'])):
+                for v in range(len(breakdown['region']['VH'])):
+                    ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                    vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                    self.slice[slice]['correlation']['VJ'][ji][vi] += breakdown['portion']
+
+    def add_sample(self, sample):
+        if 'CDR3' in sample.primary:
+            breakdown = {
+                'sample': sample,
+                'portion': None,
+                'combination': None,
+                'region': {
+                    'VH': [],
+                    'DH': [],
+                    'JH': [],
+                },
+            }
+
+            # collect CDR3 statistics
+            self.feature['CDR3 length'].append(sample.primary['CDR3']['query'].length)
+            self.feature['CDR3 charge'].append(sample.primary['CDR3']['charge'])
+            self.feature['CDR3 weight'].append(sample.primary['CDR3']['weight'])
+
+            for hit in breakdown['sample'].hit:
+                if hit['picked'] and hit['region'] in breakdown['region'].keys():
+                    breakdown['region'][hit['region']].append(hit)
+            breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
+
+            # this is the case where we have a D
+            if breakdown['region']['DH']:
+                breakdown['combination'] *= len(breakdown['region']['DH'])
+
+                total = 0
+                if 'V-D' in sample.primary:
+                    self.feature['V-D length'].append(sample.primary['V-D']['query'].length)
+                    self.feature['V-D N count'].append(sample.primary['V-D']['palindrome'].count('N'))
+                    total += sample.primary['V-D']['palindrome'].count('N')
+                else:
+                    self.feature['V-D length'].append(0)
+                    self.feature['V-D N count'].append(0)
+
+                if 'D-J' in sample.primary:
+                    self.feature['D-J length'].append(sample.primary['D-J']['query'].length)
+                    self.feature['D-J N count'].append(sample.primary['D-J']['palindrome'].count('N'))
+                    total += sample.primary['D-J']['palindrome'].count('N')
+                else:
+                    self.feature['D-J length'].append(0)
+                    self.feature['D-J N count'].append(0)
+
+                self.feature['N count'].append(total)
+
+            else:
+                if 'V-J' in sample.primary:
+                    self.feature['V-J length'].append(sample.primary['V-J']['query'].length)
+                    self.feature['V-J N count'].append(sample.primary['V-J']['palindrome'].count('N'))
+                    self.feature['N count'].append(sample.primary['V-J']['palindrome'].count('N'))
+                else:
+                    self.feature['V-J length'].append(0)
+                    self.feature['V-J N count'].append(0)
+                    self.feature['N count'].append(0)
+
+            breakdown['portion'] = 1.0 / float(breakdown['combination'])
+
+            for slice in self.slice.keys():
+                self._add_sample_to_slice(slice, breakdown)
+            self.head['sample count'] += 1
+        else:
+            self.log.error('%s is missing a CDR3 region', sample.id)
+
+    def done(self):
+        self.body['distribution'] = {}
+        for name, feature in self.body['feature'].items():
+            feature = array(feature)
+            self.body['feature'][name] = feature
+            self.body['distribution'][name] = {
+                'min': float(amin(feature)),
+                'max': float(amax(feature)),
+                'mean': float(mean(feature)),
+                'std': float(std(feature)),
+                'median': float(median(feature)),
+            }
+            bins, edges = histogram(feature, ptp(feature))
+            self.body['distribution'][name]['histogram'] = { 
+                'bins': [ int(x) for x in bins ], 
+                'edges': [ float(x) for x in edges ]
+            }
+
+
+class Heatmap(object):
+    def __init__(self, pipeline, statistic, slice):
+        self.log = logging.getLogger('Heatmap')
+        self.pipeline = pipeline
+        self.statistic = statistic
+        self.slice = self.statistic.slice[slice]
+        self.lookup = self.statistic.lookup[slice]
+        self.background_color = '#EEEEEE'
+        self.font_color = '#020202'
+        self.cell_size =  8
+        self.font_size = 8
+        self.padding = 8
+        self.slice_padding = 8
+        self.matrix = matrix
+        self.row_labels = self.lookup['DH']['label']
+        self.column_labels = self.lookup['VH']['label']
+        self.width = self.slice['dimension']['VH'] * self.cell_size
+        self.slice_height = self.slice['dimension']['DH'] * self.cell_size
+        self.height = ( self.slice_height  + self.slice_padding ) * self.slice['dimension']['JH'] + self.slice['dimension']['JH'] * self.cell_size
+        self.width_padding = max([ len(i) for i in self.row_labels ]) * self.font_size
+        self.height_padding = max([ len(i) for i in self.column_labels ]) * self.font_size
+        self.origin = (0, self.height_padding)
+        self.font = ImageFont.truetype('/Library/Fonts/Verdana.ttf', self.font_size)
+        self.image = Image.new('RGB', (self.width + self.width_padding, self.height + self.height_padding), self.background_color)
+        self.normalize()
+
+        self.image = self.image.rotate(270)
+        draw = ImageDraw.Draw(self.image)
+        for i in range(self.slice['dimension']['VH']):
+            draw.text((self.height + self.padding , self.cell_size * i), self.column_labels[i], font=self.font, fill=self.font_color)
+        self.image = self.image.rotate(90)
+
+        draw = ImageDraw.Draw(self.image)
+        for i in range(self.slice['dimension']['DH']):
+            draw.text((self.width + self.padding , self.height_padding + self.cell_size * i), self.row_labels[i], font=self.font, fill=self.font_color)
+
+        for j in range(self.slice['dimension']['JH']):
+            height = j * ( self.slice_height + self.slice_padding ) + self.height_padding 
+            self._draw_row_labels((self.width + self.padding , height))
+            self._draw_heatmap(self.slice['correlation']['VDJ'][j], (0, height))
+
+        height = self.slice['dimension']['JH'] * ( self.slice_height + self.slice_padding ) + self.height_padding
+        self._draw_j_row_labels((self.width + self.padding , height))
+        self._draw_heatmap(self.slice['correlation']['VJ'], (0, height))
+
+    def _draw_row_labels(self, origin):
+        draw = ImageDraw.Draw(self.image)
+        for i in range(self.slice['dimension']['DH']):
+            draw.text((origin[0] , origin[1] + self.cell_size * i), self.row_labels[i], font=self.font, fill=self.font_color)
+
+    def _draw_j_row_labels(self, origin):
+        draw = ImageDraw.Draw(self.image)
+        for i in range(self.slice['dimension']['JH']):
+            draw.text((origin[0] , origin[1] + self.cell_size * i), self.lookup['DH']['label'][i], font=self.font, fill=self.font_color)
+
+    def _draw_heatmap(self, matrix, origin):
+        #self.normalize_matrix(matrix)
+        draw = ImageDraw.Draw(self.image)
+        for i in range(matrix.shape[0]):
+            for j in range(matrix.shape[1]):
+                heat = self.fraction_to_color(matrix[i][j])
+                block = (
+                    origin[0] + (j * self.cell_size), 
+                    origin[1] + (i * self.cell_size), 
+                    origin[0] + ((j + 1) * self.cell_size - 1), 
+                    origin[1] + ((i + 1) * self.cell_size - 1) 
+                )
+                draw.rectangle(block,fill=heat)
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
+    @property
+    def scale(self):
+        return self.configuration['scale']
+
+    def fraction_to_color(self, value):
+        result = None
+        if value is None: result = '#DDDDDD'
+        else:
+            if value > 1.0: result = '#FFFFFF'
+            elif value < 0.0: result = '#000000'
+            else:
+                position = int(round(float((len(self.scale['color']) - 1)) * value))
+                result = self.scale['color'][position]
+        return  result
+
+    def normalize_matrix(self, matrix):
+        vmax = 0
+        # switch to a logarithmic scale
+        for i in range(matrix.shape[0]):
+            for j in range(matrix.shape[1]):
+                if matrix[i][j] > 0:
+                    matrix[i][j] = math.log(1.0 + matrix[i][j])
+                    vmax = max(vmax, matrix[i][j])
+
+        # normalize
+        for i in range(matrix.shape[0]):
+            for j in range(matrix.shape[1]):
+                if matrix[i][j] > 0:
+                    matrix[i][j] = matrix[i][j] / vmax
+
+    def normalize(self):
+        vmax = 0
+
+        # switch to a logarithmic scale
+        for i in range(self.slice['correlation']['VDJ'].shape[0]):
+            for j in range(self.slice['correlation']['VDJ'].shape[1]):
+                for k in range(self.slice['correlation']['VDJ'].shape[2]):
+                    if self.slice['correlation']['VDJ'][i][j][k] > 0:
+                        self.slice['correlation']['VDJ'][i][j][k] = math.log(1.0 + self.slice['correlation']['VDJ'][i][j][k])
+                        vmax = max(vmax, self.slice['correlation']['VDJ'][i][j][k])
+
+        for i in range(self.slice['correlation']['VJ'].shape[0]):
+            for j in range(self.slice['correlation']['VJ'].shape[1]):
+                if self.slice['correlation']['VJ'][i][j] > 0:
+                    self.slice['correlation']['VJ'][i][j] = math.log(1.0 + self.slice['correlation']['VJ'][i][j])
+                    vmax = max(vmax, self.slice['correlation']['VJ'][i][j])
+
+        # normalize
+        for i in range(self.slice['correlation']['VDJ'].shape[0]):
+            for j in range(self.slice['correlation']['VDJ'].shape[1]):
+                for k in range(self.slice['correlation']['VDJ'].shape[2]):
+                    if self.slice['correlation']['VDJ'][i][j][k] > 0:
+                        self.slice['correlation']['VDJ'][i][j][k] = self.slice['correlation']['VDJ'][i][j][k] / vmax
+
+        for i in range(self.slice['correlation']['VJ'].shape[0]):
+            for j in range(self.slice['correlation']['VJ'].shape[1]):
+                if self.slice['correlation']['VJ'][i][j] > 0:
+                    self.slice['correlation']['VJ'][i][j] = self.slice['correlation']['VJ'][i][j] / vmax
+
+    def save(self, path):
+        self.image.save(path)
 
 
 class Diagram(object):
@@ -2812,7 +3522,6 @@ class Diagram(object):
                 'feature': [],
             },
         }
-        
         if profile in self.configuration['profile'] and 'diagram' in self.configuration['profile'][profile]:
             p = self.configuration['profile'][profile]['diagram']
         else:
@@ -2822,13 +3531,7 @@ class Diagram(object):
             self.query[k] = v
             
         for track in sample.hit:
-            if all([k in track and track[k] == v for k,v in self.query.items()]):
-                self.track.append(track)
-                
-        for track in sample.region.values():
-            if track['subject id'] in set(['CDR3', 'V-J', 'V-D', 'D-J']):
-                if 'uuid' not in track:
-                    track['uuid'] = str(uuid.uuid4())
+            if track['region'] not in ['VH', 'DH', 'JH']  or all([k in track and track[k] == v for k,v in self.query.items()]):
                 self.track.append(track)
                 
         for k in p['feature']:
@@ -2894,10 +3597,22 @@ class Diagram(object):
         b = []
         b.append(self.sample.library)
         b.append(self.sample.id)
-        for r in ('VH', 'DH', 'JH'):
-            if r in self.sample.region:
-                b.append('{} : {}'.format(r, self.sample.region[r]['gene']))
-                
+        if 'VH' in self.sample.primary:
+            vh = self.sample.primary['VH']
+            b.append('{} : {}'.format(vh['region'], vh['gene']))
+
+        if 'DH' in self.sample.primary:
+            dh = self.sample.primary['DH']
+            b.append('{} : {}'.format(dh['region'], dh['gene']))
+
+        if 'JH' in self.sample.primary:
+            jh = self.sample.primary['JH']
+            b.append('{} : {}'.format(jh['region'], jh['gene']))
+
+        if 'CDR3' in self.sample.primary:
+            cdr3 = self.sample.primary['CDR3']
+            b.append('{} : {:.3} {}'.format(cdr3['region'], cdr3['charge'], cdr3['weight']))
+
         if self.sample.productive:
             b.append('productive')
         else:
@@ -3364,7 +4079,7 @@ class Block(object):
             elif state == 3 and not line.startswith('#'):
                 hit = parse_igblast_hit(line)
                 if hit is not None:
-                    sample.add_hit(hit)
+                    sample.add_igblast_hit(hit)
 
     def view(self, profile):
         for sample in self.buffer:
@@ -3380,6 +4095,44 @@ class Block(object):
             if alignment: sample.view(profile)
 
 
+class Library(object):
+    def __init__(self, pipeline, node=None):
+        self.log = logging.getLogger('Library')
+        self.pipeline = pipeline
+        self.node = node
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
+    @property
+    def id(self):
+        return self.head['id']
+
+    @property
+    def head(self):
+        return self.node['head']
+
+    @property
+    def body(self):
+        return self.node['body']
+
+    @property
+    def strain(self):
+        return None if 'strain' not in self.head else self.head['strain']
+
+    @property
+    def reference(self):
+        if 'reference' in self.body:
+            return self.body['reference']
+        else:
+            return None
+
+    @property
+    def document(self):
+        return transform_to_document(self.node)
+
+
 class Resolver(object):
     def __init__(self, pipeline):
         self.log = logging.getLogger('Resolver')
@@ -3388,7 +4141,8 @@ class Resolver(object):
         self.cache = {
             'gene':{},
             'sample': {},
-            'accession': {}
+            'accession': {},
+            'library': {}
         }
 
     @property
@@ -3424,7 +4178,78 @@ class Resolver(object):
         if self._connection is not None:
             self._connection.close()
 
-    def drop_library(self, library):
+    def rebuild(self, table):
+        objective = []
+        existing_collections = self.database.collection_names()
+        if table:
+            objective = [ t for t in table if t in self.configuration['table'] ]
+        else:
+            objective = self.configuration['table'].keys()
+
+        for t in objective:
+            record = self.configuration['table'][t]
+            collection = self.database[record['collection']]
+            if record['collection'] in existing_collections:
+                existing_indexes = collection.index_information()
+                for definition in record['index']:
+                    if definition['name'] in existing_indexes:
+                        self.log.info('dropping index %s on collection %s', definition['name'], record['collection'])
+                        collection.drop_index(definition['name'])
+                        
+            for definition in record['index']:
+                self.log.info('building index %s on collection %s', definition['name'], record['collection'])
+                collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
+
+    def statistic_fetch(self, id):
+        statistic = None
+        document = self.database['statistic'].find_one({'head.id': id})
+        if document:
+            statistic = Statistic(self.pipeline, document)
+        return statistic
+
+    def statistic_drop(self, id):
+        statistic = statistic_fetch(id)
+        if statistic:
+            result = self.database['statistic'].delete({ 'head.id': id })
+            if result:
+                self.log.info('dropped statistic record for\n%s', statistic.query)
+
+    def statistic_save(self, statistic):
+        if statistic is not None:
+            existing = self.statistic_fetch(statistic.id)
+            if existing:
+                self.log.debug('existing statistic found for %s', statistic.id)
+                statistic.node['_id'] = existing.node['_id']
+            self.database['statistic'].save(statistic.document)
+
+    def library_store(self, node):
+        if node is not None:
+            library = Library(self.pipeline, node)
+            self.library_save(library)
+
+    def library_save(self, library):
+        if library is not None:
+            existing = self.library_fetch(library.id)
+            if existing:
+                self.log.debug('existing library found for %s', library.id)
+                library.node['_id'] = existing.node['_id']
+                
+            self.database['library'].save(library.document)
+            if library.id in self.cache['library']:
+                del self.cache['library'][library.id]
+
+    def library_fetch(self, id):
+        if id not in self.cache['library']:
+            document = self.database['library'].find_one({'head.id': id})
+            if document:
+                library = Library(self.pipeline, document)
+                self.cache['library'][id] = library
+        if id in self.cache['library']:
+            return self.cache['library'][id]
+        else:
+            return None
+
+    def library_drop(self, library):
         if library:
             collection = self.database['sample']
             try:
@@ -3434,22 +4259,7 @@ class Resolver(object):
             except BulkWriteError as e:
                 self.log.critical(e.details)
 
-    def rebuild(self):
-        existing_collections = self.database.collection_names()
-        for table in self.configuration['table']:
-            collection = self.database[table['collection']]
-            if table['collection'] in existing_collections:
-                existing_indexes = collection.index_information()
-                for definition in table['index']:
-                    if definition['name'] in existing_indexes:
-                        self.log.info('dropping index %s on collection %s', definition['name'], table['collection'])
-                        collection.drop_index(definition['name'])
-                        
-            for definition in table['index']:
-                self.log.info('building index %s on collection %s', definition['name'], table['collection'])
-                collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
-
-    def fetch_gene(self, id):
+    def gene_fetch(self, id):
         if id not in self.cache['gene']:
             document = self.database['gene'].find_one({'head.id': id})
             if document:
@@ -3460,7 +4270,55 @@ class Resolver(object):
         else:
             return None
 
-    def fetch_ncbi_accession(self, id):
+    def gene_save(self, gene):
+        if gene is not None:
+            existing = self.gene_fetch(gene.id)
+            if existing:
+                self.log.debug('existing gene found for %s', gene.id)
+                gene.node['_id'] = existing.node['_id']
+                
+            self.database['gene'].save(gene.document)
+            if gene.id in self.cache['gene']:
+                del self.cache['gene'][gene.id]
+
+    def gene_store(self, node):
+        if node is not None:
+            document = { 'head': {}, 'body': node }
+            for k in [
+                'accession',
+                'framed',
+                'region',
+                'id',
+                'verified',
+                'confirmed',
+                'functionality',
+                'organism name',
+                'strain',
+                'identified'
+            ]:
+                if k in node:
+                    document['head'][k] = node[k]
+                    
+            node['length'] = node['end'] - node['start'] 
+            if 'strand' not in node:
+                node['strand'] = True
+                
+            if 'read frame' in node:
+                document['head']['framed'] = True
+            else:
+                document['head']['framed'] = False
+                node['read frame'] = 0
+                
+            if 'sequence' in node and isinstance(node['sequence'], str):
+                node['sequence'] = {
+                    'nucleotide': node['sequence'],
+                    'strand': node['strand'],
+                    'read frame': node['read frame']
+                }
+            gene = Gene(self.pipeline, document)
+            self.gene_save(gene)
+
+    def accession_fetch_ncbi(self, id):
         def normalize_document(document, transform):
             if isinstance(document, dict):
                 transformed = {}
@@ -3534,7 +4392,7 @@ class Resolver(object):
                 self.database['ncbi_accession'].save(document)
         return document
 
-    def save_accession(self, accession):
+    def accession_save(self, accession):
         if accession is not None:
             if accession.valid:
                 existing = self.database['accession'].find_one({'head.id': accession.id})
@@ -3550,12 +4408,12 @@ class Resolver(object):
             else:
                 self.log.error('refusing to save invalid accession %s', str(accession))
 
-    def cache_accession(self, id):
+    def accession_cache(self, id):
         document = self.database['accession'].find_one({'head.id': id})
         if document:
             self.cache['accession'][id] = Accession(self.pipeline, document)
         else:
-            ncbi = self.fetch_ncbi_accession(id)
+            ncbi = self.accession_fetch_ncbi(id)
             if ncbi:
                 document = {
                     'head': {
@@ -3607,120 +4465,40 @@ class Resolver(object):
                         self.log.info('C57BL/6 strain deduced for accession %s from a mention in the description', id)
                         
                 accession = Accession(self.pipeline, document)
-                self.save_accession(accession)
+                self.accession_save(accession)
                 self.cache['accession'][id] = accession
 
-    def fetch_accession(self, id):
+    def accession_fetch(self, id):
         result = None
         if id not in self.cache['accession']:
-            self.cache_accession(id)
+            self.accession_cache(id)
             
         if id in self.cache['accession']:
             result = self.cache['accession'][id]
             
         return result
 
-    def search_accession(self, gene):
-        accession = self.fetch_accession(gene.accession)
-        positions = []
-        start = accession.sequence.nucleotide.find(gene.sequence.nucleotide)
-        while start >= 0 and start < accession.sequence.length:
-            end = start + gene.sequence.length
-            positions.append([start, end])
-            start = accession.sequence.nucleotide.find(gene.sequence.nucleotide, start + 1)
-
-        if len(positions) == 1:
-            position = positions[0]
-            self.log.info('new position found for %s in %s:%d:%d delta is %d:%d',
-                gene.id,
-                gene.accession,
-                position[0],
-                position[1],
-                gene.start - position[0],
-                gene.end - position[1])
-
-            gene.body['start'] = position[0]
-            gene.body['end'] = position[1]
-        elif len(positions) == 0:
-            self.log.error('%s not found in %s', gene.id, gene.accession)
-        else:
-            self.log.error('multiple positions found for %s in %s %s', gene.id, gene.accession, positions)
-
-    def complement_from_accesion(self, gene):
-        if gene is not None:
-            accession = self.fetch_accession(gene.accession)
-            if accession is not None:
-                matching = accession.sequence.crop(gene.start, gene.end)
-                if not gene.strand:
-                    matching = matching.reversed
-
-                if not gene.sequence.nucleotide:
-                    gene.sequence.nucleotide = matching.nucleotide
-                    self.log.info('sequence assigned to gene %s from accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
-                else:
-                    if gene.sequence.nucleotide and matching.nucleotide != gene.sequence.nucleotide:
-                        self.log.error('gene sequence for %s does not match accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
-                        self.search_accession(gene)
-                    else:
-                        self.log.debug('gene sequence for %s matched to accession %s:%d:%d', gene.id, accession.id, gene.start, gene.end)
-                        
-                    if gene.strain is None and accession.strain is not None:
-                        gene.strain = accession.strain
-                        self.log.info('strain %s assigned to gene %s from %s', gene.strain, gene.id, gene.accession)
-                    if accession.strain is None and gene.strain is not None:
-                        accession.strain = gene.strain
-                        self.save_accession(accession)
-                        self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, gene.id)
+    def assemble_query(self, query):
+        assembled = {}
+        for key,value in query.items():
+            if key in [ '$or', '$and' ]:
+                assembled[key] = [ dict([ ('head.{}'.format(k),v) for k,v in e.items() ]) for e in value ]
             else:
-                self.log.error('accession %s is missing', gene.accession)
+                assembled['head.{}'.format(key)] = value
+        return assembled
 
-    def save_gene(self, gene):
-        if gene is not None:
-            existing = self.fetch_gene(gene.id)
-            if existing:
-                self.log.debug('existing gene found for %s', gene.id)
-                gene.node['_id'] = existing.node['_id']
-                
-            self.database['gene'].save(gene.document)
-            if gene.id in self.cache['gene']:
-                del self.cache['gene'][gene.id]
+    def make_cursor(self, collection, query, limit=None, skip=None):
+        q = self.assemble_query(query)
+        cursor = self.database[collection].find(q)
+        if limit is not None:
+            cursor.limit(limit)
+        if skip is not None:
+            cursor.skip(skip)
+        return cursor
 
-    def store_gene(self, node):
-        if node is not None:
-            document = { 'head': {}, 'body': node }
-            for k in [
-                'accession',
-                'framed',
-                'region',
-                'id',
-                'verified',
-                'confirmed',
-                'functionality',
-                'organism name',
-                'strain',
-                'identified'
-            ]:
-                if k in node:
-                    document['head'][k] = node[k]
-                    
-            node['length'] = node['end'] - node['start'] 
-            if 'strand' not in node:
-                node['strand'] = True
-                
-            if 'read frame' in node:
-                document['head']['framed'] = True
-            else:
-                document['head']['framed'] = False
-                node['read frame'] = 0
-                
-            if 'sequence' in node and isinstance(node['sequence'], str):
-                node['sequence'] = {
-                    'nucleotide': node['sequence'],
-                    'strand': node['strand'],
-                    'read frame': node['read frame']
-                }
-            gene = Gene(self.pipeline, document)
-            self.save_gene(gene)
+    def count(self, collection, query):
+        q = self.assemble_query(query)
+        return self.database[collection].count(q)
 
 
 class Pipeline(object):
@@ -3769,50 +4547,185 @@ class Pipeline(object):
             feature['space'] |= set(codon['possible'])
         return feature
 
-    def fetch_gene(self, id):
-        return self.resolver.fetch_gene(id)
-
-    def fetch_accession(self, id):
-        return self.resolver.fetch_accession(id)
-
-    def save_accession(self, accession):
-        self.resolver.save_accession(accession)
-
-    def build_query(self, override, profile, kind='sample'):
+    def build_query(self, override, profile, kind):
         query = {}
         if profile is not None and profile in self.configuration['profile']:
-            for k,v in self.configuration['profile'][profile][kind].items():
-                query[k] = v
-                
+            if kind in self.configuration['profile'][profile]:
+                for k,v in self.configuration['profile'][profile][kind].items():
+                    query[k] = v
+            else:
+                self.log.critical('profile %s is undefined for %s', profile, kind)
+                raise SystemExit(1)
+
         if override:
             for k,v in override.items():
-                query['head.{}'.format(k)] = v
-        self.log.debug('Query is \n{}'.format(to_json(query)))
+                if k == 'library':
+                    library = self.resolver.library_fetch(v)
+                    if library:
+                        if library.reference:
+                            query['$or'] = []
+                            for reference in library.reference:
+                                query['$or'].append({'library': reference})
+                        else:
+                            query['library'] = v
+                    else:
+                        self.log.error('library %s does not exist', v)
+                        SystemExit(1)
+                else:
+                    query[k] = v
+        if query: self.log.debug('search query is:\n{}'.format(to_json(query)))
         return query
 
-    def rebuild(self):
-        self.resolver.rebuild()
+    def rebuild(self, table):
+        self.resolver.rebuild(table)
 
-    def populate_gene(self, path):
+    def library_populate(self, path):
         count = 0
         with io.open(path, 'rb') as file:
             content = StringIO(file.read().decode('utf8'))
             document = json.loads(content.getvalue())
             for node in document:
-                self.resolver.store_gene(node)
+                self.resolver.library_store(node)
+                count += 1
+        self.log.info('populated %d libraries', count)
+
+    def library_to_json(self, query, profile):
+        q = self.build_query(query, profile, 'library')
+        cursor = self.resolver.make_cursor('library', q)
+        buffer = []
+        for node in cursor:
+            buffer.append(node)
+        cursor.close()
+        buffer = sorted(buffer, key=lambda x: '' if 'technical' not in x else x['technical'])
+        buffer = sorted(buffer, key=lambda x: '' if 'biological' not in x else x['biological'])
+        buffer = sorted(buffer, key=lambda x: '' if 'tissue' not in x else x['head']['tissue'])
+        buffer = sorted(buffer, key=lambda x: '' if 'exposure' not in x else x['head']['exposure'])
+        print(to_json(buffer))
+
+    def library_drop(self, library):
+        self.resolver.library_drop(library)
+
+    def sample_statistic(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        request = { 'limit': limit, 'skip': skip, 'query': q }
+        id = hashlib.sha1(to_json(request).encode('utf8')).hexdigest()
+        statistic = self.resolver.statistic_fetch(id)
+        if statistic is None:
+            self.log.debug('calculating statistic for\n%s', to_json(q))
+            statistic = Statistic(self, None, q, id)
+            cursor = self.resolver.make_cursor('sample', q, limit, skip)
+            for node in cursor:
+                sample = Sample(self, node)
+                statistic.add_sample(sample)
+            cursor.close()
+            statistic.done()
+            self.resolver.statistic_save(statistic)
+        else:
+            self.log.debug('cached statistic found for\n%s', to_json(q))
+        return statistic
+
+    def sample_heatmap(self, query, limit, skip, profile):
+        statistic = self.sample_statistic(query, limit, skip, profile)
+        if statistic:
+            allele_heatmap = Heatmap(self, statistic, 'allele')
+            family_heatmap = Heatmap(self, statistic, 'family')
+            allele_heatmap.save('{}_allele.png'.format(query['library']))
+            family_heatmap.save('{}_family.png'.format(query['library']))
+            histogram = Histogram(statistic)
+            histogram.draw(query['library'])
+
+    def sample_populate(self, library, strain, drop):
+        count = 0
+        if not library:
+            raise ValueError('must specify a library to populate')
+        block = Block(self)
+        collection = self.resolver.database['sample']
+        if drop:
+            self.resolver.library_drop(library)
+            
+        while block.fill(library, strain):
+            try:
+                result = collection.insert_many(block.document)
+            except BulkWriteError as e:
+                self.log.critical(e.details)
+                raise SystemExit()
+            count += block.size
+            self.log.info('%s so far', count)
+
+    def sample_count(self, query, profile):
+        q = self.build_query(query, profile, 'library')
+        print(self.resolver.count('sample', q))
+
+    def sample_fasta(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        for node in cursor:
+            sample = Sample(self, node)
+            print(sample.fasta)
+        cursor.close()
+
+    def sample_fastq(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        for node in cursor:
+            sample = Sample(self, node)
+            print(sample.fastq)
+        cursor.close()
+
+    def sample_view(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        for node in cursor:
+            sample = Sample(self, node)
+            sample.view(profile)
+        cursor.close()
+
+    def sample_info(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        for node in cursor:
+            sample = Sample(self, node)
+            sample.info(profile)
+        cursor.close()
+
+    def gene_populate(self, path):
+        count = 0
+        with io.open(path, 'rb') as file:
+            content = StringIO(file.read().decode('utf8'))
+            document = json.loads(content.getvalue())
+            for node in document:
+                self.resolver.gene_store(node)
                 count += 1
         self.log.info('populated %d genes', count)
 
-    def accession_to_fasta(self, query, profile):
-        q = self.build_query(query, profile, 'accession')
-        collection = self.resolver.database['accession']
-        cursor = collection.find(q)
+    def gene_to_json(self, query, profile):
+        q = self.build_query(query, profile, 'gene')
+        cursor = self.resolver.make_cursor('gene', q)
+        buffer = []
         for node in cursor:
-            accession = Accession(self, node)
-            print(accession.fasta)
+            document = node['body'].copy()
+            document.update(node['head'])
+            buffer.append(document)
+        cursor.close()
+        buffer = sorted(buffer, key=lambda x: '' if 'allele' not in x else x['allele'])
+        buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x else x['gene'])
+        buffer = sorted(buffer, key=lambda x: '' if 'family' not in x else x['family'])
+        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
+        print(to_json(buffer))
+
+    def gene_to_fasta(self, query, profile, flanking=0):
+        q = self.build_query(query, profile, 'gene')
+        cursor = self.resolver.make_cursor('gene', q)
+        for node in cursor:
+            gene = Gene(self, node)
+            print(gene.to_fasta(flanking))
         cursor.close()
 
-    def align_gene(self, query, profile, flank=0):
+    def gene_count(self, query, profile):
+        q = self.build_query(query, profile, 'gene')
+        print(self.resolver.count('gene', q))
+
+    def gene_align(self, query, profile, flank=0):
         instruction = {
             'record': {}, 
             'total': 0, 
@@ -3822,8 +4735,7 @@ class Pipeline(object):
         
         # load the gene sequences
         q = self.build_query(query, profile, 'gene')
-        collection = self.resolver.database['gene']
-        cursor = collection.find(q)
+        cursor = self.resolver.make_cursor('gene', q)
         for node in cursor:
             gene = Gene(self, node)
             instruction['record'][gene.id] = { 'gene': gene }
@@ -3842,48 +4754,16 @@ class Pipeline(object):
                     self.log.info('gene %s aligned to %d %d', gene.id, hit['target start'], hit['target end'])
                     gene.body['alignment'] = hit
                     gene.head['aligned'] = True
-                    self.resolver.save_gene(gene)
+                    self.resolver.gene_save(gene)
                 else:
                     self.log.info('gene %s aligned to multiple locations', gene.id)
             else:
                 self.log.error('no satisfactory alignment found for gene %s',  gene.id)
 
-    def gene_to_fasta(self, query, profile, flanking=0):
+    def gene_to_auxiliary(self, query, profile):
         q = self.build_query(query, profile, 'gene')
-        collection = self.resolver.database['gene']
-        cursor = collection.find(q)
-        for node in cursor:
-            gene = Gene(self, node)
-            print(gene.to_fasta(flanking))
-        cursor.close()
-
-    def gene_to_json(self, query, profile):
-        q = self.build_query(query, profile, 'gene')
-        buffer = []
-        collection = self.resolver.database['gene']
-        cursor = collection.find(q)
-        for node in cursor:
-            document = node['body'].copy()
-            document.update(node['head'])
-            buffer.append(document)
-        cursor.close()
-        buffer = sorted(buffer, key=lambda x: '' if 'allele' not in x else x['allele'])
-        buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x else x['gene'])
-        buffer = sorted(buffer, key=lambda x: '' if 'family' not in x else x['family'])
-        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
-        print(to_json(buffer))
-
-    def gene_count(self, query, profile):
-        q = self.build_query(query, profile, 'gene')
-        buffer = []
-        collection = self.resolver.database['gene']
-        print(collection.count(q))
-
-    def gene_to_auxiliary(self, query=None, profile='default'):
-        q = self.build_query(query, profile, 'gene')
+        cursor = self.resolver.make_cursor('gene', q)
         buffer = StringIO()
-        collection = self.resolver.database['gene']
-        cursor = collection.find(q)
         for node in cursor:
             gene = Gene(self, node)
             if gene.framed:
@@ -3896,87 +4776,13 @@ class Pipeline(object):
         buffer.seek(0)
         print(buffer.read())
 
-    def drop_library(self, library):
-        self.resolver.drop_library(library)
-
-    def populate(self, library, strain, drop):
-        count = 0
-        if not library:
-            raise ValueError('must specify a library to populate')
-        block = Block(self)
-        collection = self.resolver.database['sample']
-        if drop:
-            self.drop_library(library)
-            
-        while block.fill(library, strain):
-            try:
-                result = collection.insert_many(block.document)
-            except BulkWriteError as e:
-                self.log.critical(e.details)
-                raise SystemExit()
-            count += block.size
-            self.log.info('%s so far', count)
-
-    def fasta(self, query=None, limit=None, skip=None, profile='default'):
-        q = self.build_query(query, profile)
-        collection = self.resolver.database['sample']
-        cursor = collection.find(q)
-        if limit is not None:
-            cursor.limit(limit)
-        if skip is not None:
-            cursor.skip(skip)
-            
+    def accession_to_fasta(self, query, profile):
+        q = self.build_query(query, profile, 'accession')
+        cursor = self.resolver.make_cursor('accession', q)
         for node in cursor:
-            sample = Sample(self, node)
-            print(sample.fasta)
+            accession = Accession(self, node)
+            print(accession.fasta)
         cursor.close()
-
-    def fastq(self, query=None, limit=None, skip=None, profile='default'):
-        q = self.build_query(query, profile)
-        collection = self.resolver.database['sample']
-        cursor = collection.find(q)
-        if limit is not None:
-            cursor.limit(limit)
-        if skip is not None:
-            cursor.skip(skip)
-            
-        for node in cursor:
-            sample = Sample(self, node)
-            print(sample.fastq)
-        cursor.close()
-
-    def view(self, query=None, limit=None, skip=None, profile='default'):
-        q = self.build_query(query, profile)
-        collection = self.resolver.database['sample']
-        cursor = collection.find(q)
-        if limit is not None:
-            cursor.limit(limit)
-        if skip is not None:
-            cursor.skip(skip)
-            
-        for node in cursor:
-            sample = Sample(self, node)
-            sample.view(profile)
-        cursor.close()
-
-    def info(self, query, limit=None, skip=None, profile='default'):
-        q = self.build_query(query, profile)
-        collection = self.resolver.database['sample']
-        cursor = collection.find(q)
-        if limit is not None:
-            cursor.limit(limit)
-        if skip is not None:
-            cursor.skip(skip)
-            
-        for node in cursor:
-            sample = Sample(self, node)
-            sample.info(profile)
-        cursor.close()
-
-    def count(self, query=None, profile='default'):
-        q = self.build_query(query, profile)
-        collection = self.resolver.database['sample']
-        print(collection.count(q))
 
     def simulate(self, library, strain, json, alignment, profile):
         block = Block(self)
@@ -3984,12 +4790,70 @@ class Pipeline(object):
             block.simulate(json, alignment, profile)
 
     def execute(self, cmd):
-        if cmd.action == 'accession-fasta':
-            self.accession_to_fasta(cmd.query, cmd.instruction['profile'])
+        if cmd.action == 'view':
+            self.sample_view(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'info':
+            self.sample_info(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'statistic':
+            statistic = self.sample_statistic(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+            print(statistic.json)
+
+        elif cmd.action == 'heatmap':
+            self.sample_heatmap(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'count':
+            self.sample_count(
+                cmd.query,
+                cmd.instruction['profile'])
             
-        if cmd.action == 'gene-populate':
-            for path in cmd.instruction['path']:
-                self.populate_gene(path)
+        elif cmd.action == 'drop':
+            self.library_drop(cmd.instruction['library'])
+            
+        elif cmd.action == 'fasta':
+            self.sample_fasta(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'fastq':
+            self.sample_fastq(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'populate':
+            self.sample_populate(
+                cmd.instruction['library'],
+                cmd.instruction['strain'],
+                cmd.instruction['drop'])
+                
+        elif cmd.action == 'simulate':
+            self.simulate(
+                cmd.instruction['library'],
+                cmd.instruction['strain'],
+                cmd.instruction['json'],
+                cmd.instruction['alignment'],
+                cmd.instruction['profile'])
                 
         elif cmd.action == 'gene-info':
             self.gene_to_json(
@@ -4008,66 +4872,34 @@ class Pipeline(object):
                 cmd.instruction['flanking'])
             
         elif cmd.action == 'gene-align':
-            self.align_gene(
+            self.gene_align(
                 cmd.query, 
                 cmd.instruction['profile'],
                 cmd.instruction['flanking'])
-            
+
+        elif cmd.action == 'gene-populate':
+            for path in cmd.instruction['path']:
+                self.gene_populate(path)
+                
         elif cmd.action == 'gene-igblast-aux':
             self.gene_to_auxiliary(
                 cmd.query, 
                 cmd.instruction['profile'])
             
-        elif cmd.action == 'populate':
-            self.populate(
-                cmd.instruction['library'],
-                cmd.instruction['strain'],
-                cmd.instruction['drop'])
+        elif cmd.action == 'library-populate':
+            for path in cmd.instruction['path']:
+                self.library_populate(path)
                 
-        elif cmd.action == 'drop':
-            self.drop_library(cmd.instruction['library'])
+        elif cmd.action == 'library-info':
+            self.library_to_json(
+                cmd.query,
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'accession-fasta':
+            self.accession_to_fasta(cmd.query, cmd.instruction['profile'])
             
-        elif cmd.action == 'view':
-            self.view(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'count':
-            self.count(cmd.query, cmd.instruction['profile'])
-            
-        elif cmd.action == 'fasta':
-            self.fasta(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'fastq':
-            self.fastq(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'info':
-            self.info(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'simulate':
-            self.simulate(
-                cmd.instruction['library'],
-                cmd.instruction['strain'],
-                cmd.instruction['json'],
-                cmd.instruction['alignment'],
-                cmd.instruction['profile'])
-                
         elif cmd.action == 'rebuild':
-            self.rebuild()
+            self.rebuild(cmd.instruction['table'])
 
 
 def main():
