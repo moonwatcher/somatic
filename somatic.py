@@ -3053,7 +3053,10 @@ class Histogram(object):
     def draw(self, path):
         matplotlib.rc('font', family='Verdana', weight='normal', size=10)
         matplotlib.rc('axes', edgecolor='#CCCCCC', linewidth=0.5)
-        figure, axes = pyplot.subplots(nrows=3, ncols=3, figsize=(15, 15), tight_layout=True, dpi=900)
+        figure, axes = pyplot.subplots(nrows=3, ncols=3, figsize=(15, 15), dpi=900)
+        # figure.set_tight_layout(True)
+        figure.suptitle(path, fontsize=16, fontweight='bold')
+
         names = [ 'CDR3 charge', 'CDR3 length', 'N count', 'V-D length', 'D-J length', 'V-J length', 'V-D N count', 'D-J N count', 'V-J N count' ]
         for index, name in enumerate(names):
             feature = self.distribution[name]
@@ -3081,6 +3084,7 @@ class Histogram(object):
                 item.set_fontsize(6)
                 item.set_color('#222222')
         pyplot.savefig('{}.eps'.format(path), format='eps', )        
+
 
 class Statistic(object):
     def __init__(self, pipeline, node=None, query=None, id=None):
