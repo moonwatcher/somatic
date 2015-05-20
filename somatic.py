@@ -178,12 +178,6 @@ configuration = {
                 ]
             },
         },
-        'unknown': {
-            'gene': {
-                'organism name': 'mus musculus',
-                'strain': { '$exists': False }
-            },
-        },
         'aligned': {
             'gene': {
                 'aligned': True
@@ -191,13 +185,10 @@ configuration = {
         },
         'default': {
             'library': {},
-            'accession': {
-            },
-            'gene': {
-            },
+            'accession': {},
+            'gene': {},
             'sample': {
-                'valid': True,
-                'productive': True,
+                'valid': True
             },
             'diagram': {
                 'track': {
@@ -216,7 +207,6 @@ configuration = {
         },
         'productive3033': {
             'sample': {
-                'valid': True,
                 'productive': True,
                 '$and': [ { 'average phred': { '$gt': 30 } }, { 'average phred': { '$lt': 33 } } ] 
             },
@@ -1038,8 +1028,8 @@ configuration = {
                         'productive',
                     ],
                     'instruction': {
-                        'help': 'draw heatmap',
-                        'name': 'heatmap'
+                        'help': 'draw plots',
+                        'name': 'plot'
                     }
                 },
                 {
@@ -1287,6 +1277,23 @@ configuration = {
         'TGA':'*',
         'TAG':'*',
     },
+    'histogram': {
+        'CDR3 length': { 'bins': 40, 'range': (0,120) },
+        'CDR3 charge': { 'bins': 80, 'range': (-80,80) },
+        'CDR3 weight': { 'bins': 50, 'range': (0,5000) },
+        'V-D length': { 'bins': 50, 'range': (0,50) },
+        'D-J length': { 'bins': 50, 'range': (0,50) },
+        'V-J length': { 'bins': 50, 'range': (0,50) },
+        'V-D N count': { 'bins': 50, 'range': (0,50) },
+        'D-J N count': { 'bins': 50, 'range': (0,50) },
+        'V-J N count': { 'bins': 50, 'range': (0,50) },
+        'N count': { 'bins': 50, 'range': (0,50) },
+        'V 3 chew': { 'bins': 50, 'range': (0,50) },
+        'J 5 chew': { 'bins': 50, 'range': (0,50) },
+        'D 3 chew': { 'bins': 50, 'range': (0,50) },
+        'D 5 chew': { 'bins': 50, 'range': (0,50) },
+        'chew': { 'bins': 50, 'range': (0,50) },
+    },
     'constant': {
         'mouse chromosome 12': DB_BASE + '/chr12.fa',
         'buffer size': 32,
@@ -1404,11 +1411,8 @@ def transform_to_document(node):
         return [ transform_to_document(v) for v in node ]
         
     elif isinstance(node, dict):
-        n = {}
-        for key, value in node.items():
-            n[key] = transform_to_document(value)
-        return n
-        
+        return dict([ (key,transform_to_document(value)) for key,value in node.items() ])
+
     elif isinstance(node, Sample):
         return node.document
         
@@ -1419,6 +1423,9 @@ def transform_to_document(node):
         return node.document
         
     elif isinstance(node, Sequence):
+        return node.document
+
+    elif isinstance(node, Statistic):
         return node.document
 
     elif isinstance(node, ndarray):
@@ -1567,14 +1574,7 @@ class Sequence(object):
 
     @property
     def document(self):
-        document = {}
-        for k,v in self.node.items():
-            if k not in [
-                'codon',
-                'phred',
-            ]:
-                document[k] = v
-        return document
+        return dict([ (k,v) for k,v in self.node.items() if k not in ['codon', 'phred']])
 
     def reset(self):
         if self.node is None:
@@ -2318,14 +2318,10 @@ class Sample(object):
                 'head': {
                     'id': id,
                     'library': library,
-                    'valid': True,
-                    'framed': False,
-                    'gapped': False,
-                    'premature': False,
-                    'in frame': False,
-                    'productive': False,
+                    'valid': True
                 }
             }
+            self.reset()
 
         if not self.id:
             raise InvalidSampleError('sample must have an id')
@@ -2344,40 +2340,9 @@ class Sample(object):
         for hit in self.hit:
             self.load_hit(hit)
 
-    def load_hit(self, hit):
-        for k in [
-            'query',
-            'subject',
-            '3 chew',
-            '5 chew'
-        ]:
-            if k in hit and isinstance(hit[k], dict):
-                hit[k] = Sequence(self.pipeline, hit[k])
-
-        if 'uuid' not in hit:
-            hit['uuid'] = str(uuid.uuid4())
-
-        if hit['uuid'] not in self.index:
-            self.index[hit['uuid']] = hit
-
-    def __str__(self):
-        return self.diagram('default')
-
-    @property
-    def key(self):
-        if 'id sha1' not in self.head and self.id is not None:
-            self.head['id sha1'] = hashlib.sha1(self.id.encode('utf8')).hexdigest()
-        return self.head['id sha1']
-
     @property
     def configuration(self):
         return self.pipeline.configuration
-
-    @property
-    def document(self):
-        document = transform_to_document(self.node)
-        document['head']['matched'] = True if document['body']['hit'] else False
-        return document
 
     @property
     def head(self):
@@ -2390,6 +2355,29 @@ class Sample(object):
         if 'body' not in self.node:
             self.node['body'] = {}
         return self.node['body']
+
+    @property
+    def key(self):
+        if 'id sha1' not in self.head and self.id is not None:
+            self.head['id sha1'] = hashlib.sha1(self.id.encode('utf8')).hexdigest()
+        return self.head['id sha1']
+
+    @property
+    def document(self):
+        document = transform_to_document(self.node)
+        return document
+
+    @property
+    def fasta(self):
+        return to_fasta(self.id, self.sequence.nucleotide)
+
+    @property
+    def fastq(self):
+        return '{}\n{}\n+\n{}'.format(self.id, self.sequence.nucleotide, self.sequence.quality)
+
+    @property
+    def json(self):
+        return to_json(self)
 
     @property
     def id(self):
@@ -2440,15 +2428,18 @@ class Sample(object):
     @property
     def primary(self):
         if self._primary is None:
+            self._primary = {}
             if 'primary' in self.body:
-                self._primary = {}
                 for k,v in self.body['primary'].items():
                     self._primary[k] = self.index[v]
         return self._primary
 
     @property
-    def matched(self):
-        return len(self.hit) > 0
+    def comment(self):
+        if 'comment' in self.body:
+            return self.body['comment']
+        else:
+            return None
 
     @property
     def framed(self):
@@ -2470,14 +2461,6 @@ class Sample(object):
     def productive(self):
         return self.head['productive']
 
-    @property
-    def fasta(self):
-        return to_fasta(self.id, self.sequence.nucleotide)
-
-    @property
-    def fastq(self):
-        return '{}\n{}\n+\n{}'.format(self.id, self.sequence.nucleotide, self.sequence.quality)
-
     def add_igblast_hit(self, hit):
         if hit is not None:
             if 'subject id' in hit:
@@ -2488,112 +2471,64 @@ class Sample(object):
                     if hit['subject strand'] == gene.sequence.strand:
                         hit['subject start'] -= 1
                     else:
-                        hit['subject start'] = ref.length - hit['subject start']
-                        hit['subject end'] = ref.length - hit['subject end'] + 1
+                        hit['subject start'] = gene.length - hit['subject start']
+                        hit['subject end'] = gene.length - hit['subject end'] + 1
                 else:
-                    self.invalidate_hit(hit, 'hit matches an unknown gene')
+                    self.invalidate_hit(hit, 'unknown gene')
             self.hit.append(hit)
             self.load_hit(hit)
 
+    def load_hit(self, hit):
+        for k in [
+            'query',
+            'subject',
+            '3 chew',
+            '5 chew'
+        ]:
+            if k in hit and isinstance(hit[k], dict):
+                hit[k] = Sequence(self.pipeline, hit[k])
+
+        if 'uuid' not in hit:
+            hit['uuid'] = str(uuid.uuid4())
+
+        if hit['uuid'] not in self.index:
+            self.index[hit['uuid']] = hit
+
     def reverse(self):
         self.body['sequence'] = self.body['sequence'].reversed
-
-    def expand(self):
-        if 'hit' in self.body:
-            for hit in self.body['hit']:
-                if 'compressed hit' in hit:
-                    match = self.configuration['expression']['expand hit'].search(hit['compressed hit'])
-                    if match:
-                        parsed = parse_match(match)
-                        for k,v in parsed.items():
-                            if k in [
-                                'query start',
-                                'query end',
-                                'subject start',
-                                'subject end',
-                                'gap openings',
-                                'gaps',
-                                'mismatch',
-                                'alignment length'
-                            ]:
-                                try:
-                                    hit[k] = int(parsed[k])
-                                except ValueError as e:
-                                    self.log.warning('could not parse value %s for %s as int', parsed[k], k)
-                            elif k in [
-                                'identical',
-                                'bit score',
-                                'evalue',
-                            ]:
-                                try:
-                                    hit[k] = float(parsed[k])
-                                except ValueError:
-                                    self.log.warning('could not parse value %s for %s as float', parsed[k], k)
-                            else:
-                                hit[k] = v
-
-    def compress(self):
-        if 'hit' in self.body:
-            for hit in self.body['hit']:
-                try:
-                    hit['compressed hit'] = self.configuration['expression']['igblast compressed hit'].format(**hit)
-                except KeyError as e:
-                    self.log.error('could not compress hit because %s was missing', e)
-
-    def to_json(self):
-        def handler(o):
-            result = None
-            if isinstance(o, datetime):
-                result = o.isoformat()
-            if isinstance(o, ObjectId):
-                result = str(o)
-            if isinstance(o, set):
-                result = list(o)
-            if isinstance(o, Sequence):
-                result = o.node
-            return result
-
-        return json.dumps(self.document, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
-
-    def to_summary(self):
-        if self.hit:
-            buffer = []
-            buffer.append(self.id)
-            for r in ('VH', 'DH', 'JH'):
-                if r in self.region:
-                    buffer.append('{} : {}'.format(r, self.region[r]['subject id']))
-                    
-            if self.productive:
-                buffer.append('productive')
-            else:
-                if self.framed:
-                    buffer.append('in frame' if self.in_frame else 'out of frame')
-                    
-                if self.premature:
-                    buffer.append('premature')
-                    
-            buffer.append('Q : {:.4}'.format(self.head['average phred']))
-            return ' | '.join(buffer)
-        else:
-            return ''
 
     def view(self, profile):
         diagram = Diagram(self.pipeline, self, profile)
         print(diagram.draw())
 
     def info(self, profile):
-        print(self.to_json())
+        print(self.json)
 
     def invalidate(self, message):
         self.valid = False
-        self.head['error'] = message
-        self.log.warning('sample %s invalidated because %s', self.id, message)
+        self.make_comment(message)
+
+    def make_comment(self, message):
+        if 'comment' not in self.body:
+            self.body['comment'] = []
+        self.body['comment'].append(message)
+        self.log.info('sample %s : %s', self.id, message)
+
+    def make_comment_hit(self, hit, message):
+        if 'comment' not in hit:
+            hit['comment'] = []
+        hit['comment'].append(message)
+        self.log.warning(
+            '%dbp %s hit to %s on %s : %s',
+            hit['alignment length'],
+            hit['region'],
+            hit['subject id'],
+            self.id,
+            message)
 
     def invalidate_hit(self, hit, message):
         hit['valid'] = False
-        hit['error'] = message
-        self.log.warning('%dbp %s hit to %s on %s invalidated because %s',
-        hit['alignment length'], hit['region'], hit['subject id'], self.id, message)
+        self.make_comment_hit(hit, message)
 
     def analyze(self, strain=None):
         self.reset()
@@ -2619,54 +2554,27 @@ class Sample(object):
         self.head['in frame'] = False
         self.head['productive'] = False
         self.head['palindromic'] = False
+        self.body['primary'] = {}
 
         if 'framed by' in self.body:
             del self.body['framed by']
 
-        if 'matched' in self.head:
-            del self.head['matched']
-
-        if 'primary' in self.body:
-            del self.body['primary']
+        if 'hit' in self.body:
+            self.body['hit'] = [ hit for hit in self.body['hit'] if hit['region'] in ['VH', 'DH', 'JH']]
 
         for hit in self.hit:
             hit['valid'] = True
-            hit['in frame'] = False
             hit['picked'] = False
             hit['framed'] = False
-            hit['gapped'] = False
+            hit['in frame'] = False
             hit['score'] = hit['bit score']
             if 'gap openings' in hit and hit['gap openings'] > 0:
                 hit['gapped'] = True
                 self.head['gapped'] = True
-                self.invalidate_hit(hit, 'hit contains a gapped alignment')
-                
-            if hit['valid']:
+                self.invalidate_hit(hit, 'gapped')
+            else:
+                hit['gapped'] = False
                 hit['query'] = self.sequence.crop(hit['query start'], hit['query end'])
-
-    def _fix(self):
-        for k in [
-            'framed by',
-            'hit',
-            'sequence'
-        ]:
-            if k in self.node:
-                self.body[k] = self.node[k]
-                del self.node[k]
-
-        for k in [
-            'matched',
-            'strand'
-        ]:
-            if k in self.node:
-                self.head[k] = self.node[k]
-                del self.node[k]
-
-        if 'region' in self.node:
-            del self.node['region']
-
-        if 'region' in self.head:
-            del self.head['region']
 
     def _load_gene(self):
         for hit in self.hit:
@@ -2684,9 +2592,11 @@ class Sample(object):
                     else:
                         hit['subject'] = gene.sequence.reversed.crop(hit['subject start'], hit['subject end'])
 
-                    # only DH regions are allowed to align to the oposite strand
+                    # only DH regions are allowed to align to the opposite strand
                     if hit['region'] != 'DH' and hit['subject strand'] != gene.sequence.strand:
-                        self.invalidate_hit(hit, 'hit aligns to the wrong strand')
+                        self.invalidate_hit(hit, 'wrong strand')
+                else:
+                    self.invalidate_hit(hit, 'unknown gene')
 
     def _pick_hit(self, hit):
         if hit:
@@ -2696,9 +2606,10 @@ class Sample(object):
             self._pick_framing_region(hit)
 
     def _pick_region_primary(self, hit):
-        if hit['region'] not in self.primary:
-            self.primary[hit['region']] = hit
+        if hit['region'] not in self.body['primary']:
+            self.body['primary'][hit['region']] = hit['uuid']
             hit['primary'] = True
+            self._primary = None
 
     def _pick_framing_region(self, hit):
         # first hit to be picked sets the frame for the sample
@@ -2752,6 +2663,12 @@ class Sample(object):
                     search['strained'] = [ hit for hit in top if 'strain' in hit and hit['strain'] == strain ]
                     if search['strained']:
                         top = search['strained']
+
+                # if there are multiple matches and at least one is functional, keep only the functional
+                if len(top) > 1 and strain is not None:
+                    search['functional'] = [ hit for hit in top if hit['functionality'] == 'F' ]
+                    if search['functional']:
+                        top = search['functional']
             if top:
                 # prefer a functional gene for a leader F > O > P
                 top.sort(key=lambda x: x['functionality'])
@@ -2766,7 +2683,7 @@ class Sample(object):
             if (jh['in frame'] and vh['in frame']):
                 self.head['in frame'] = True
         else:
-            self.invalidate('could not establish a V/J pair for {}'.format(self.id))
+            self.invalidate('could not establish a VH JH pair')
 
     def _pick_jh_region(self, strain):
         return self._pick_region('JH', self.hit, strain)
@@ -2916,7 +2833,7 @@ class Sample(object):
             end = None
             
             offset = None
-            # look for the most upstream cycteine on the VH region
+            # look for the first upstream Cycteine on the VH region
             for index,codon in enumerate(reversed(vh['query'].codon)):
                 if codon == 'C':
                     offset = vh['query'].read_frame + (len(vh['query'].codon) - index - 1) * 3
@@ -2925,25 +2842,29 @@ class Sample(object):
             if offset is not None:
                 start = vh['query start'] + offset
             else:
-                self.log.debug('could not locate the upstream cycteine in the VH region')
+                self.make_comment('no CDR3 framing cycteine')
                 
             offset = None
-            # look for the most downstream tryptophan in the JH region
+            tryptophan = []
+            # Look for the first downstream Tryptophan on the JH region
             # followed by GG, followed by either C or T
             for index,codon in enumerate(jh['query'].codon):
                 if codon == 'W':
-                    o = jh['query'].read_frame + (index + 1) * 3
-                    suffix = jh['query'].nucleotide[o:o + 3]
-                    if suffix[0:2] == 'GG':
-                        if suffix[2] == 'T' or suffix[2] == 'C':
-                            offset = o
-                            break
-                            
+                    # if we found a tryptophan, keep a record of the search
+                    w = jh['query'].read_frame + (index + 1) * 3
+                    tryptophan.append(w)
+                    if jh['query'].nucleotide[w:w + 2] == 'GG':
+                        offset = w
+                        break
+
             if offset is not None:
                 end = jh['query start'] + offset
+            elif tryptophan:
+                for w in tryptophan:
+                    self.make_comment('CDR3 framing tryptophan found at %s but not followed by glycine')
             else:
-                self.log.debug('could not locate the downstream tryptophan in the JH region')
-                
+                self.make_comment('no CDR3 framing tryptophan')
+
             if start and end:
                 cdr3 = {
                     'valid': True,
@@ -2969,8 +2890,15 @@ class Sample(object):
     def _check_productive(self):
         jh = None if 'JH' not in self.primary else self.primary['JH']
         vh = None if 'VH' not in self.primary else self.primary['VH']
-        if (not self.premature and self.in_frame and vh is not None and jh is not None):
-            self.head['productive'] = True
+        cdr3 = None if 'CDR3' not in self.primary else self.primary['CDR3']
+        if (not self.premature and self.in_frame and vh is not None and jh is not None and cdr3 is not None):
+            if vh['functionality'] == 'F':
+                if jh['functionality'] == 'F':
+                    self.head['productive'] = True
+                else:
+                    self.make_comment('leading JH {} is non functional {}'.format(jh['allele'], jh['functionality']))
+            else:
+                self.make_comment('leading VH {} is non functional {}'.format(vh['allele'], vh['functionality']))
 
     def _identify_chewback(self):
         for hit in self.hit:
@@ -2997,9 +2925,6 @@ class Sample(object):
         self.head['average phred'] = float(sum(self.sequence.phred)) / float((self.sequence.length))
 
     def _summary_statistics(self):
-        statistic = {
-            'VH': {}
-        }
         for name, region in self.primary.items():
             self.head['{} length'.format(name)] = region['query'].length
             region['average phread'] = float(sum(region['query'].phred)) / float((region['query'].length))
@@ -3040,6 +2965,48 @@ class Sample(object):
             else:
                 junction['palindrome ratio'] = 0.0
 
+    def _expand(self):
+        if 'hit' in self.body:
+            for hit in self.body['hit']:
+                if 'compressed hit' in hit:
+                    match = self.configuration['expression']['expand hit'].search(hit['compressed hit'])
+                    if match:
+                        parsed = parse_match(match)
+                        for k,v in parsed.items():
+                            if k in [
+                                'query start',
+                                'query end',
+                                'subject start',
+                                'subject end',
+                                'gap openings',
+                                'gaps',
+                                'mismatch',
+                                'alignment length'
+                            ]:
+                                try:
+                                    hit[k] = int(parsed[k])
+                                except ValueError as e:
+                                    self.log.warning('could not parse value %s for %s as int', parsed[k], k)
+                            elif k in [
+                                'identical',
+                                'bit score',
+                                'evalue',
+                            ]:
+                                try:
+                                    hit[k] = float(parsed[k])
+                                except ValueError:
+                                    self.log.warning('could not parse value %s for %s as float', parsed[k], k)
+                            else:
+                                hit[k] = v
+
+    def _compress(self):
+        if 'hit' in self.body:
+            for hit in self.body['hit']:
+                try:
+                    hit['compressed hit'] = self.configuration['expression']['igblast compressed hit'].format(**hit)
+                except KeyError as e:
+                    self.log.error('could not compress hit because %s was missing', e)
+
 
 class Histogram(object):
     def __init__(self, statistic):
@@ -3053,11 +3020,26 @@ class Histogram(object):
     def draw(self, path):
         matplotlib.rc('font', family='Verdana', weight='normal', size=10)
         matplotlib.rc('axes', edgecolor='#CCCCCC', linewidth=0.5)
-        figure, axes = pyplot.subplots(nrows=3, ncols=3, figsize=(15, 15), dpi=900)
+        figure, axes = pyplot.subplots(nrows=3, ncols=5, figsize=(25, 15), dpi=900)
         # figure.set_tight_layout(True)
         figure.suptitle(path, fontsize=16, fontweight='bold')
-
-        names = [ 'CDR3 charge', 'CDR3 length', 'N count', 'V-D length', 'D-J length', 'V-J length', 'V-D N count', 'D-J N count', 'V-J N count' ]
+        names = [
+            'CDR3 length',
+            'CDR3 charge',
+            'CDR3 weight',
+            'V-D length',
+            'D-J length',
+            'V-J length',
+            'V-D N count',
+            'D-J N count',
+            'V-J N count',
+            'N count',
+            'V 3 chew',
+            'J 5 chew',
+            'D 3 chew',
+            'D 5 chew',
+            'chew',
+        ]
         for index, name in enumerate(names):
             feature = self.distribution[name]
             plot = axes.flat[index]
@@ -3083,7 +3065,7 @@ class Histogram(object):
             for item in ( [ plot.xaxis.label, plot.yaxis.label ] + plot.get_xticklabels() + plot.get_yticklabels()):
                 item.set_fontsize(6)
                 item.set_color('#222222')
-        pyplot.savefig('{}.eps'.format(path), format='eps', )        
+        pyplot.savefig('{}.eps'.format(path), format='eps', )
 
 
 class Statistic(object):
@@ -3137,10 +3119,19 @@ class Statistic(object):
                     'D-J N count': [],
                     'V-J N count': [],
                     'N count': [],
+                    'V 3 chew': [],
+                    'J 5 chew': [],
+                    'D 3 chew': [],
+                    'D 5 chew': [],
+                    'chew': [],
                 }
             else:
                 raise ValueError('must specify a query to calculate statistic')
     
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
     @property
     def document(self):
         document = transform_to_document(self.node)
@@ -3300,7 +3291,7 @@ class Statistic(object):
                     'VH': [],
                     'DH': [],
                     'JH': [],
-                },
+                }
             }
 
             # collect CDR3 statistics
@@ -3308,15 +3299,32 @@ class Statistic(object):
             self.feature['CDR3 charge'].append(sample.primary['CDR3']['charge'])
             self.feature['CDR3 weight'].append(sample.primary['CDR3']['weight'])
 
+            # collect the picked VH, DH and JH hits and count the number of possible combinations 
             for hit in breakdown['sample'].hit:
                 if hit['picked'] and hit['region'] in breakdown['region'].keys():
                     breakdown['region'][hit['region']].append(hit)
             breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
+            if breakdown['region']['DH']: breakdown['combination'] *= len(breakdown['region']['DH'])
+            breakdown['portion'] = 1.0 / float(breakdown['combination'])
+
+            total = 0
+            chewback = {
+                'V 3 chew': [ h['3 chew'].length for h in breakdown['region']['VH'] if '3 chew' in h ],
+                'J 5 chew': [ h['5 chew'].length for h in breakdown['region']['JH'] if '5 chew' in h ],
+                'D 3 chew': [ h['3 chew'].length for h in breakdown['region']['DH'] if '3 chew' in h ],
+                'D 5 chew': [ h['5 chew'].length for h in breakdown['region']['DH'] if '5 chew' in h ],
+            }
+            for k,v in chewback.items():
+                if v:
+                    c = mean(v)
+                    total += c
+                    self.feature[k].append(c)
+                else:
+                    self.feature[k].append(0)
+            self.feature['chew'].append(total)
 
             # this is the case where we have a D
             if breakdown['region']['DH']:
-                breakdown['combination'] *= len(breakdown['region']['DH'])
-
                 total = 0
                 if 'V-D' in sample.primary:
                     self.feature['V-D length'].append(sample.primary['V-D']['query'].length)
@@ -3336,6 +3344,7 @@ class Statistic(object):
 
                 self.feature['N count'].append(total)
 
+            # and the case without the D
             else:
                 if 'V-J' in sample.primary:
                     self.feature['V-J length'].append(sample.primary['V-J']['query'].length)
@@ -3345,8 +3354,6 @@ class Statistic(object):
                     self.feature['V-J length'].append(0)
                     self.feature['V-J N count'].append(0)
                     self.feature['N count'].append(0)
-
-            breakdown['portion'] = 1.0 / float(breakdown['combination'])
 
             for slice in self.slice.keys():
                 self._add_sample_to_slice(slice, breakdown)
@@ -3366,9 +3373,9 @@ class Statistic(object):
                 'std': float(std(feature)),
                 'median': float(median(feature)),
             }
-            bins, edges = histogram(feature, ptp(feature))
+            bins, edges = histogram(feature, **self.configuration['histogram'][name])
             self.body['distribution'][name]['histogram'] = { 
-                'bins': [ int(x) for x in bins ], 
+                'bins': [ float(x) for x in bins ], 
                 'edges': [ float(x) for x in edges ]
             }
 
@@ -3426,7 +3433,7 @@ class Heatmap(object):
     def _draw_j_row_labels(self, origin):
         draw = ImageDraw.Draw(self.image)
         for i in range(self.slice['dimension']['JH']):
-            draw.text((origin[0] , origin[1] + self.cell_size * i), self.lookup['DH']['label'][i], font=self.font, fill=self.font_color)
+            draw.text((origin[0] , origin[1] + self.cell_size * i), self.lookup['JH']['label'][i], font=self.font, fill=self.font_color)
 
     def _draw_heatmap(self, matrix, origin):
         #self.normalize_matrix(matrix)
@@ -3597,6 +3604,12 @@ class Diagram(object):
                 values.append('')
         return self.pattern['phrase'].format(*values)
 
+    def _draw_comment(self, buffer):
+        if self.sample.comment:
+            buffer.write('{: <{}}'.format('Comment', self.width['diagram start']))
+            buffer.write(' | '.join(self.sample.comment))
+            buffer.write('\n')
+
     def _draw_summary(self, buffer):
         b = []
         b.append(self.sample.library)
@@ -3681,7 +3694,7 @@ class Diagram(object):
             if offset > 0:
                 buffer.write(' ' * offset)
             if track['query'].read_frame > 0:
-                buffer.write('-' * track['query'].read_frame)
+                buffer.write('-' * min(track['query'].read_frame, track['query'].length))
                 # buffer.write(track['query'].nucleotide[0:track['query'].read_frame])
                 buffer.write(self.gap)
                 
@@ -3695,7 +3708,7 @@ class Diagram(object):
                 buffer.write(' ' * self.width['diagram start'])
                 if offset > 0: buffer.write(' ' * offset)
                 if track['query'].read_frame > 0:
-                    buffer.write(track['palindrome'][0:track['query'].read_frame])
+                    buffer.write(track['palindrome'][0:min(track['query'].read_frame, track['query'].length)])
                     buffer.write(self.gap)
                     
                 for index in range(track['query'].read_frame, track['query'].length, 3):
@@ -3778,6 +3791,7 @@ class Diagram(object):
     def draw(self):
         buffer = StringIO()
         buffer.write('\n')
+        self._draw_comment(buffer)
         self._draw_track_title(buffer)
         buffer.write(' ' * self.width['table padding'])
         self._draw_summary(buffer)
@@ -4058,7 +4072,7 @@ class Block(object):
             if line.startswith('# IGBLASTN '):
                 # this is the start of a new record
                 if state == 2:
-                    sample.invalidate('no alignment results found')
+                    sample.invalidate('no alignments found')
                 state = 1
                 sample = None
                 
@@ -4628,15 +4642,21 @@ class Pipeline(object):
             self.log.debug('cached statistic found for\n%s', to_json(q))
         return statistic
 
-    def sample_heatmap(self, query, limit, skip, profile):
+    def sample_plot(self, query, limit, skip, profile):
         statistic = self.sample_statistic(query, limit, skip, profile)
         if statistic:
+            name = statistic.id
+            if 'library' in query: name = '{}.{}'.fomrat(query['library'], name)
             allele_heatmap = Heatmap(self, statistic, 'allele')
             family_heatmap = Heatmap(self, statistic, 'family')
-            allele_heatmap.save('{}_allele.png'.format(query['library']))
-            family_heatmap.save('{}_family.png'.format(query['library']))
+            allele_heatmap.save('{}_allele.png'.format(name))
+            family_heatmap.save('{}_family.png'.format(name))
             histogram = Histogram(statistic)
-            histogram.draw(query['library'])
+            histogram.draw(name)
+
+            # fig, ax = pyplot.subplots()
+            # heatmap = ax.pcolor(allele_heatmap.slice['correlation']['VDJ'][0], cmap=pyplot.cm.Blues, edgecolors='none')
+            # pyplot.savefig('{}.eps'.format('heat'), format='eps', )
 
     def sample_populate(self, library, strain, drop):
         count = 0
@@ -4816,8 +4836,8 @@ class Pipeline(object):
                 cmd.instruction['profile'])
             print(statistic.json)
 
-        elif cmd.action == 'heatmap':
-            self.sample_heatmap(
+        elif cmd.action == 'plot':
+            self.sample_plot(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
