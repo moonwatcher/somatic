@@ -1051,5 +1051,64 @@
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
         }
+    }, 
+    {
+        "body": {
+            "reference": [
+                "c57bl6b01t01spfb1a", 
+                "c57bl6b02t01spfb1a", 
+                "c57bl6b03t01spfb1a", 
+                "c57bl6b04t01spfb1a", 
+                "c57bl6b05t01spfb1a", 
+                "c57bl6b02t01gfb1a", 
+                "c57bl6b03t01gfb1a", 
+                "c57bl6b04t01gfb1a", 
+                "c57bl6b05t01gfb1a"
+            ]
+        }, 
+        "head": {
+            "id": "c57bl6b1a", 
+            "strain": "C57BL/6", 
+            "tissue": "peritoneal cavity b1a"
+        }
+    }, 
+    {
+        "body": {
+            "reference": [
+                "c57bl6b01t01spffo", 
+                "c57bl6b01t02spffo", 
+                "c57bl6b01t03spffo", 
+                "c57bl6b02t01spffo", 
+                "c57bl6b02t02spffo", 
+                "c57bl6b03t01spffo", 
+                "c57bl6b03t02spffo", 
+                "c57bl6b03t03spffo", 
+                "c57bl6b04t01spffo", 
+                "c57bl6b04t02spffo", 
+                "c57bl6b05t01spffo", 
+                "c57bl6b05t02spffo", 
+                "c57bl6b05t03spffo", 
+                "c57bl6b05t04spffo", 
+                "c57bl6b02t01gffo", 
+                "c57bl6b02t02gffo", 
+                "c57bl6b02t03gffo", 
+                "c57bl6b03t01gffo", 
+                "c57bl6b03t02gffo", 
+                "c57bl6b03t03gffo", 
+                "c57bl6b03t04gffo", 
+                "c57bl6b04t01gffo", 
+                "c57bl6b04t02gffo", 
+                "c57bl6b04t03gffo", 
+                "c57bl6b04t04gffo", 
+                "c57bl6b05t01gffo", 
+                "c57bl6b05t02gffo", 
+                "c57bl6b05t03gffo"
+            ]
+        }, 
+        "head": {
+            "id": "c57bl6fo", 
+            "strain": "C57BL/6", 
+            "tissue": "follicular spleen"
+        }
     }
 ]

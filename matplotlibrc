@@ -78,7 +78,7 @@
 ### LINES
 # See http://matplotlib.org/api/artist_api.html#module-matplotlib.lines for more
 # information on line properties.
-#lines.linewidth   : 1.0     # line width in points
+lines.linewidth   : 0.5     # line width in points
 #lines.linestyle   : -       # solid line
 #lines.color       : blue    # has no affect on plot(); see axes.color_cycle
 #lines.marker      : None    # the default marker
@@ -160,7 +160,7 @@ font.sans-serif     : Bitstream Vera Sans, Lucida Grande, Verdana, Geneva, Lucid
 # http://matplotlib.org/api/artist_api.html#module-matplotlib.text for more
 # information on text properties
 
-text.color          : 222222
+text.color          : 333333
 
 ### LaTeX customizations. See http://www.scipy.org/Wiki/Cookbook/Matplotlib/UsingTex
 #text.usetex         : False  # use latex for all text handling. The following fonts
@@ -243,7 +243,7 @@ axes.linewidth       : 0.5     # edge linewidth
 #axes.grid           : False   # display grid or not
 #axes.titlesize      : large   # fontsize of the axes title
 axes.labelsize       : small  # fontsize of the x any y labels
-#axes.labelweight    : normal  # weight of the x and y labels
+axes.labelweight    : bold  # weight of the x and y labels
 axes.labelcolor      : 222222
 #axes.axisbelow      : False   # whether axis gridlines and ticks are below
                                # the axes elements (lines, text, etc)
@@ -280,22 +280,22 @@ axes.labelcolor      : 222222
 # see http://matplotlib.org/api/axis_api.html#matplotlib.axis.Tick
 #xtick.major.size     : 4      # major tick size in points
 #xtick.minor.size     : 2      # minor tick size in points
-#xtick.major.width    : 0.5    # major tick width in points
+xtick.major.width    : 0.5    # major tick width in points
 #xtick.minor.width    : 0.5    # minor tick width in points
 #xtick.major.pad      : 4      # distance to major tick label in points
 #xtick.minor.pad      : 4      # distance to the minor tick label in points
 xtick.color           : 666666      # color of the tick labels
-xtick.labelsize       : x-small # fontsize of the tick labels
+xtick.labelsize       : xx-small # fontsize of the tick labels
 #xtick.direction      : in     # direction: in, out, or inout
 
 #ytick.major.size     : 4      # major tick size in points
 #ytick.minor.size     : 2      # minor tick size in points
-#ytick.major.width    : 0.5    # major tick width in points
+ytick.major.width    : 0.5    # major tick width in points
 #ytick.minor.width    : 0.5    # minor tick width in points
 #ytick.major.pad      : 4      # distance to major tick label in points
 #ytick.minor.pad      : 4      # distance to the minor tick label in points
 ytick.color           : 666666      # color of the tick labels
-ytick.labelsize       : x-small # fontsize of the tick labels
+ytick.labelsize       : xx-small # fontsize of the tick labels
 #ytick.direction      : in     # direction: in, out, or inout
 
 
@@ -310,11 +310,11 @@ ytick.labelsize       : x-small # fontsize of the tick labels
                                # legend, else a rectangle
 #legend.isaxes        : True
 #legend.numpoints     : 2      # the number of points in the legend line
-legend.fontsize       : large
+legend.fontsize       : xx-small
 #legend.borderpad     : 0.5    # border whitespace in fontsize units
 #legend.markerscale   : 1.0    # the relative size of legend markers vs. original
 # the following dimensions are in axes coords
-#legend.labelspacing  : 0.5    # the vertical space between the legend entries in fraction of fontsize
+legend.labelspacing  : 1.0    # the vertical space between the legend entries in fraction of fontsize
 #legend.handlelength  : 2.     # the length of the legend lines in fraction of fontsize
 #legend.handleheight  : 0.7     # the height of the legend handle in fraction of fontsize
 #legend.handletextpad : 0.8    # the space between the legend line and legend text in fraction of fontsize
@@ -322,7 +322,7 @@ legend.fontsize       : large
 #legend.columnspacing : 2.    # the border between the axes and legend edge in fraction of fontsize
 #legend.shadow        : False
 #legend.frameon       : True   # whether or not to draw a frame around legend
-#legend.framealpha    : None    # opacity of of legend frame
+legend.framealpha     : 0.75    # opacity of of legend frame
 #legend.scatterpoints : 3 # number of scatter points
 
 ### FIGURE
@@ -388,11 +388,11 @@ figure.dpi       : 800      # figure dots per inch
 # the default savefig params can be different from the display params
 # e.g., you may want a higher resolution, or to make the figure
 # background white
-savefig.dpi          : 800      # figure dots per inch
+savefig.dpi          : 300      # figure dots per inch
 #savefig.facecolor   : white    # figure facecolor when saving
 #savefig.edgecolor   : white    # figure edgecolor when saving
 #savefig.format      : png      # png, ps, pdf, svg
-#savefig.bbox        : standard # 'tight' or 'standard'.
+savefig.bbox         : tight # 'tight' or 'standard'.
                                 # 'tight' is incompatible with pipe-based animation
                                 # backends but will workd with temporary file based ones:
                                 # e.g. setting animation.writer to ffmpeg will not work,

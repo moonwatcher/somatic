@@ -29,6 +29,8 @@ from http.client import BadStatusLine
 
 log = logging.getLogger('Validate')
 
+ncbi_cache = {}
+
 def reverse(sequence):
     complement = {
         'A': 'T',
@@ -117,19 +119,24 @@ def fetch_from_ncbi(id):
             document = normalize_document(document, transform)
         return document
 
-    node = None
     if id is not None:
-        url = 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}'
-        document = fetch(url.format(id))
-        if 'INSDSet' in document:
-            for INSDSet in document['INSDSet']:
-                if 'INSDSeq' in INSDSet:
-                    for INSDSeq in INSDSet['INSDSeq']:
-                        if 'INSDSeq_moltype' in INSDSeq and INSDSeq['INSDSeq_moltype'] in ['DNA', 'mRNA', 'RNA']:
-                            if 'INSDSeq_sequence' in INSDSeq:
-                                INSDSeq['INSDSeq_sequence'] = INSDSeq['INSDSeq_sequence'].upper()
-                            node = INSDSeq
-                            break
+        if id in ncbi_cache:
+            node = ncbi_cache[id]
+        else:
+            node = None
+            url = 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}'
+            document = fetch(url.format(id))
+            if 'INSDSet' in document:
+                for INSDSet in document['INSDSet']:
+                    if 'INSDSeq' in INSDSet:
+                        for INSDSeq in INSDSet['INSDSeq']:
+                            if 'INSDSeq_moltype' in INSDSeq and INSDSeq['INSDSeq_moltype'] in ['DNA', 'mRNA', 'RNA']:
+                                if 'INSDSeq_sequence' in INSDSeq:
+                                    INSDSeq['INSDSeq_sequence'] = INSDSeq['INSDSeq_sequence'].upper()
+                                node = INSDSeq
+                                break
+            if node is not None:
+                ncbi_cache[id] = node
     return node
 
 def to_json(node):
@@ -144,47 +151,65 @@ def search(space, query):
         start = space.find(query, start + 1)
     return result
 
-def validate(gene):
-    if 'accession' in gene and 'start' in gene and 'end' in gene and 'strand' in gene:
-        if gene['accession'] in documents:
-            document = documents[gene['accession']]
-        else:
-            document = fetch_from_ncbi(gene['accession'])
-            documents[gene['accession']] = document
+def validate(record):
+    if 'accession' in record and 'start' in record and 'end' in record and 'strand' in record:
+        accession = fetch_from_ncbi(record['accession'])
 
-        r = document['INSDSeq_sequence'][gene['start']:gene['end']].upper()
-        if not gene['strand']:
-            r = reverse(r)
+        r = accession['INSDSeq_sequence'][record['start']:record['end']]
+        if not record['strand']: r = reverse(r)
 
-        if r != gene['sequence']:
-            complement(gene, True)
-            r = document['INSDSeq_sequence'][gene['start']:gene['end']].upper()
-            if r != gene['sequence']:
-                print('ERROR: {} is invalid'.format(gene['id']))
+        if r != record['sequence']:
+            print(to_json(record))
+            complement(record)
+            r = accession['INSDSeq_sequence'][record['start']:record['end']]
+            if not record['strand']: r = reverse(r)
+
+            if r != record['sequence']:
+                print('ERROR: {} is invalid'.format(record['sequence']))
         else:
-            print('{} is valid'.format(gene['id']))
+            pass
+            # print('{} is valid'.format(record['sequence']))
     else:
-        print('ERROR: {} is missing metadata'.format(gene['id']))
+        print('ERROR: {} is missing metadata'.format(record['sequence']))
 
-def complement(gene, force=False):
-    if force or ('start' not in gene or 'end' not in gene):
-        if gene['accession'] in documents:
-            document = documents[gene['accession']]
-        else:
-            document = fetch_from_ncbi(gene['accession'])
-            documents[gene['accession']] = document
-        result = search(document['INSDSeq_sequence'], gene['sequence'])
-        if len(result) == 1:
-          r = result[0]
-          print('new position found for {} in {} : {}'.format(gene['id'], gene['accession'], r))
-          gene['start'] = r[0]
-          gene['end'] = r[1]
-        elif len(result) == 0:
-          print('{} not found in {}'.format(gene['id'], gene['accession']))
-          print(document['INSDSeq_sequence'])
-          print(gene['sequence'])
-        else:
-          print('multiple positions found for {} in {} : {}'.format(gene['id'], gene['accession'], result))
+def complement(record):
+    accession = fetch_from_ncbi(record['accession'])
+    result = search(accession['INSDSeq_sequence'], record['sequence'])
+
+    if len(result) == 1:
+      r = result[0]
+      print('new position found for {} in {} : {}'.format(record['sequence'], record['accession'], r))
+      record['start'] = r[0]
+      record['end'] = r[1]
+
+    elif len(result) == 0:
+      print('{} not found in {}'.format(record['sequence'], record['accession']))
+      print(accession['INSDSeq_sequence'])
+      print(record['sequence'])
+
+    else:
+      print('multiple positions found for {} in {} : {}'.format(record['sequence'], record['accession'], result))
+
+vh_nomenclature = {
+    'IGHV1':'J558',
+    'IGHV2':'Q52',
+    'IGHV3':'36-60',
+    'IGHV4':'X24',
+    'IGHV5':'7183',
+    'IGHV6':'J606',
+    'IGHV7':'S107',
+    'IGHV8':'3609v',
+    'IGHV9':'VGAM3.8',
+    'IGHV10':'VH10',
+    'IGHV11':'VH11',
+    'IGHV12':'VH12',
+    'IGHV13':'3609N',
+    'IGHV14':'IGHV14',
+    'IGHV15':'IGHV15',
+    'IGHV16':'IGHV16',
+    'IGHV(II)':'VHPS2',
+    'IGHV(III)':'VHPS3',
+}
 
 BN000872 = set([
     "J558.89pg.195",
@@ -385,12 +410,6 @@ BN000872 = set([
 ])
 lookup = {}
 
-documents = {}
-# for k,region in genes.items():
-#     for gene in region:
-#         validate(gene)
-#document = json.loads(sys.stdin.read())
-
 notconfirmed = set([
     'IGHV3-6*03', 
     'IGHV3S7*01', 
@@ -401,7 +420,6 @@ notconfirmed = set([
     'IGHV14S4*01', 
     'IGHV15-2*02'
 ])
-
 
 notidentified = set([
     'IGHV1-18*02',
@@ -505,98 +523,12 @@ notidentified = set([
     'IGHV8S9*01',
 ])
 
-original = None
-with io.open('/Users/lg/code/somatic/bootstrap/mouse_ighv.json', 'r') as f:
-    original = json.loads(f.read())
+document = None
+with io.open('/Users/lg/code/somatic/bootstrap/mouse_c57bl6_rss.json', 'r') as f:
+    document = json.loads(f.read())
 
-for gene in original:
-    lookup[gene['id']] = gene
-
-buffer = []
-for gene in lookup.values():
-    gene['confirmed'] = True
-    gene['identified'] = True
-    gene['verified'] = True
-
-    # if 'name' in gene: del gene['name']
-
-    if 'imgt allele name' in gene:
-        if gene['imgt allele name'] in notconfirmed:
-            print(gene['id'])
-            gene['confirmed'] = False
-
-        if gene['imgt allele name'] in notidentified:
-            print(gene['id'])
-            gene['identified'] = False
-
-        if not gene['identified'] or not gene['confirmed']:
-            print(gene['id'])
-            gene['verified'] = False
-
-# document = json.loads(sys.stdin.read())
-
-# family = {
-#     'imgt': {
-#         'IGHV1':'J558',
-#         'IGHV2':'Q52',
-#         'IGHV3':'36-60',
-#         'IGHV4':'X24',
-#         'IGHV5':'7183',
-#         'IGHV6':'J606',
-#         'IGHV7':'S107',
-#         'IGHV8':'3609v',
-#         'IGHV9':'VGAM3.8',
-#         'IGHV10':'VH10',
-#         'IGHV11':'VH11',
-#         'IGHV12':'VH12',
-#         'IGHV13':'3609N',
-#         'IGHV14':'IGHV14',
-#         'IGHV15':'IGHV15',
-#         'IGHV16':'IGHV16',
-#         'IGHV(II)':'VHPS2',
-#         'IGHV(III)':'VHPS3',
-#     }
-# }
-
-# family['lit'] = {}
-# for k,v in family['imgt'].items():
-#     family['lit'][v] = k
-
-# buffer = []
-# for gene in document:
-#     if 'family name' in gene:
-#         gene['family'] = gene['family name']
-#         del gene['family name']
-
-
-#     if 'imgt family name' in gene and 'family' not in gene:
-#         gene['family'] = family['imgt'][gene['imgt family name']]
-#     #     print('adding family name {} to {}'.format(gene['family name'], gene['id']))
-
-#     if 'family' in gene and 'imgt family name' not in gene:
-#         gene['imgt family name'] = family['lit'][gene['family']]
-#     #     print('adding imgt family name {} to {}'.format(gene['imgt family name'], gene['id']))
-
-#     x = [ 
-#         gene['imgt family name'],
-#         gene['family'],
-#         gene['name'],
-#         gene['id'],
-#     ]
-#     x.append('None' if 'strain' not in gene else gene['strain'])
-#     x.append('None' if 'imgt allele name' not in gene else gene['imgt allele name'])
-#     x.append(gene['accession'])
-#     x.append(gene['start'])
-#     x.append(gene['end'])
-#     buffer.append(x)
-
-buffer = sorted(buffer, key=lambda x: x['gene'])
-buffer = sorted(buffer, key=lambda x: x['family'])
-
-#print('\n'.join([ ','.join([str(i) for i in x]) for x in buffer ]))
-
-print(to_json(buffer))
-
+for rss in document:
+    validate(rss)
 
 
 

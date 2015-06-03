@@ -65,48 +65,6 @@ log_levels = {
 }
 
 configuration = {
-    'scale': {
-        'color': [
-            '#00007F', '#000083', '#000087', '#00008B', '#00008F', '#000093', '#000097', '#00009B',
-            '#00009F', '#0000A3', '#0000A7', '#0000AB', '#0000AF', '#0000B3', '#0000B7', '#0000BB',
-            '#0000BF', '#0000C3', '#0000C7', '#0000CB', '#0000CF', '#0000D3', '#0000D7', '#0000DB',
-            '#0000DF', '#0000E3', '#0000E7', '#0000EB', '#0000EF', '#0000F3', '#0000F7', '#0000FB',
-            '#0000FF', '#0004FF', '#0008FF', '#000CFF', '#0010FF', '#0014FF', '#0018FF', '#001CFF',
-            '#0020FF', '#0024FF', '#0028FF', '#002CFF', '#0030FF', '#0034FF', '#0038FF', '#003CFF',
-            '#0040FF', '#0044FF', '#0048FF', '#004CFF', '#0050FF', '#0054FF', '#0058FF', '#005CFF',
-            '#0060FF', '#0064FF', '#0068FF', '#006CFF', '#0070FF', '#0074FF', '#0078FF', '#007CFF',
-            '#0080FF', '#0084FF', '#0088FF', '#008CFF', '#0090FF', '#0094FF', '#0098FF', '#009CFF',
-            '#00A0FF', '#00A4FF', '#00A8FF', '#00ACFF', '#00B0FF', '#00B4FF', '#00B8FF', '#00BCFF',
-            '#00C0FF', '#00C4FF', '#00C8FF', '#00CCFF', '#00D0FF', '#00D4FF', '#00D8FF', '#00DCFF',
-            '#00E0FF', '#00E4FF', '#00E8FF', '#00ECFF', '#00F0FF', '#00F4FF', '#00F8FF', '#00FCFF',
-            '#01FFFD', '#05FFF9', '#09FFF5', '#0DFFF1', '#11FFED', '#15FFE9', '#19FFE5', '#1DFFE1',
-            '#21FFDD', '#25FFD9', '#29FFD5', '#2DFFD1', '#31FFCD', '#35FFC9', '#39FFC5', '#3DFFC1',
-            '#41FFBD', '#45FFB9', '#49FFB5', '#4DFFB1', '#51FFAD', '#55FFA9', '#59FFA5', '#5DFFA1',
-            '#61FF9D', '#65FF99', '#69FF95', '#6DFF91', '#71FF8D', '#75FF89', '#79FF85', '#7DFF81',
-            '#81FF7D', '#85FF79', '#89FF75', '#8DFF71', '#91FF6D', '#95FF69', '#99FF65', '#9DFF61',
-            '#A1FF5D', '#A5FF59', '#A9FF55', '#ADFF51', '#B1FF4D', '#B5FF49', '#B9FF45', '#BDFF41',
-            '#C1FF3D', '#C5FF39', '#C9FF35', '#CDFF31', '#D1FF2D', '#D5FF29', '#D9FF25', '#DDFF21',
-            '#E1FF1D', '#E5FF19', '#E9FF15', '#EDFF11', '#F1FF0D', '#F5FF09', '#F9FF05', '#FDFF01',
-            '#FFFC00', '#FFF800', '#FFF400', '#FFF000', '#FFEC00', '#FFE800', '#FFE400', '#FFE000',
-            '#FFDC00', '#FFD800', '#FFD400', '#FFD000', '#FFCC00', '#FFC800', '#FFC400', '#FFC000',
-            '#FFBC00', '#FFB800', '#FFB400', '#FFB000', '#FFAC00', '#FFA800', '#FFA400', '#FFA000',
-            '#FF9C00', '#FF9800', '#FF9400', '#FF9000', '#FF8C00', '#FF8800', '#FF8400', '#FF8000',
-            '#FF7C00', '#FF7800', '#FF7400', '#FF7000', '#FF6C00', '#FF6800', '#FF6400', '#FF6000',
-            '#FF5C00', '#FF5800', '#FF5400', '#FF5000', '#FF4C00', '#FF4800', '#FF4400', '#FF4000',
-            '#FF3C00', '#FF3800', '#FF3400', '#FF3000', '#FF2C00', '#FF2800', '#FF2400', '#FF2000',
-            '#FF1C00', '#FF1800', '#FF1400', '#FF1000', '#FF0C00', '#FF0800', '#FF0400', '#FF0000',
-            '#FB0000', '#F70000', '#F30000', '#EF0000', '#EB0000', '#E70000', '#E30000', '#DF0000',
-            '#DB0000', '#D70000', '#D30000', '#CF0000', '#CB0000', '#C70000', '#C30000', '#BF0000',
-            '#BB0000', '#B70000', '#B30000', '#AF0000', '#AB0000', '#A70000', '#A30000', '#9F0000',
-            '#9B0000', '#970000', '#930000', '#8F0000', '#8B0000', '#870000', '#830000', '#7F0000',
-        ]
-    },
-    'database': {
-        'database': 'somatic', 
-        'host': 'albireo.bio.nyu.edu', 
-        'password': 'fPWZq8nCVizzHloVDhs=', 
-        'username': 'somatic'
-    },
     'diagram': {
         'prototype': {
             'name': {
@@ -163,6 +121,7 @@ configuration = {
         'all': {
             'accession': {},
             'gene': {},
+            'rss': {},
             'sample': {},
             'diagram': {
                 'track': {},
@@ -187,6 +146,7 @@ configuration = {
             'library': {},
             'accession': {},
             'gene': {},
+            'rss': {},
             'sample': {
                 'valid': True
             },
@@ -205,10 +165,56 @@ configuration = {
                 ]
             },
         },
+        'invalid': {
+            'sample': {
+                'valid': False,
+            },
+            'diagram': {
+                'track': {},
+                'feature': [
+                    'region',
+                    'name',
+                    'functionality',
+                ]
+            },
+        },
         'productive3033': {
             'sample': {
                 'productive': True,
                 '$and': [ { 'average phred': { '$gt': 30 } }, { 'average phred': { '$lt': 33 } } ] 
+            },
+            'diagram': {
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'functionality',
+                ]
+            },
+        },
+        'productive': {
+            'sample': {
+                'productive': True,
+            },
+            'diagram': {
+                'track': {
+                    'valid': True,
+                    'picked': True
+                },
+                'feature': [
+                    'region',
+                    'name',
+                    'functionality',
+                ]
+            },
+        },
+        'nonproductive': {
+            'sample': {
+                'valid': True,
+                'productive': False,
             },
             'diagram': {
                 'track': {
@@ -239,26 +245,11 @@ configuration = {
                 ]
             },
         },
-        'productive': {
-            'sample': {
-                'productive': True,
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'not-productive': {
+        'nonproductive33+': {
             'sample': {
                 'valid': True,
                 'productive': False,
+                'average phred': { '$gt': 33 },
             },
             'diagram': {
                 'track': {
@@ -269,11 +260,10 @@ configuration = {
                     'region',
                     'name',
                     'functionality',
-                    'in frame',
                 ]
             },
         },
-        'dropped-productive': {
+        'droppedproductive': {
             'sample': {
                 'productive': True,
             },
@@ -290,23 +280,6 @@ configuration = {
                 ]
             },
         },
-        'palindromic': {
-            'sample': {
-                'productive': True,
-                'palindromic': True,
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
         'gapped': {
             'sample': {
                 'valid': True,
@@ -315,58 +288,6 @@ configuration = {
             'diagram': {
                 'track': {
                     'valid': False
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'premature': {
-            'sample': {
-                'valid': True,
-                'premature': True,
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                    'in frame',
-                ]
-            },
-        },
-        'in': {
-            'sample': {
-                'valid': True,
-                'in frame': True,
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'out': {
-            'sample': {
-                'valid': True,
-                'in frame': False,
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
                 },
                 'feature': [
                     'region',
@@ -789,6 +710,16 @@ configuration = {
                     'nargs': '*'
                 }
             },
+            'query': {
+                'flag': [
+                    'query'
+                ],
+                'parameter': {
+                    'help': 'query id',
+                    'metavar': 'UUID',
+                    'nargs': '*'
+                }
+            },
             'premature': {
                 'flag': [
                     '-T',
@@ -1034,6 +965,15 @@ configuration = {
                 },
                 {
                     'argument': [
+                        'query'
+                    ],
+                    'instruction': {
+                        'help': 'draw compared plots',
+                        'name': 'plot-compare'
+                    }
+                },
+                {
+                    'argument': [
                         'path'
                     ],
                     'instruction': {
@@ -1050,6 +990,27 @@ configuration = {
                     'instruction': {
                         'help': 'view JSON library records',
                         'name': 'library-info'
+                    }
+                },
+                {
+                    'argument': [
+                        'path'
+                    ],
+                    'instruction': {
+                        'help': 'load rss sequences from JSON file',
+                        'name': 'rss-populate'
+                    }
+                },
+                {
+                    'argument': [
+                        'region',
+                        'strain',
+                        'profile',
+                        'id'
+                    ],
+                    'instruction': {
+                        'help': 'view JSON rss records',
+                        'name': 'rss-info'
                     }
                 },
                 {
@@ -1105,6 +1066,7 @@ configuration = {
                         'profile',
                         'id',
                         'flanking',
+                        'limit'
                     ],
                     'instruction': {
                         'help': 'dump gene sequences to fasta',
@@ -1278,21 +1240,29 @@ configuration = {
         'TAG':'*',
     },
     'histogram': {
-        'CDR3 length': { 'bins': 40, 'range': (0,120) },
-        'CDR3 charge': { 'bins': 80, 'range': (-80,80) },
-        'CDR3 weight': { 'bins': 50, 'range': (0,5000) },
-        'V-D length': { 'bins': 50, 'range': (0,50) },
-        'D-J length': { 'bins': 50, 'range': (0,50) },
-        'V-J length': { 'bins': 50, 'range': (0,50) },
-        'V-D N count': { 'bins': 50, 'range': (0,50) },
-        'D-J N count': { 'bins': 50, 'range': (0,50) },
-        'V-J N count': { 'bins': 50, 'range': (0,50) },
-        'N count': { 'bins': 50, 'range': (0,50) },
-        'V 3 chew': { 'bins': 50, 'range': (0,50) },
-        'J 5 chew': { 'bins': 50, 'range': (0,50) },
-        'D 3 chew': { 'bins': 50, 'range': (0,50) },
-        'D 5 chew': { 'bins': 50, 'range': (0,50) },
-        'chew': { 'bins': 50, 'range': (0,50) },
+        'CDR3 length':  { 'bins': 40, 'range': (0,120) },
+        'CDR3 charge':  { 'bins': 80, 'range': (-80,80) },
+        'CDR3 weight':  { 'bins': 50, 'range': (0,5000) },
+        'chew':         { 'bins': 50, 'range': (0,50) },
+
+        'V 3 chew':     { 'bins': 50, 'range': (0,50) },
+        'J 5 chew':     { 'bins': 50, 'range': (0,50) },
+        'D 3 chew':     { 'bins': 50, 'range': (0,50) },
+        'D 5 chew':     { 'bins': 50, 'range': (0,50) },
+
+        'V-D length':   { 'bins': 50, 'range': (0,50) },
+        'D-J length':   { 'bins': 50, 'range': (0,50) },
+        'V-J length':   { 'bins': 50, 'range': (0,50) },
+
+        'V-D N count':  { 'bins': 50, 'range': (0,50) },
+        'D-J N count':  { 'bins': 50, 'range': (0,50) },
+        'V-J N count':  { 'bins': 50, 'range': (0,50) },
+        'N count':      { 'bins': 50, 'range': (0,50) },
+
+        'V-D P count':  { 'bins': 50, 'range': (0,50) },
+        'D-J P count':  { 'bins': 50, 'range': (0,50) },
+        'V-J P count':  { 'bins': 50, 'range': (0,50) },
+        'P count':      { 'bins': 50, 'range': (0,50) },
     },
     'constant': {
         'mouse chromosome 12': DB_BASE + '/chr12.fa',
@@ -1351,22 +1321,57 @@ configuration = {
                 { 'key': [( 'head.functionality', ASCENDING )], 'unique': False, 'name': 'gene functionality' },
             ]
         },
+        'rss': {
+            'collection': 'rss',
+            'index': [
+                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'rss id' },
+                { 'key': [( 'head.accession', ASCENDING )], 'unique': False, 'name': 'rss accession' },
+                { 'key': [( 'head.organism name', ASCENDING )], 'unique': False, 'name': 'rss organism name' },
+                { 'key': [( 'head.region', ASCENDING )], 'unique': False, 'name': 'rss region' },
+            ]
+        },
         'sample': {
             'collection': 'sample',
             'index': [
-                { 'key': [( 'head.library', ASCENDING ), ( 'head.productive', ASCENDING )], 'unique': False, 'name': 'sample productive and library' },
-                { 'key': [( 'head.library', ASCENDING ), ( 'head.productive', ASCENDING ), ( 'head.average phred', ASCENDING )], 'unique': False, 'name': 'sample productive and library and phred' },
-                { 'key': [( 'head.id', ASCENDING ), ( 'head.library', ASCENDING )], 'unique': True, 'name': 'sample in library' },
-                { 'key': [( 'head.library', ASCENDING ), ( 'head.valid', ASCENDING )], 'unique': False, 'name': 'sample valid and library' },
-                { 'key': [( 'head.id', ASCENDING )], 'unique': False, 'name': 'sample id' },
-                { 'key': [( 'head.productive', ASCENDING )], 'unique': False, 'name': 'sample productive' },
-                { 'key': [( 'head.valid', ASCENDING )], 'unique': False, 'name': 'sample valid' },
-                { 'key': [( 'head.framed', ASCENDING )], 'unique': False, 'name': 'sample framed' },
-                { 'key': [( 'head.in frame', ASCENDING )], 'unique': False, 'name': 'sample in frame' },
-                { 'key': [( 'head.premature', ASCENDING )], 'unique': False, 'name': 'sample premature' },
-                { 'key': [( 'head.library', ASCENDING )], 'unique': False, 'name': 'sample library' },
-                { 'key': [( 'head.gapped', ASCENDING )], 'unique': False, 'name': 'sample gapped' },
-                { 'key': [( 'head.palindromic', ASCENDING )], 'unique': False, 'name': 'sample palindromic' },
+                {   'key': [( 'head.id', ASCENDING )], 'unique': False, 'name': 'sample id' },
+                {   'key': [( 'head.valid', ASCENDING )], 'unique': False, 'name': 'sample valid' },
+                {   'key': [( 'head.gapped', ASCENDING )], 'unique': False, 'name': 'sample gapped' },
+                {   'key': [( 'head.library', ASCENDING )], 'unique': False, 'name': 'sample library' },
+                {
+                    'key': [
+                        ( 'head.id', ASCENDING ),
+                        ( 'head.library', ASCENDING ),
+                    ],
+                    'unique': True,
+                    'name': 'unique sample in library'
+                },
+                {
+                    'key': [
+                        ( 'head.valid', ASCENDING ),
+                        ( 'head.library', ASCENDING ),
+                    ],
+                    'unique': False,
+                    'name': 'valid sample with library'
+                },
+                {
+                    'key': [
+                        ( 'head.library', ASCENDING ),
+                        ( 'head.valid', ASCENDING ),
+                        ( 'head.productive', ASCENDING ),
+                    ],
+                    'unique': False,
+                    'name': 'valid productive sample with library'
+                },
+                {
+                    'key': [
+                        ( 'head.library', ASCENDING ),
+                        ( 'head.valid', ASCENDING ),
+                        ( 'head.productive', ASCENDING ),
+                        ( 'head.average phred', ASCENDING ),
+                    ],
+                    'unique': False,
+                    'name': 'valid productive sample with phred and library'
+                },
             ]
         },
         'library': {
@@ -1381,7 +1386,49 @@ configuration = {
                 { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'statistic id' }
             ]
         }
-    }
+    },
+    'scale': {
+        'color': [
+            '#00007F', '#000083', '#000087', '#00008B', '#00008F', '#000093', '#000097', '#00009B',
+            '#00009F', '#0000A3', '#0000A7', '#0000AB', '#0000AF', '#0000B3', '#0000B7', '#0000BB',
+            '#0000BF', '#0000C3', '#0000C7', '#0000CB', '#0000CF', '#0000D3', '#0000D7', '#0000DB',
+            '#0000DF', '#0000E3', '#0000E7', '#0000EB', '#0000EF', '#0000F3', '#0000F7', '#0000FB',
+            '#0000FF', '#0004FF', '#0008FF', '#000CFF', '#0010FF', '#0014FF', '#0018FF', '#001CFF',
+            '#0020FF', '#0024FF', '#0028FF', '#002CFF', '#0030FF', '#0034FF', '#0038FF', '#003CFF',
+            '#0040FF', '#0044FF', '#0048FF', '#004CFF', '#0050FF', '#0054FF', '#0058FF', '#005CFF',
+            '#0060FF', '#0064FF', '#0068FF', '#006CFF', '#0070FF', '#0074FF', '#0078FF', '#007CFF',
+            '#0080FF', '#0084FF', '#0088FF', '#008CFF', '#0090FF', '#0094FF', '#0098FF', '#009CFF',
+            '#00A0FF', '#00A4FF', '#00A8FF', '#00ACFF', '#00B0FF', '#00B4FF', '#00B8FF', '#00BCFF',
+            '#00C0FF', '#00C4FF', '#00C8FF', '#00CCFF', '#00D0FF', '#00D4FF', '#00D8FF', '#00DCFF',
+            '#00E0FF', '#00E4FF', '#00E8FF', '#00ECFF', '#00F0FF', '#00F4FF', '#00F8FF', '#00FCFF',
+            '#01FFFD', '#05FFF9', '#09FFF5', '#0DFFF1', '#11FFED', '#15FFE9', '#19FFE5', '#1DFFE1',
+            '#21FFDD', '#25FFD9', '#29FFD5', '#2DFFD1', '#31FFCD', '#35FFC9', '#39FFC5', '#3DFFC1',
+            '#41FFBD', '#45FFB9', '#49FFB5', '#4DFFB1', '#51FFAD', '#55FFA9', '#59FFA5', '#5DFFA1',
+            '#61FF9D', '#65FF99', '#69FF95', '#6DFF91', '#71FF8D', '#75FF89', '#79FF85', '#7DFF81',
+            '#81FF7D', '#85FF79', '#89FF75', '#8DFF71', '#91FF6D', '#95FF69', '#99FF65', '#9DFF61',
+            '#A1FF5D', '#A5FF59', '#A9FF55', '#ADFF51', '#B1FF4D', '#B5FF49', '#B9FF45', '#BDFF41',
+            '#C1FF3D', '#C5FF39', '#C9FF35', '#CDFF31', '#D1FF2D', '#D5FF29', '#D9FF25', '#DDFF21',
+            '#E1FF1D', '#E5FF19', '#E9FF15', '#EDFF11', '#F1FF0D', '#F5FF09', '#F9FF05', '#FDFF01',
+            '#FFFC00', '#FFF800', '#FFF400', '#FFF000', '#FFEC00', '#FFE800', '#FFE400', '#FFE000',
+            '#FFDC00', '#FFD800', '#FFD400', '#FFD000', '#FFCC00', '#FFC800', '#FFC400', '#FFC000',
+            '#FFBC00', '#FFB800', '#FFB400', '#FFB000', '#FFAC00', '#FFA800', '#FFA400', '#FFA000',
+            '#FF9C00', '#FF9800', '#FF9400', '#FF9000', '#FF8C00', '#FF8800', '#FF8400', '#FF8000',
+            '#FF7C00', '#FF7800', '#FF7400', '#FF7000', '#FF6C00', '#FF6800', '#FF6400', '#FF6000',
+            '#FF5C00', '#FF5800', '#FF5400', '#FF5000', '#FF4C00', '#FF4800', '#FF4400', '#FF4000',
+            '#FF3C00', '#FF3800', '#FF3400', '#FF3000', '#FF2C00', '#FF2800', '#FF2400', '#FF2000',
+            '#FF1C00', '#FF1800', '#FF1400', '#FF1000', '#FF0C00', '#FF0800', '#FF0400', '#FF0000',
+            '#FB0000', '#F70000', '#F30000', '#EF0000', '#EB0000', '#E70000', '#E30000', '#DF0000',
+            '#DB0000', '#D70000', '#D30000', '#CF0000', '#CB0000', '#C70000', '#C30000', '#BF0000',
+            '#BB0000', '#B70000', '#B30000', '#AF0000', '#AB0000', '#A70000', '#A30000', '#9F0000',
+            '#9B0000', '#970000', '#930000', '#8F0000', '#8B0000', '#870000', '#830000', '#7F0000',
+        ]
+    },
+    'database': {
+        'database': 'somatic', 
+        'host': 'albireo.bio.nyu.edu', 
+        'password': 'fPWZq8nCVizzHloVDhs=', 
+        'username': 'somatic'
+    },
 }
 
 def parse_match(match):
@@ -1390,52 +1437,64 @@ def parse_match(match):
     else:
         return None
 
-def to_fasta(id, sequence, description=None, limit=configuration['constant']['fasta line length']):
+def to_fastq(id, sequence, quality):
+    if id:
+        if sequence:
+            if quality:
+                return '{}\n{}\n+\n{}'.format(id, sequence, quality)
+            else:
+                raise ValueError('FASTQ quality can not be empty')
+        else:
+            raise ValueError('FASTQ sequence can not be empty')
+    else:
+        raise ValueError('FASTQ id can not be empty')
+
+def to_fasta(id, sequence, description, limit):
     if id and sequence:
         buffer = []
-        if description: buffer.append('>{} {}'.format(id, description))
-        else: buffer.append('>{}'.format(id))
-        begin = 0
-        end = 0
-        length = len(sequence)
-        while end < length:
-            end = min(begin + limit, length)
-            buffer.append(sequence[begin:end])
-            begin = end
+        if description:
+            buffer.append('>{} {}'.format(id, description))
+        else:
+            buffer.append('>{}'.format(id))
+
+        if limit:
+            begin = 0
+            end = 0
+            length = len(sequence)
+            while end < length:
+                end = min(begin + limit, length)
+                buffer.append(sequence[begin:end])
+                begin = end
+        else:
+            buffer.append(sequence)
         return '\n'.join(buffer)
     else:
-        return None
+        raise ValueError('FASTA sequence must have an id and sequence')
 
 def transform_to_document(node):
+    if isinstance(node, set):
+        return [ transform_to_document(v) for v in node ]
     if isinstance(node, list):
         return [ transform_to_document(v) for v in node ]
-        
     elif isinstance(node, dict):
-        return dict([ (key,transform_to_document(value)) for key,value in node.items() ])
-
+        return dict([ (k,transform_to_document(v)) for k,v in node.items() ])
     elif isinstance(node, Sample):
         return node.document
-        
     elif isinstance(node, Gene):
         return node.document
-        
     elif isinstance(node, Accession):
         return node.document
-        
     elif isinstance(node, Sequence):
         return node.document
-
     elif isinstance(node, Statistic):
         return node.document
-
     elif isinstance(node, ndarray):
         bytesio = BytesIO()
         save(bytesio, node)
         bytesio.seek(0)
-        binary = Binary(bytesio.read())
-        return binary
-
-    else: return node
+        return Binary(bytesio.read())
+    else:
+        return node
 
 def to_json(node):
     def handler(o):
@@ -1444,12 +1503,6 @@ def to_json(node):
             result = o.isoformat()
         if isinstance(o, ObjectId):
             result = str(o)
-        if isinstance(o, set):
-            result = list(o)
-        if isinstance(o, Sequence):
-            result = o.node
-        if isinstance(o, Sample):
-            result = o.head
         return result
     document = transform_to_document(node)
     return json.dumps(document, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
@@ -1756,7 +1809,7 @@ class Accession(object):
 
     @property
     def fasta(self):
-        return to_fasta(self.id, self.sequence.nucleotide, self.description)
+        return self.to_fasta(self.configuration['constant']['fasta line length'])
 
     @property
     def head(self):
@@ -1797,6 +1850,7 @@ class Accession(object):
             return self.head['description']
         else:
             return None
+
     @property
     def strain(self):
         if 'strain' in self.head:
@@ -1810,6 +1864,9 @@ class Accession(object):
         if self.head['strain'] == '':
             del self.head['strain']
 
+    def to_fasta(self, limit):
+        return to_fasta(self.id, self.sequence.nucleotide, self.description, limit)
+
 
 class Blat(object):
     def __init__(self, pipeline, instruction):
@@ -1821,7 +1878,14 @@ class Blat(object):
 
         for record in self.instruction['record'].values():
             record['flanking'] = record['gene'].to_flanking_fasta(instruction['flank'])
-            self.fasta.append(to_fasta(record['flanking']['id'], record['flanking']['sequence'].nucleotide))
+            self.fasta.append(
+                to_fasta(
+                    record['flanking']['id'],
+                    record['flanking']['sequence'].nucleotide,
+                    None,
+                    self.configuration['constant']['fasta line length']
+                )
+            )
         self.fasta = '\n'.join(self.fasta)
 
         with io.open(self.instruction['target path'], 'r') as file:
@@ -2068,21 +2132,16 @@ class Blat(object):
                     self.summarize(query)
 
 
-class Gene(object):
+class Artifact(object):
     def __init__(self, pipeline, node=None):
-        self.log = logging.getLogger('Gene')
+        self.log = logging.getLogger('Artifact')
         self.pipeline = pipeline
         self.node = node
         
         if self.node is None:
             self.node = {
-                'head': {
-                    'confirmed': True,
-                    'identified': True,
-                },
-                'body': {
-                    'strand': True,
-                }
+                'head': {},
+                'body': { 'strand': True }
             }
             
         if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
@@ -2095,67 +2154,14 @@ class Gene(object):
         buffer.append(self.id if self.id else 'unknown id')
         buffer.append(self.region if self.region else 'unknown region')
         buffer.append(self.strain if self.strain else 'unknown strain')
-        if 'accession' in self.head:
-            buffer.append(self.head['accession'])
-        if 'strand' in self.body:
-            buffer.append('+' if self.body['strand'] else '-')
-            
-        buffer.append('{} nucleotides'.format(self.length))
+        if 'accession' in self.head: buffer.append(self.head['accession'])
+        if 'strand' in self.body: buffer.append('+' if self.body['strand'] else '-')
+        buffer.append('{}bp'.format(self.length))
         return '[ {} ]'.format(', '.join(buffer))
 
-    def to_flanking_fasta(self, flank):
-        flanking = None
-        accession = self.pipeline.resolver.accession_fetch(self.accession)
-        if accession is not None:
-            flanking = {}
-            flanking['id'] = self.id
-            flanking['accession start'] = self.start
-            flanking['accession end'] = self.end
-            flanking['flank start'] = max(self.start - flank, 0)
-            flanking['flank end'] = min(self.end + flank, accession.length)
-            flanking['flank length'] = flanking['flank end'] - flanking['flank start']
-            flanking['start'] = flanking['accession start'] - flanking['flank start']
-            flanking['end'] = flanking['accession end'] - flanking['flank start']
-            flanking['sequence'] = accession.sequence.crop(flanking['flank start'], flanking['flank end'])
-            if not self.body['strand']:
-                flanking['sequence'] = flanking['sequence'].reversed
-                end = flanking['flank length'] - flanking['start']
-                start = flanking['flank length'] - flanking['end']
-                flanking['end'] = end
-                flanking['start'] = start
-            flanking['length'] = flanking['end'] - flanking['start']
-        return flanking
-
-    def to_fasta(self, flank=0):
-        buffer = [ '>{}'.format(self.id) ]
-        sequence = self.sequence
-        if flank is not None and flank > 0:
-            accession = self.pipeline.resolver.accession_fetch(self.accession)
-            if accession is not None:
-                flanking = accession.sequence.crop(self.start - flank, self.end + flank)
-                if flanking is not None:
-                    if not self.body['strand']:
-                        flanking = flanking.reversed
-                    sequence = flanking
-        begin = 0
-        end = 0
-        while end < sequence.length:
-            end = min(begin + self.configuration['constant']['fasta line length'], sequence.length)
-            buffer.append(sequence.nucleotide[begin:end])
-            begin = end
-        return '\n'.join(buffer)
-
     @property
-    def fasta(self):
-        return self.to_fasta()
-
-    @property
-    def valid(self):
-        return self.id is not None and self.sequence.valid
-
-    @property
-    def document(self):
-        return transform_to_document(self.node)
+    def configuration(self):
+        return self.pipeline.configuration
 
     @property
     def head(self):
@@ -2166,8 +2172,8 @@ class Gene(object):
         return self.node['body']
 
     @property
-    def configuration(self):
-        return self.pipeline.configuration
+    def valid(self):
+        return self.id is not None and self.sequence.valid
 
     @property
     def id(self):
@@ -2176,27 +2182,10 @@ class Gene(object):
         else:
             return None
 
-    @id.setter
-    def id(self, value):
-        self.head['id'] = value
-        if self.head['id'] == '':
-            del self.head['id']
-
     @property
-    def accession(self):
-        if 'accession' in self.head:
-            return self.head['accession']
-        else:
-            return None
-
-    @property
-    def sequence(self):
-        return self.body['sequence']
-
-    @property
-    def region(self):
-        if 'region' in self.head:
-            return self.head['region']
+    def organism(self):
+        if 'organism name' in self.head:
+            return self.head['organism name']
         else:
             return None
 
@@ -2207,21 +2196,19 @@ class Gene(object):
         else:
             return None
 
-    @strain.setter
-    def strain(self, value):
-        self.head['strain'] = value
-        if self.head['strain'] == '':
-            del self.head['strain']
-
-    @region.setter
-    def region(self, value):
-        self.head['region'] = value
-        if self.head['region'] == '':
-            del self.head['region']
+    @property
+    def region(self):
+        if 'region' in self.head:
+            return self.head['region']
+        else:
+            return None
 
     @property
-    def length(self):
-        return self.sequence.length
+    def accession(self):
+        if 'accession' in self.head:
+            return self.head['accession']
+        else:
+            return None
 
     @property
     def start(self):
@@ -2238,45 +2225,93 @@ class Gene(object):
             return None
 
     @property
-    def framed(self):
-        return self.head['framed']
+    def length(self):
+        return self.sequence.length
+
+    @property
+    def sequence(self):
+        return self.body['sequence']
 
     @property
     def strand(self):
         return self.body['strand']
 
     @property
-    def functionality(self):
-        return self.head['functionality']
+    def document(self):
+        return transform_to_document(self.node)
+
+    @property
+    def json(self):
+        return to_json(self.node)
+
+    @property
+    def fasta(self):
+        return to_fasta(self.id, self.sequence.nucleotide, None, self.configuration['constant']['fasta line length'])
+
+    def flanking_query(self, flank):
+        query = None
+        accession = self.pipeline.resolver.accession_fetch(self.accession)
+        if accession is not None:
+            query = {}
+            query['id'] = self.id
+            query['accession start'] = self.start
+            query['accession end'] = self.end
+            query['flank start'] = max(self.start - flank, 0)
+            query['flank end'] = min(self.end + flank, accession.length)
+            query['flank length'] = query['flank end'] - query['flank start']
+            query['start'] = query['accession start'] - query['flank start']
+            query['end'] = query['accession end'] - query['flank start']
+            query['sequence'] = accession.sequence.crop(query['flank start'], query['flank end'])
+            if not self.strand:
+                query['sequence'] = query['sequence'].reversed
+                end = query['flank length'] - query['start']
+                start = query['flank length'] - query['end']
+                query['end'] = end
+                query['start'] = start
+            query['length'] = query['end'] - query['start']
+        return query
+
+    def to_fasta(self, flank, limit):
+        sequence = self.sequence
+        if flank is not None and flank > 0:
+            accession = self.pipeline.resolver.accession_fetch(self.accession)
+            if accession is not None:
+                flanking = accession.sequence.crop(self.start - flank, self.end + flank)
+                if flanking is not None:
+                    if not self.strand:
+                        flanking = flanking.reversed
+                    sequence = flanking
+        return to_fasta(self.id, sequence.nucleotide, None, limit)
 
     def check_in_accesion(self):
-            accession = self.accession_fetch(self.accession)
-            if accession is not None:
-                matching = accession.sequence.crop(self.start, self.end)
-                if not self.strand:
-                    matching = matching.reversed
+        accession = self.pipeline.resolver.accession_fetch(self.accession)
+        if accession is not None:
+            matching = accession.sequence.crop(self.start, self.end)
+            if not self.strand:
+                matching = matching.reversed
 
-                if not self.sequence.nucleotide:
-                    self.sequence.nucleotide = matching.nucleotide
-                    self.log.info('sequence assigned to gene %s from accession %s:%d:%d', self.id, accession.id, self.start, self.end)
-                else:
-                    if self.sequence.nucleotide and matching.nucleotide != self.sequence.nucleotide:
-                        self.log.info('gene sequence for %s does not match accession %s:%d:%d', self.id, accession.id, self.start, self.end)
-                        self.search_in_accession()
-                    else:
-                        self.log.debug('gene sequence for %s matched to accession %s:%d:%d', self.id, accession.id, self.start, self.end)
-                        
-                    if self.strain is None and accession.strain is not None:
-                        self.strain = accession.strain
-                        self.log.info('strain %s assigned to gene %s from %s', self.strain, self.id, self.accession)
-
-                    # This should probably not be here...
-                    if accession.strain is None and self.strain is not None:
-                        accession.strain = self.strain
-                        self.pipeline.resolver.accession_save(accession)
-                        self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, self.id)
+            if not self.sequence.nucleotide:
+                # if no sequence defined, assign sequence from accession 
+                self.sequence.nucleotide = matching.nucleotide
+                self.log.info('sequence assigned to artifact %s from accession %s:%d:%d', self.id, accession.id, self.start, self.end)
             else:
-                self.log.error('accession %s could not be located', self.accession)
+                if matching.nucleotide != self.sequence.nucleotide:
+                    self.log.info('artifact sequence in %s does not match accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                    self.search_in_accession()
+                else:
+                    self.log.debug('artifact sequence for %s matched to accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                    
+                if self.strain is None and accession.strain is not None:
+                    self.head['strain'] = accession.strain
+                    self.log.info('strain %s assigned to artifact %s from %s', self.strain, self.id, self.accession)
+
+                # This should probably not be here...
+                # if accession.strain is None and self.strain is not None:
+                #     accession.strain = self.strain
+                #     self.pipeline.resolver.accession_save(accession)
+                #     self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, self.id)
+        else:
+            self.log.error('accession %s could not be located', self.accession)
 
     def search_in_accession(self):
         accession = self.pipeline.resolver.accession_fetch(self.accession)
@@ -2287,7 +2322,9 @@ class Gene(object):
             positions.append([start, end])
             start = accession.sequence.nucleotide.find(self.sequence.nucleotide, start + 1)
 
-        if len(positions) == 1:
+        if len(positions) < 1:
+            self.log.error('%s not found in %s', self.id, self.accession)
+        elif len(positions) == 1:
             position = positions[0]
             self.log.info('new position found for %s in %s:%d:%d delta is %d:%d',
                 self.id,
@@ -2299,10 +2336,32 @@ class Gene(object):
 
             self.body['start'] = position[0]
             self.body['end'] = position[1]
-        elif len(positions) == 0:
-            self.log.error('%s not found in %s', self.id, self.accession)
         else:
-            self.log.error('multiple positions found for %s in %s %s', self.id, self.accession, positions)
+            self.log.error('%s found %d times in %s', self.id, len(positions), self.accession)
+            self.log.debug(str(positions))
+
+
+class Gene(Artifact):
+    def __init__(self, pipeline, node=None):
+        Artifact.__init__(self, pipeline, node)
+        self.log = logging.getLogger('Gene')
+        for k in [ 'confirmed',  'identified' ]:
+            if k not in self.head:
+                self.head[k] = True
+
+    @property
+    def framed(self):
+        return self.head['framed']
+
+    @property
+    def functionality(self):
+        return self.head['functionality']
+
+
+class RSS(Artifact):
+    def __init__(self, pipeline, node=None):
+        Artifact.__init__(self, pipeline, node)
+        self.log = logging.getLogger('RSS')
 
 
 class Sample(object):
@@ -2338,7 +2397,7 @@ class Sample(object):
             self.body['sequence'] = Sequence(self.pipeline)
             
         for hit in self.hit:
-            self.load_hit(hit)
+            self._load_hit(hit)
 
     @property
     def configuration(self):
@@ -2364,28 +2423,23 @@ class Sample(object):
 
     @property
     def document(self):
-        document = transform_to_document(self.node)
-        return document
-
-    @property
-    def fasta(self):
-        return to_fasta(self.id, self.sequence.nucleotide)
-
-    @property
-    def fastq(self):
-        return '{}\n{}\n+\n{}'.format(self.id, self.sequence.nucleotide, self.sequence.quality)
+        return transform_to_document(self.node)
 
     @property
     def json(self):
-        return to_json(self)
+        return to_json(self.node)
+
+    @property
+    def fasta(self):
+        return to_fasta(self.id, self.sequence.nucleotide, None, self.configuration['constant']['fasta line length'])
+
+    @property
+    def fastq(self):
+        return to_fastq(self.id, self.sequence.nucleotide, self.sequence.quality)
 
     @property
     def id(self):
         return self.head['id']
-
-    @id.setter
-    def id(self, value):
-        self.head['id'] = value
 
     @property
     def length(self):
@@ -2395,17 +2449,9 @@ class Sample(object):
     def strand(self):
         return self.head['strand']
 
-    @strand.setter
-    def strand(self, value):
-        self.head['strand'] = value
-
     @property
     def library(self):
         return self.head['library']
-
-    @library.setter
-    def library(self, value):
-        self.head['library'] = value
 
     @property
     def sequence(self):
@@ -2414,10 +2460,6 @@ class Sample(object):
     @property
     def valid(self):
         return self.head['valid']
-
-    @valid.setter
-    def valid(self, value):
-        self.head['valid'] = value
 
     @property
     def hit(self):
@@ -2461,39 +2503,6 @@ class Sample(object):
     def productive(self):
         return self.head['productive']
 
-    def add_igblast_hit(self, hit):
-        if hit is not None:
-            if 'subject id' in hit:
-                gene = self.pipeline.resolver.gene_fetch(hit['subject id'])
-                # switch the hit to a zero based coordinate system
-                if gene:
-                    hit['query start'] -= 1
-                    if hit['subject strand'] == gene.sequence.strand:
-                        hit['subject start'] -= 1
-                    else:
-                        hit['subject start'] = gene.length - hit['subject start']
-                        hit['subject end'] = gene.length - hit['subject end'] + 1
-                else:
-                    self.invalidate_hit(hit, 'unknown gene')
-            self.hit.append(hit)
-            self.load_hit(hit)
-
-    def load_hit(self, hit):
-        for k in [
-            'query',
-            'subject',
-            '3 chew',
-            '5 chew'
-        ]:
-            if k in hit and isinstance(hit[k], dict):
-                hit[k] = Sequence(self.pipeline, hit[k])
-
-        if 'uuid' not in hit:
-            hit['uuid'] = str(uuid.uuid4())
-
-        if hit['uuid'] not in self.index:
-            self.index[hit['uuid']] = hit
-
     def reverse(self):
         self.body['sequence'] = self.body['sequence'].reversed
 
@@ -2505,7 +2514,7 @@ class Sample(object):
         print(self.json)
 
     def invalidate(self, message):
-        self.valid = False
+        self.head['valid'] = False
         self.make_comment(message)
 
     def make_comment(self, message):
@@ -2514,7 +2523,7 @@ class Sample(object):
         self.body['comment'].append(message)
         self.log.info('sample %s : %s', self.id, message)
 
-    def make_comment_hit(self, hit, message):
+    def make_hit_comment(self, hit, message):
         if 'comment' not in hit:
             hit['comment'] = []
         hit['comment'].append(message)
@@ -2528,23 +2537,7 @@ class Sample(object):
 
     def invalidate_hit(self, hit, message):
         hit['valid'] = False
-        self.make_comment_hit(hit, message)
-
-    def analyze(self, strain=None):
-        self.reset()
-        if self.valid: self._load_gene()
-        if self.valid: self._pick_jh_region(strain)
-        if self.valid: self._pick_vh_region(strain)
-        if self.valid: self._check_V_J_framing()
-        if self.valid: self._pick_dh_region()
-        if self.valid: self._identify_v_j_junction()
-        if self.valid: self._identify_v_d_junction()
-        if self.valid: self._identify_d_j_junction()
-        if self.valid: self._check_for_stop_codon()
-        if self.valid: self._identify_cdr3()
-        if self.valid: self._check_productive()
-        if self.valid: self._identify_chewback()
-        if self.valid: self._analyze_quality()
+        self.make_hit_comment(hit, message)
 
     def reset(self):
         self.head['valid'] = True
@@ -2560,7 +2553,7 @@ class Sample(object):
             del self.body['framed by']
 
         if 'hit' in self.body:
-            self.body['hit'] = [ hit for hit in self.body['hit'] if hit['region'] in ['VH', 'DH', 'JH']]
+            self.body['hit'] = [ hit for hit in self.body['hit'] if hit['region'] in self.configuration['region'].keys()]
 
         for hit in self.hit:
             hit['valid'] = True
@@ -2575,6 +2568,22 @@ class Sample(object):
             else:
                 hit['gapped'] = False
                 hit['query'] = self.sequence.crop(hit['query start'], hit['query end'])
+
+    def analyze(self, strain=None):
+        self.reset()
+        if self.valid: self._load_gene()
+        if self.valid: self._pick_jh_region(strain)
+        if self.valid: self._pick_vh_region(strain)
+        if self.valid: self._check_v_j_framing()
+        if self.valid: self._pick_dh_region()
+        if self.valid: self._identify_v_j_junction()
+        if self.valid: self._identify_v_d_junction()
+        if self.valid: self._identify_d_j_junction()
+        if self.valid: self._check_for_stop_codon()
+        if self.valid: self._identify_cdr3()
+        if self.valid: self._identify_chewback()
+        if self.valid: self._check_for_productivity()
+        if self.valid: self._analyze_quality()
 
     def _load_gene(self):
         for hit in self.hit:
@@ -2601,15 +2610,31 @@ class Sample(object):
     def _pick_hit(self, hit):
         if hit:
             hit['picked'] = True
-            self.load_hit(hit)
+            self._load_hit(hit)
             self._pick_region_primary(hit)
             self._pick_framing_region(hit)
 
+    def _load_hit(self, hit):
+        for k in [
+            'query',
+            'subject',
+            '3 chew',
+            '5 chew'
+        ]:
+            if k in hit and isinstance(hit[k], dict):
+                hit[k] = Sequence(self.pipeline, hit[k])
+
+        if 'uuid' not in hit:
+            hit['uuid'] = str(uuid.uuid4())
+
+        if hit['uuid'] not in self.index:
+            self.index[hit['uuid']] = hit
+
     def _pick_region_primary(self, hit):
         if hit['region'] not in self.body['primary']:
-            self.body['primary'][hit['region']] = hit['uuid']
-            hit['primary'] = True
             self._primary = None
+            hit['primary'] = True
+            self.body['primary'][hit['region']] = hit['uuid']
 
     def _pick_framing_region(self, hit):
         # first hit to be picked sets the frame for the sample
@@ -2617,7 +2642,7 @@ class Sample(object):
             self.head['framed'] = True
             self.body['framed by'] = hit['uuid']
             self.sequence.read_frame = (hit['query start'] + hit['subject'].read_frame) % 3
-            self.strand = hit['subject strand']
+            self.head['strand'] = hit['subject strand']
             for h in self.hit:
                 if h['valid']:
                     h['query'].read_frame = 2 - (h['query start'] - self.sequence.read_frame - 1) % 3
@@ -2670,20 +2695,11 @@ class Sample(object):
                     if search['functional']:
                         top = search['functional']
             if top:
-                # prefer a functional gene for a leader F > O > P
+                # prefer a functional gene for a primary F > O > P
                 top.sort(key=lambda x: x['functionality'])
                 for hit in top: self._pick_hit(hit)
                 picked = True
         return picked
-
-    def _check_V_J_framing(self):
-        jh = None if 'JH' not in self.primary else self.primary['JH']
-        vh = None if 'VH' not in self.primary else self.primary['VH']
-        if jh is not None and vh is not None:
-            if (jh['in frame'] and vh['in frame']):
-                self.head['in frame'] = True
-        else:
-            self.invalidate('could not establish a VH JH pair')
 
     def _pick_jh_region(self, strain):
         return self._pick_region('JH', self.hit, strain)
@@ -2760,177 +2776,49 @@ class Sample(object):
                     top = search['trimmed']
         return self._pick_region('DH', top)
 
-    def _identify_v_d_junction(self):
-        dh = None if 'DH' not in self.primary else self.primary['DH']
+    def _check_v_j_framing(self):
+        jh = None if 'JH' not in self.primary else self.primary['JH']
         vh = None if 'VH' not in self.primary else self.primary['VH']
-        if dh is not None and vh is not None:
-            if vh['query end'] < dh['query start']:
+        if jh is not None and vh is not None:
+            if jh['in frame'] and vh['in frame']:
+                self.head['in frame'] = True
+        else:
+            self.invalidate('could not establish a VH JH pair')
+
+    def _identify_junction(self, left, right, name):
+        if left is not None and right is not None:
+            if left['query end'] < right['query start']:
                 junction = {
                     'valid': True,
-                    'subject strand': self.strand,
                     'picked': True,
-                    'subject id': 'V-D',
-                    'query start': vh['query end'],
-                    'query end': dh['query start'],
-                    'region': 'V-D',
-                    'query': self.sequence.crop(vh['query end'], dh['query start'])
+                    'region': name,
+                    'subject id': name,
+                    'subject strand': self.strand,
+                    'query start': left['query end'],
+                    'query end': right['query start'],
+                    'query': self.sequence.crop(left['query end'], right['query start'])
                 }
-                self._check_palindrome(junction, vh['query'], dh['query'])
+                self._identify_palindrome(junction, left['query'], right['query'])
                 self.hit.append(junction)
                 self._pick_hit(junction)
+
+    def _identify_v_d_junction(self):
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+        dh = None if 'DH' not in self.primary else self.primary['DH']
+        self._identify_junction(vh, dh, 'V-D')
 
     def _identify_d_j_junction(self):
-        jh = None if 'JH' not in self.primary else self.primary['JH']
         dh = None if 'DH' not in self.primary else self.primary['DH']
-        if dh is not None and jh is not None:
-            if jh['query start'] > dh['query end']:
-                junction = {
-                    'valid': True,
-                    'subject strand': self.strand,
-                    'picked': True,
-                    'subject id': 'D-J',
-                    'query start': dh['query end'],
-                    'query end': jh['query start'],
-                    'region': 'D-J',
-                    'query': self.sequence.crop(dh['query end'], jh['query start'])
-                }
-                self._check_palindrome(junction, dh['query'], jh['query'])
-                self.hit.append(junction)
-                self._pick_hit(junction)
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        self._identify_junction(dh, jh, 'D-J')
 
     def _identify_v_j_junction(self):
-        jh = None if 'JH' not in self.primary else self.primary['JH']
-        vh = None if 'VH' not in self.primary else self.primary['VH']
-        dh = None if 'DH' not in self.primary else self.primary['DH']
-        if dh is None and vh is not None and jh is not None:
-            if jh['query start'] > vh['query end']:
-                junction = {
-                    'valid': True,
-                    'subject strand': self.strand,
-                    'picked': True,
-                    'subject id': 'V-J',
-                    'query start': vh['query end'],
-                    'query end': jh['query start'],
-                    'region': 'V-J',
-                    'query': self.sequence.crop(vh['query end'], jh['query start'])
-                }
-                self._check_palindrome(junction, vh['query'], jh['query'])
-                self.hit.append(junction)
-                self._pick_hit(junction)
+        if 'DH' not in self.primary:
+            vh = None if 'VH' not in self.primary else self.primary['VH']
+            jh = None if 'JH' not in self.primary else self.primary['JH']
+            self._identify_junction(vh, jh, 'V-J')
 
-    def _check_for_stop_codon(self):
-        if '*' in self.sequence.codon:
-            self.head['premature'] = True
-        else:
-            self.head['premature'] = False
-        return not self.head['premature']
-
-    def _identify_cdr3(self):
-        jh = None if 'JH' not in self.primary else self.primary['JH']
-        vh = None if 'VH' not in self.primary else self.primary['VH']
-        if vh is not None and jh is not None:
-            start = None
-            end = None
-            
-            offset = None
-            # look for the first upstream Cycteine on the VH region
-            for index,codon in enumerate(reversed(vh['query'].codon)):
-                if codon == 'C':
-                    offset = vh['query'].read_frame + (len(vh['query'].codon) - index - 1) * 3
-                    break
-                    
-            if offset is not None:
-                start = vh['query start'] + offset
-            else:
-                self.make_comment('no CDR3 framing cycteine')
-                
-            offset = None
-            tryptophan = []
-            # Look for the first downstream Tryptophan on the JH region
-            # followed by GG, followed by either C or T
-            for index,codon in enumerate(jh['query'].codon):
-                if codon == 'W':
-                    # if we found a tryptophan, keep a record of the search
-                    w = jh['query'].read_frame + (index + 1) * 3
-                    tryptophan.append(w)
-                    if jh['query'].nucleotide[w:w + 2] == 'GG':
-                        offset = w
-                        break
-
-            if offset is not None:
-                end = jh['query start'] + offset
-            elif tryptophan:
-                for w in tryptophan:
-                    self.make_comment('CDR3 framing tryptophan found at %s but not followed by glycine')
-            else:
-                self.make_comment('no CDR3 framing tryptophan')
-
-            if start and end:
-                cdr3 = {
-                    'valid': True,
-                    'subject strand': self.strand,
-                    'picked': True,
-                    'subject id': 'CDR3',
-                    'query start': start,
-                    'query end': end,
-                    'region': 'CDR3',
-                    'query': self.sequence.crop(start, end),
-                    'charge': 0,
-                    'weight': 0
-                }
-                for acid in cdr3['query'].codon:
-                    amino = self.configuration['iupac amino acid notation']
-                    if 'charge' in amino[acid]:
-                        cdr3['charge'] += amino[acid]['charge']
-                    if 'weight' in amino[acid]:
-                        cdr3['weight'] += amino[acid]['weight']
-                self.hit.append(cdr3)
-                self._pick_hit(cdr3)
-
-    def _check_productive(self):
-        jh = None if 'JH' not in self.primary else self.primary['JH']
-        vh = None if 'VH' not in self.primary else self.primary['VH']
-        cdr3 = None if 'CDR3' not in self.primary else self.primary['CDR3']
-        if (not self.premature and self.in_frame and vh is not None and jh is not None and cdr3 is not None):
-            if vh['functionality'] == 'F':
-                if jh['functionality'] == 'F':
-                    self.head['productive'] = True
-                else:
-                    self.make_comment('leading JH {} is non functional {}'.format(jh['allele'], jh['functionality']))
-            else:
-                self.make_comment('leading VH {} is non functional {}'.format(vh['allele'], vh['functionality']))
-
-    def _identify_chewback(self):
-        for hit in self.hit:
-            if hit['valid'] and hit['region'] in ['VH', 'DH', 'JH']:
-                gene = self.pipeline.resolver.gene_fetch(hit['subject id'])
-                if gene:
-                    if hit['subject strand'] == gene.sequence.strand:
-                        ref = gene.sequence
-                    else:
-                        ref = gene.sequence.reversed
-                        
-                    if hit['region'] == 'VH' or hit['region'] == 'DH':
-                        if hit['subject end'] < ref.length:
-                            hit['3 chew'] = ref.crop(hit['subject end'], ref.length)
-                            
-                    if hit['region'] == 'JH' or hit['region'] == 'DH':
-                        if hit['subject start'] > 0:
-                            hit['5 chew'] = ref.crop(0, hit['subject start'])
-
-    def _analyze_quality(self):
-        for name, region in self.primary.items():
-            self.head['{} length'.format(name)] = region['query'].length
-            region['average phread'] = float(sum(region['query'].phred)) / float((region['query'].length))
-        self.head['average phred'] = float(sum(self.sequence.phred)) / float((self.sequence.length))
-
-    def _summary_statistics(self):
-        for name, region in self.primary.items():
-            self.head['{} length'.format(name)] = region['query'].length
-            region['average phread'] = float(sum(region['query'].phred)) / float((region['query'].length))
-        self.head['average phred'] = float(sum(self.sequence.phred)) / float((self.sequence.length))
-
-    def _check_palindrome(self, junction, left, right):
+    def _identify_palindrome(self, junction, left, right):
         if junction['query'].length > 0:
             junction['palindrome'] = [ 'N' ] * junction['query'].length
             i = 0
@@ -2964,6 +2852,132 @@ class Sample(object):
                     junction['palindrome ratio'] = 1.0
             else:
                 junction['palindrome ratio'] = 0.0
+
+    def _check_for_stop_codon(self):
+        if '*' in self.sequence.codon:
+            self.head['premature'] = True
+        else:
+            self.head['premature'] = False
+        return not self.head['premature']
+
+    def _identify_cdr3_start(self, vh):
+        position = None
+        # look for the first upstream Cycteine on the VH region
+        offset = None
+        for index, codon in enumerate(reversed(vh['query'].codon)):
+            if codon == 'C':
+                offset = vh['query'].read_frame + (len(vh['query'].codon) - index - 1) * 3
+                break
+        if offset is not None:
+            position = vh['query start'] + offset
+        else:
+            self.make_comment('no CDR3 framing cycteine')
+        return position
+
+    def _identify_cdr3_end(self, jh):
+        position = None
+        # Look for the first downstream Tryptophan on the JH region followed by GG.
+        # What ever the third nucleotide is after the GG is, it is still a Glycine
+        offset = None
+        tryptophan = []
+        for index, codon in enumerate(jh['query'].codon):
+            if codon == 'W':
+                # if we found a Tryptophan, keep a record of the search
+                w = jh['query'].read_frame + (index + 1) * 3
+                tryptophan.append(w)
+                if jh['query'].nucleotide[w:w + 2] == 'GG':
+                    offset = w
+                    break
+        if offset is not None:
+            position = jh['query start'] + offset
+        elif tryptophan:
+            for w in tryptophan:
+                self.make_comment('CDR3 framing tryptophan found at %s but not followed by glycine')
+        else:
+            self.make_comment('no CDR3 framing tryptophan')
+        return position
+
+    def _identify_cdr3(self):
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+        if vh is not None and jh is not None:
+            start = self._identify_cdr3_start(vh)
+            end = self._identify_cdr3_end(jh)
+            if start and end:
+                cdr3 = {
+                    'valid': True,
+                    'picked': True,
+                    'region': 'CDR3',
+                    'subject id': 'CDR3',
+                    'subject strand': self.strand,
+                    'query start': start,
+                    'query end': end,
+                    'query': self.sequence.crop(start, end),
+                    'charge': 0,
+                    'weight': 0,
+                }
+                for acid in cdr3['query'].codon:
+                    amino = self.configuration['iupac amino acid notation']
+                    if 'charge' in amino[acid]:
+                        cdr3['charge'] += amino[acid]['charge']
+                    if 'weight' in amino[acid]:
+                        cdr3['weight'] += amino[acid]['weight']
+                self.hit.append(cdr3)
+                self._pick_hit(cdr3)
+
+    def _identify_chewback(self):
+        for hit in self.hit:
+            if hit['valid'] and hit['region'] in self.configuration['region'].keys():
+                gene = self.pipeline.resolver.gene_fetch(hit['subject id'])
+                if gene:
+                    if hit['subject strand'] == gene.sequence.strand:
+                        ref = gene.sequence
+                    else:
+                        ref = gene.sequence.reversed
+
+                    if hit['region'] == 'VH' or hit['region'] == 'DH':
+                        if hit['subject end'] < ref.length:
+                            hit['3 chew'] = ref.crop(hit['subject end'], ref.length)
+                            
+                    if hit['region'] == 'JH' or hit['region'] == 'DH':
+                        if hit['subject start'] > 0:
+                            hit['5 chew'] = ref.crop(0, hit['subject start'])
+
+    def _check_for_productivity(self):
+        jh = None if 'JH' not in self.primary else self.primary['JH']
+        vh = None if 'VH' not in self.primary else self.primary['VH']
+        cdr3 = None if 'CDR3' not in self.primary else self.primary['CDR3']
+        if not self.premature and self.in_frame and vh is not None and jh is not None and cdr3 is not None:
+            if vh['functionality'] == 'F':
+                if jh['functionality'] == 'F':
+                    self.head['productive'] = True
+                else:
+                    self.make_comment('leading JH {} is non functional {}'.format(jh['allele'], jh['functionality']))
+            else:
+                self.make_comment('leading VH {} is non functional {}'.format(vh['allele'], vh['functionality']))
+
+    def _analyze_quality(self):
+        for name, region in self.primary.items():
+            self.head['{} length'.format(name)] = region['query'].length
+            region['average phread'] = float(sum(region['query'].phred)) / float((region['query'].length))
+        self.head['average phred'] = float(sum(self.sequence.phred)) / float((self.sequence.length))
+
+    def add_igblast_hit(self, hit):
+        if hit is not None:
+            if 'subject id' in hit:
+                gene = self.pipeline.resolver.gene_fetch(hit['subject id'])
+                # switch the hit to a zero based coordinate system
+                if gene:
+                    hit['query start'] -= 1
+                    if hit['subject strand'] == gene.sequence.strand:
+                        hit['subject start'] -= 1
+                    else:
+                        hit['subject start'] = gene.length - hit['subject start']
+                        hit['subject end'] = gene.length - hit['subject end'] + 1
+                else:
+                    self.invalidate_hit(hit, 'unknown gene')
+            self.hit.append(hit)
+            self._load_hit(hit)
 
     def _expand(self):
         if 'hit' in self.body:
@@ -3009,177 +3023,178 @@ class Sample(object):
 
 
 class Histogram(object):
-    def __init__(self, statistic):
+    def __init__(self, name):
         self.log = logging.getLogger('Histogram')
-        self.statistic = statistic
+        self.name = name
+        self.plots = {
+            'CDR3 length': {
+                'position': [0,0],
+                'name': 'CDR3 length',
+            },
+            'CDR3 charge': {
+                'position': [0,1],
+                'name': 'CDR3 charge',
+            },
+            'CDR3 weight': {
+                'position': [0,2],
+                'name': 'CDR3 atomic weight',
+            },
+            'V-D N count': {
+                'position': [1,0],
+                'name': 'V-D Junction N count',
+            },
+            'D-J N count': {
+                'position': [1,1],
+                'name': 'D-J Junction N count',
+            },
+            'V-J N count': {
+                'position': [1,2],
+                'name': 'V-J Junction N count',
+            },
+            'N count': {
+                'position': [1,3],
+                'name': 'Total Junction N count',
+            },
+            'V-D P count': {
+                'position': [2,0],
+                'name': 'V-D Junction P count',
+            },
+            'D-J P count': {
+                'position': [2,1],
+                'name': 'D-J Junction P count',
+            },
+            'V-J P count': {
+                'position': [2,2],
+                'name': 'V-J Junction P count',
+            },
+            'P count': {
+                'position': [2,3],
+                'name': 'Total Junction P count',
+            },
+            'V-D length': {
+                'position': [3,0],
+                'name': 'V-D Junction length',
+            },
+            'D-J length': {
+                'position': [3,1],
+                'name': 'D-J Junction length',
+            },
+            'V-J length': {
+                'position': [3,2],
+                'name': 'V-J Junction length',
+            },
+            'chew': {
+                'position': [3,3],
+                'name': 'Total chew back',
+            },
 
-    @property
-    def distribution(self):
-        return self.statistic.body['distribution']
+            'V 3 chew': {
+                'position': [4,0],
+                'name': 'V 3\' chew back',
+            },
+            'D 5 chew': {
+                'position': [4,1],
+                'name': 'D 5\' chew back',
+            },
+            'D 3 chew': {
+                'position': [4,2],
+                 'name': 'D 3\' chew back',
+           },
+            'J 5 chew': {
+                'position': [4,3],
+                'name': 'J 5\' chew back',
+            },
+        }
+        space = [0,0]
+        for plot in self.plots.values():
+            space[0] = max(space[0], plot['position'][0])
+            space[1] = max(space[1], plot['position'][1])
+        space[0] += 1
+        space[1] += 1
+        self.figure = pyplot.figure(figsize=(space[1] * 5, space[0] * 5))
+        self.figure.suptitle(self.name, fontsize=16, fontweight='bold')
+        for key,plot in self.plots.items():
+            plot['plot'] = pyplot.subplot2grid(space, plot['position'])
 
-    def draw(self, path):
-        matplotlib.rc('font', family='Verdana', weight='normal', size=10)
-        matplotlib.rc('axes', edgecolor='#CCCCCC', linewidth=0.5)
-        figure, axes = pyplot.subplots(nrows=3, ncols=5, figsize=(25, 15), dpi=900)
-        # figure.set_tight_layout(True)
-        figure.suptitle(path, fontsize=16, fontweight='bold')
-        names = [
-            'CDR3 length',
-            'CDR3 charge',
-            'CDR3 weight',
-            'V-D length',
-            'D-J length',
-            'V-J length',
-            'V-D N count',
-            'D-J N count',
-            'V-J N count',
-            'N count',
-            'V 3 chew',
-            'J 5 chew',
-            'D 3 chew',
-            'D 5 chew',
-            'chew',
-        ]
-        for index, name in enumerate(names):
-            feature = self.distribution[name]
-            plot = axes.flat[index]
-            bins = array(feature['histogram']['bins'])
-            edges = array(feature['histogram']['edges'])
-
+    def draw(self, statistic, edgecolor='#669803', facecolor='#DDE7AC', alpha=0.65):
+        for key, distribution in statistic.body['distribution'].items():
+            plot = self.plots[key]
+            bins = array(distribution['histogram']['bins']) / amax(distribution['histogram']['bins'])
+            # bins = array(distribution['histogram']['bins']) / statistic.count
+            edges = array(distribution['histogram']['edges'])
             width = 0.7 * (edges[1] - edges[0])
             center = (edges[:-1] + edges[1:]) / 2 
-            plot.bar(
-                center,
-                bins,
-                align='center',
-                width=width,
-                edgecolor='#669803',
-                alpha=0.75,
-                facecolor='#DDE7AC',
-                linewidth=0.5)
-            plot.title.set_fontsize(10)
-            plot.set_title(name)
-            plot.fontcolor = '#222222'
-            plot.tick_params(colors='#CCCCCC')
+            label = '{}\nmean {:.2f}\nsd {:.2f}\ncount {}'.format(statistic.name, distribution['mean'], distribution['std'], statistic.count)
+            plot['plot'].bar(center, bins, label=label, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
+            plot['plot'].set_title(plot['name'], fontweight='bold')
 
-            for item in ( [ plot.xaxis.label, plot.yaxis.label ] + plot.get_xticklabels() + plot.get_yticklabels()):
-                item.set_fontsize(6)
-                item.set_color('#222222')
-        pyplot.savefig('{}.eps'.format(path), format='eps', )
+    def save(self, path):
+        for key,plot in self.plots.items():
+            plot['plot'].legend()
+        pyplot.savefig('{}.pdf'.format(path))
 
 
 class Statistic(object):
-    def __init__(self, pipeline, node=None, query=None, id=None):
+    def __init__(self, pipeline, node=None, request=None):
         self.log = logging.getLogger('Statistic')
         self.pipeline = pipeline
         self.node = node
         self._lookup = None
 
         if self.node is not None:
+            # loading an existing object
             for slice in self.slice.values():
                 if 'correlation' in slice:
                     for k,v in slice['correlation'].items():
-                        bytesio = BytesIO(v)
-                        bytesio.seek(0)
-                        slice['correlation'][k] = load(bytesio)
-
+                        binary = BytesIO(v)
+                        binary.seek(0)
+                        slice['correlation'][k] = load(binary)
             # for name, feature in self.body['feature'].items():
             #     bytesio = BytesIO(feature)
             #     bytesio.seek(0)
             #     self.body['feature'][name] = load(bytesio)
         else:
-            if query is not None:
+            # constructing a new object
+            if request:
                 self.node = {
                     'head': {
-                        'id': id,
-                        'strain': self.strain,
+                        'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
+                        'strain': 'C57BL/6',
                         'sample count': 0
                     },
-                    'body': { 'query': json.dumps(query, sort_keys=True, ensure_ascii=False)}
+                    'body': {
+                        'query': json.dumps(request, sort_keys=True, ensure_ascii=False),
+                        'feature': {},
+                    }
                 }
 
+                for word in ['library', 'profile']:
+                    if word in request['query']:
+                       self.head[word] = request['query'][word]
+
+                for feature in self.configuration['histogram'].keys():
+                    self.body['feature'][feature] = []
+
                 self.body['repertoire'] = {
-                    'VH': self._fetch_repertoire('VH', self.strain),
-                    'DH': self._fetch_repertoire('DH', self.strain),
-                    'JH': self._fetch_repertoire('JH', self.strain),
+                    'VH': self._fetch_region_repertoire({'head.region': 'VH', 'head.strain': self.strain}),
+                    'DH': self._fetch_region_repertoire({'head.region': 'DH', 'head.strain': self.strain}),
+                    'JH': self._fetch_region_repertoire({'head.region': 'JH', 'head.strain': self.strain}),
                 }
 
                 self.body['slice'] = {
                     'family': self._initialize_slice('family'),
                     'allele': self._initialize_slice('allele'),
                 }
-                self.body['feature'] = {
-                    'CDR3 length': [],
-                    'CDR3 charge': [],
-                    'CDR3 weight': [],
-                    'V-D length': [],
-                    'D-J length': [],
-                    'V-J length': [],
-                    'V-D N count': [],
-                    'D-J N count': [],
-                    'V-J N count': [],
-                    'N count': [],
-                    'V 3 chew': [],
-                    'J 5 chew': [],
-                    'D 3 chew': [],
-                    'D 5 chew': [],
-                    'chew': [],
-                }
             else:
                 raise ValueError('must specify a query to calculate statistic')
-    
+
     @property
     def configuration(self):
         return self.pipeline.configuration
 
     @property
-    def document(self):
-        document = transform_to_document(self.node)
-        if 'feature' in document['body']: del document['body']['feature']
-        return document
-
-    @property
-    def json(self):
-        document = self.document
-        document['body']['query'] = json.loads(self.body['query'])
-        if 'feature' in document['body']: del document['body']['feature']
-        return(to_json(document))
-
-    @property
-    def query(self):
-        return json.loads(self.body['query'])
-
-    @property
-    def strain(self):
-        return 'C57BL/6'
-
-    @property
-    def feature(self):
-        return self.body['feature']
-
-    @property
-    def id(self):
-        return self.head['id']
-
-    @property
-    def repertoire(self):
-        return self.body['repertoire']
-
-    def _fetch_repertoire(self, region, strain):
-        repertoire = []
-        cursor = self.database['gene'].find({'head.region': region, 'head.strain':strain}).sort([
-            ('body.family', pymongo.ASCENDING),
-            ('body.gene', pymongo.ASCENDING),
-            ('body.allele', pymongo.ASCENDING),
-        ])
-        for gene in cursor:
-            repertoire.append({   
-                'id': gene['head']['id'],
-                'allele': gene['body']['allele'],
-                'gene': gene['body']['gene'],
-                'family': gene['body']['family'],
-            })
-        return repertoire
+    def database(self):
+        return self.pipeline.resolver.database
 
     @property
     def lookup(self):
@@ -3213,38 +3228,6 @@ class Statistic(object):
                 self._lookup[slice] = lookup
         return self._lookup
 
-    def _initialize_slice(self, slice):
-        node = {
-            'correlation': {
-                'VJ': None,
-                'VDJ': None,
-            },
-            'dimension': {},
-        }
-
-        for region in [ 'VH', 'DH', 'JH' ]:
-            node['dimension'][region] = len(self.lookup[slice][region]['label'])
-
-        node['correlation']['VJ'] = zeros((node['dimension']['JH'], node['dimension']['VH']))
-        self.log.debug(
-            '%s VJ correlation matrix esablished with %s JH, %s VH',
-            slice,
-            node['dimension']['JH'], 
-            node['dimension']['VH'])
-
-        node['correlation']['VDJ'] = zeros((node['dimension']['JH'], node['dimension']['DH'], node['dimension']['VH']))
-        self.log.debug(
-            '%s VDJ correlation matrix esablished with %s JH, %s DH, %s VH',
-            slice,
-            node['dimension']['JH'],
-            node['dimension']['DH'],
-            node['dimension']['VH'])
-        return node
-
-    @property
-    def database(self):
-        return self.pipeline.resolver.database
-
     @property
     def head(self):
         return self.node['head']
@@ -3265,21 +3248,57 @@ class Statistic(object):
     def allele(self):
         return self.slice['allele']
 
-    def _add_sample_to_slice(self, slice, breakdown):
-        if breakdown['region']['DH']:
-            for j in range(len(breakdown['region']['JH'])):
-                for d in range(len(breakdown['region']['DH'])):
-                    for v in range(len(breakdown['region']['VH'])):
-                        ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                        di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
-                        vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                        self.slice[slice]['correlation']['VDJ'][ji][di][vi] += breakdown['portion']
+    @property
+    def id(self):
+        return self.head['id']
+
+    @property
+    def name(self):
+        if 'library' in self.head:
+            return self.head['library']
         else:
-            for j in range(len(breakdown['region']['JH'])):
-                for v in range(len(breakdown['region']['VH'])):
-                    ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                    vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                    self.slice[slice]['correlation']['VJ'][ji][vi] += breakdown['portion']
+            return self.id
+
+    @property
+    def document(self):
+        document = transform_to_document(self.node)
+        for k in [ 'feature' ]:
+            if k in document['body']:
+                del document['body'][k]
+        return document
+
+    @property
+    def query(self):
+        if 'query' in self.body:
+            return json.loads(self.body['query'])
+        else:
+            return None
+
+    @property
+    def json(self):
+        document = self.document
+        if 'query' in document['body']:
+            document['body']['query'] = json.loads(document['body']['query'])
+        return(to_json(document))
+
+    @property
+    def count(self):
+        if 'sample count' in self.head:
+            return self.head['sample count']
+        else:
+            return 0
+
+    @property
+    def strain(self):
+        return self.head['strain']
+
+    @property
+    def feature(self):
+        return self.body['feature']
+
+    @property
+    def repertoire(self):
+        return self.body['repertoire']
 
     def add_sample(self, sample):
         if 'CDR3' in sample.primary:
@@ -3304,16 +3323,18 @@ class Statistic(object):
                 if hit['picked'] and hit['region'] in breakdown['region'].keys():
                     breakdown['region'][hit['region']].append(hit)
             breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
-            if breakdown['region']['DH']: breakdown['combination'] *= len(breakdown['region']['DH'])
+            if breakdown['region']['DH']:
+                breakdown['combination'] *= len(breakdown['region']['DH'])
             breakdown['portion'] = 1.0 / float(breakdown['combination'])
 
-            total = 0
             chewback = {
                 'V 3 chew': [ h['3 chew'].length for h in breakdown['region']['VH'] if '3 chew' in h ],
                 'J 5 chew': [ h['5 chew'].length for h in breakdown['region']['JH'] if '5 chew' in h ],
                 'D 3 chew': [ h['3 chew'].length for h in breakdown['region']['DH'] if '3 chew' in h ],
                 'D 5 chew': [ h['5 chew'].length for h in breakdown['region']['DH'] if '5 chew' in h ],
             }
+
+            total = 0
             for k,v in chewback.items():
                 if v:
                     c = mean(v)
@@ -3325,11 +3346,14 @@ class Statistic(object):
 
             # this is the case where we have a D
             if breakdown['region']['DH']:
-                total = 0
+                total_N = 0
+                total_P = 0
                 if 'V-D' in sample.primary:
                     self.feature['V-D length'].append(sample.primary['V-D']['query'].length)
                     self.feature['V-D N count'].append(sample.primary['V-D']['palindrome'].count('N'))
-                    total += sample.primary['V-D']['palindrome'].count('N')
+                    self.feature['V-D P count'].append(sample.primary['V-D']['palindrome'].count('P'))
+                    total_N += sample.primary['V-D']['palindrome'].count('N')
+                    total_P += sample.primary['V-D']['palindrome'].count('P')
                 else:
                     self.feature['V-D length'].append(0)
                     self.feature['V-D N count'].append(0)
@@ -3337,23 +3361,29 @@ class Statistic(object):
                 if 'D-J' in sample.primary:
                     self.feature['D-J length'].append(sample.primary['D-J']['query'].length)
                     self.feature['D-J N count'].append(sample.primary['D-J']['palindrome'].count('N'))
-                    total += sample.primary['D-J']['palindrome'].count('N')
+                    self.feature['D-J P count'].append(sample.primary['D-J']['palindrome'].count('P'))
+                    total_N += sample.primary['D-J']['palindrome'].count('N')
+                    total_P += sample.primary['D-J']['palindrome'].count('P')
                 else:
                     self.feature['D-J length'].append(0)
                     self.feature['D-J N count'].append(0)
 
-                self.feature['N count'].append(total)
+                self.feature['N count'].append(total_N)
+                self.feature['P count'].append(total_P)
 
             # and the case without the D
             else:
                 if 'V-J' in sample.primary:
                     self.feature['V-J length'].append(sample.primary['V-J']['query'].length)
                     self.feature['V-J N count'].append(sample.primary['V-J']['palindrome'].count('N'))
+                    self.feature['V-J P count'].append(sample.primary['V-J']['palindrome'].count('P'))
                     self.feature['N count'].append(sample.primary['V-J']['palindrome'].count('N'))
+                    self.feature['P count'].append(sample.primary['V-J']['palindrome'].count('P'))
                 else:
                     self.feature['V-J length'].append(0)
                     self.feature['V-J N count'].append(0)
                     self.feature['N count'].append(0)
+                    self.feature['P count'].append(0)
 
             for slice in self.slice.keys():
                 self._add_sample_to_slice(slice, breakdown)
@@ -3369,8 +3399,8 @@ class Statistic(object):
             self.body['distribution'][name] = {
                 'min': float(amin(feature)),
                 'max': float(amax(feature)),
-                'mean': float(mean(feature)),
                 'std': float(std(feature)),
+                'mean': float(mean(feature)),
                 'median': float(median(feature)),
             }
             bins, edges = histogram(feature, **self.configuration['histogram'][name])
@@ -3378,6 +3408,66 @@ class Statistic(object):
                 'bins': [ float(x) for x in bins ], 
                 'edges': [ float(x) for x in edges ]
             }
+
+    def _add_sample_to_slice(self, slice, breakdown):
+        if breakdown['region']['DH']:
+            for j in range(len(breakdown['region']['JH'])):
+                for d in range(len(breakdown['region']['DH'])):
+                    for v in range(len(breakdown['region']['VH'])):
+                        ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                        di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
+                        vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                        self.slice[slice]['correlation']['VDJ'][ji][di][vi] += breakdown['portion']
+        else:
+            for j in range(len(breakdown['region']['JH'])):
+                for v in range(len(breakdown['region']['VH'])):
+                    ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                    vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                    self.slice[slice]['correlation']['VJ'][ji][vi] += breakdown['portion']
+
+    def _fetch_region_repertoire(self, query):
+        repertoire = []
+        cursor = self.database['gene'].find(query).sort([
+            ('body.family', pymongo.ASCENDING),
+            ('body.gene', pymongo.ASCENDING),
+            ('body.allele', pymongo.ASCENDING),
+        ])
+        for gene in cursor:
+            repertoire.append({   
+                'id': gene['head']['id'],
+                'allele': gene['body']['allele'],
+                'gene': gene['body']['gene'],
+                'family': gene['body']['family'],
+            })
+        return repertoire
+
+    def _initialize_slice(self, slice):
+        node = {
+            'correlation': {
+                'VJ': None,
+                'VDJ': None,
+            },
+            'dimension': {},
+        }
+
+        for region in [ 'VH', 'DH', 'JH' ]:
+            node['dimension'][region] = len(self.lookup[slice][region]['label'])
+
+        node['correlation']['VJ'] = zeros((node['dimension']['JH'], node['dimension']['VH']))
+        self.log.debug(
+            '%s VJ correlation matrix established with %s JH, %s VH',
+            slice,
+            node['dimension']['JH'], 
+            node['dimension']['VH'])
+
+        node['correlation']['VDJ'] = zeros((node['dimension']['JH'], node['dimension']['DH'], node['dimension']['VH']))
+        self.log.debug(
+            '%s VDJ correlation matrix established with %s JH, %s DH, %s VH',
+            slice,
+            node['dimension']['JH'],
+            node['dimension']['DH'],
+            node['dimension']['VH'])
+        return node
 
 
 class Heatmap(object):
@@ -3542,7 +3632,7 @@ class Diagram(object):
             self.query[k] = v
             
         for track in sample.hit:
-            if track['region'] not in ['VH', 'DH', 'JH']  or all([k in track and track[k] == v for k,v in self.query.items()]):
+            if track['region'] not in self.configuration['region'].keys()  or all([k in track and track[k] == v for k,v in self.query.items()]):
                 self.track.append(track)
                 
         for k in p['feature']:
@@ -3949,7 +4039,7 @@ class Block(object):
         buffer = StringIO()
         for sample in self.buffer:
             if query is None or all([k in sample.head and sample.head[k] == v for k,v in query.items()]):
-                buffer.write(to_fasta(sample.id, sample.sequence.nucleotide))
+                buffer.write(to_fasta(sample.id, sample.sequence.nucleotide, None, self.configuration['constant']['fasta line length']))
                 buffer.write('\n')
         buffer.seek(0)
         return buffer
@@ -4160,7 +4250,8 @@ class Resolver(object):
             'gene':{},
             'sample': {},
             'accession': {},
-            'library': {}
+            'library': {},
+            'rss': {},
         }
 
     @property
@@ -4197,6 +4288,20 @@ class Resolver(object):
             self._connection.close()
 
     def rebuild(self, table):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         objective = []
         existing_collections = self.database.collection_names()
         if table:
@@ -4336,6 +4441,140 @@ class Resolver(object):
             gene = Gene(self.pipeline, document)
             self.gene_save(gene)
 
+    def rss_store(self, node):
+        if node is not None:
+            if 'id' not in node: node['id'] = str(uuid.uuid4())
+            if 'accession' in node: node['accession'] = node['accession'].upper()
+            document = { 'head': {}, 'body': node }
+            for k in [
+                'id',
+                'accession',
+                'organism name',
+                'strain',
+                'region',
+            ]:
+                if k in node:
+                    document['head'][k] = node[k]
+                    
+            node['length'] = node['end'] - node['start'] 
+            if 'strand' not in node:
+                node['strand'] = True
+                
+            if 'sequence' in node and isinstance(node['sequence'], str):
+                node['sequence'] = {
+                    'nucleotide': node['sequence'],
+                    'strand': node['strand'],
+                    'read frame': 0
+                }
+            rss = RSS(self.pipeline, document)
+            rss.check_in_accesion()
+            self.rss_save(rss)
+
+    def rss_save(self, rss):
+        if rss is not None:
+            existing = self.rss_fetch(rss.id)
+            if existing:
+                self.log.debug('existing rss found for %s', rss.id)
+                rss.node['_id'] = existing.node['_id']
+                
+            self.database['rss'].save(rss.document)
+            if rss.id in self.cache['rss']:
+                del self.cache['rss'][rss.id]
+
+    def rss_fetch(self, id):
+        if id not in self.cache['rss']:
+            document = self.database['rss'].find_one({'head.id': id})
+            if document:
+                rss = RSS(self.pipeline, document)
+                self.cache['rss'][id] = rss
+        if id in self.cache['rss']:
+            return self.cache['rss'][id]
+        else:
+            return None
+
+    def accession_save(self, accession):
+        if accession is not None:
+            if accession.valid:
+                existing = self.database['accession'].find_one({'head.id': accession.id})
+                if existing:
+                    accession.node['_id'] = existing['_id']
+                    self.log.debug('existing accession found for %s', accession.id)
+                    
+                self.log.debug('saving %s', accession.id)
+                self.database['accession'].save(accession.document)
+                
+                if accession.id in self.cache['accession']:
+                    del self.cache['accession'][accession.id]
+            else:
+                self.log.error('refusing to save invalid accession %s', str(accession))
+
+    def accession_fetch(self, id):
+        result = None
+        if id not in self.cache['accession']:
+            document = self.database['accession'].find_one({'head.id': id})
+            if document:
+                self.cache['accession'][id] = Accession(self.pipeline, document)
+            else:
+                ncbi = self.accession_fetch_ncbi(id)
+                if ncbi:
+                    document = {
+                        'head': {
+                            'id': ncbi['INSDSeq_primary-accession'],
+                            'version': ncbi['INSDSeq_accession-version'],
+                            'description': ncbi['INSDSeq_definition'],
+                            'simple description': simplify(ncbi['INSDSeq_definition']),
+                            'organism name': ncbi['INSDSeq_organism'],
+                        },
+                        'body': {
+                            'sequence': {
+                                'nucleotide': ncbi['INSDSeq_sequence'].upper(),
+                                'read frame': 0,
+                                'strand': True,
+                            },
+                            'molecule type': ncbi['INSDSeq_moltype']
+                        }
+                    }
+                    
+                    if 'INSDSeq_comment' in ncbi:
+                        document['body']['comment'] = ncbi['INSDSeq_comment']
+                        document['body']['simple comment'] = simplify(ncbi['INSDSeq_comment'])
+                        
+                    found = False
+                    if 'INSDSeq_feature-table' in ncbi:
+                        if 'INSDFeature' in ncbi['INSDSeq_feature-table']:
+                            for INSDFeature in ncbi['INSDSeq_feature-table']['INSDFeature']:
+                                if 'INSDFeature_quals' in INSDFeature:
+                                    for INSDFeature_qual in INSDFeature['INSDFeature_quals']:
+                                        if 'INSDQualifier' in INSDFeature_qual:
+                                            for INSDQualifier in INSDFeature_qual['INSDQualifier']:
+                                                if INSDQualifier['INSDQualifier_name'] == 'organism':
+                                                    document['head']['organism name'] = INSDQualifier['INSDQualifier_value']
+                                                elif INSDQualifier['INSDQualifier_name'] == 'strain':
+                                                    document['head']['strain'] = INSDQualifier['INSDQualifier_value']
+                                                    found = True
+                                                    break
+                                        if found: break
+                                if found: break
+                                
+                    if 'strain' not in document['head'] and 'simple description' in document['head']:
+                        if 'c57bl/6' in document['head']['simple description']:
+                            document['head']['strain'] = 'C57BL/6'
+                            self.log.info('C57BL/6 strain deduced for accession %s from a mention in the description', id)
+                            
+                    if 'strain' not in document['head'] and 'simple comment' in document['head']:
+                        if 'c57bl/6' in document['head']['simple comment']:
+                            document['head']['strain'] = 'C57BL/6'
+                            self.log.info('C57BL/6 strain deduced for accession %s from a mention in the description', id)
+                            
+                    accession = Accession(self.pipeline, document)
+                    self.accession_save(accession)
+                    self.cache['accession'][id] = accession
+            
+        if id in self.cache['accession']:
+            result = self.cache['accession'][id]
+            
+        return result
+
     def accession_fetch_ncbi(self, id):
         def normalize_document(document, transform):
             if isinstance(document, dict):
@@ -4351,26 +4590,6 @@ class Resolver(object):
                 return [ normalize_document(e, transform) for e in document ]
             else:
                 return document
-
-        def fetch(url):
-            content = None
-            request = Request(url, None, { 'Accept': 'application/xml' })
-            
-            try:
-                response = urlopen(request)
-            except BadStatusLine as e:
-                log.warning('Bad http status error when requesting %s', url)
-            except HTTPError as e:
-                log.warning('Server returned an error when requesting %s: %s', url, e.code)
-            except URLError as e:
-                log.warning('Could not reach server when requesting %s: %s', url, e.reason)
-            else:
-                content = StringIO(response.read().decode('utf8'))
-                if content.read(22) == 'Nothing has been found':
-                    content = None
-                else:
-                    content.seek(0)
-            return parse(content)
 
         def parse(content):
             transform = [
@@ -4396,105 +4615,32 @@ class Resolver(object):
                                     break
             return document
 
-        document = self.database['ncbi_accession'].find_one({'head.id': id})
-        if not document:
-            url = configuration['expression']['ncbi accession url'].format(id)
-            node = fetch(url)
-            if node and 'INSDSeq_primary-accession' in node:
-                document = {
-                    'head': {
-                        'id': node['INSDSeq_primary-accession']
-                    },
-                    'body': node
-                }
-                self.database['ncbi_accession'].save(document)
-        return document
-
-    def accession_save(self, accession):
-        if accession is not None:
-            if accession.valid:
-                existing = self.database['accession'].find_one({'head.id': accession.id})
-                if existing:
-                    accession.node['_id'] = existing['_id']
-                    self.log.debug('existing accession found for %s', accession.id)
-                    
-                self.log.debug('saving %s', accession.id)
-                self.database['accession'].save(accession.document)
-                
-                if accession.id in self.cache['accession']:
-                    del self.cache['accession'][accession.id]
+        def fetch(url):
+            content = None
+            request = Request(url, None, { 'Accept': 'application/xml' })
+            
+            try:
+                response = urlopen(request)
+            except BadStatusLine as e:
+                log.warning('Bad http status error when requesting %s', url)
+            except HTTPError as e:
+                log.warning('Server returned an error when requesting %s: %s', url, e.code)
+            except URLError as e:
+                log.warning('Could not reach server when requesting %s: %s', url, e.reason)
             else:
-                self.log.error('refusing to save invalid accession %s', str(accession))
+                content = StringIO(response.read().decode('utf8'))
+                if content.read(22) == 'Nothing has been found':
+                    content = None
+                else:
+                    content.seek(0)
+            return parse(content)
 
-    def accession_cache(self, id):
-        document = self.database['accession'].find_one({'head.id': id})
-        if document:
-            self.cache['accession'][id] = Accession(self.pipeline, document)
-        else:
-            ncbi = self.accession_fetch_ncbi(id)
-            if ncbi:
-                document = {
-                    'head': {
-                        'id': ncbi['body']['INSDSeq_primary-accession'],
-                        'version': ncbi['body']['INSDSeq_accession-version'],
-                        'description': ncbi['body']['INSDSeq_definition'],
-                        'simple description': simplify(ncbi['body']['INSDSeq_definition']),
-                        'organism name': ncbi['body']['INSDSeq_organism'],
-                    },
-                    'body': {
-                        'sequence': {
-                            'nucleotide': ncbi['body']['INSDSeq_sequence'].upper(),
-                            'read frame': 0,
-                            'strand': True,
-                        },
-                        'molecule type': ncbi['body']['INSDSeq_moltype']
-                    }
-                }
-                
-                if 'INSDSeq_comment' in ncbi['body']:
-                    document['body']['comment'] = ncbi['body']['INSDSeq_comment']
-                    document['body']['simple comment'] = simplify(ncbi['body']['INSDSeq_comment'])
-                    
-                found = False
-                if 'INSDSeq_feature-table' in ncbi['body']:
-                    if 'INSDFeature' in ncbi['body']['INSDSeq_feature-table']:
-                        for INSDFeature in ncbi['body']['INSDSeq_feature-table']['INSDFeature']:
-                            if 'INSDFeature_quals' in INSDFeature:
-                                for INSDFeature_qual in INSDFeature['INSDFeature_quals']:
-                                    if 'INSDQualifier' in INSDFeature_qual:
-                                        for INSDQualifier in INSDFeature_qual['INSDQualifier']:
-                                            if INSDQualifier['INSDQualifier_name'] == 'organism':
-                                                document['head']['organism name'] = INSDQualifier['INSDQualifier_value']
-                                            elif INSDQualifier['INSDQualifier_name'] == 'strain':
-                                                document['head']['strain'] = INSDQualifier['INSDQualifier_value']
-                                                found = True
-                                                break
-                                    if found: break
-                            if found: break
-                            
-                if 'strain' not in document['head'] and 'simple description' in document['head']:
-                    if 'c57bl/6' in document['head']['simple description']:
-                        document['head']['strain'] = 'C57BL/6'
-                        self.log.info('C57BL/6 strain deduced for accession %s from a mention in the description', id)
-                        
-                if 'strain' not in document['head'] and 'simple comment' in document['head']:
-                    if 'c57bl/6' in document['head']['simple comment']:
-                        document['head']['strain'] = 'C57BL/6'
-                        self.log.info('C57BL/6 strain deduced for accession %s from a mention in the description', id)
-                        
-                accession = Accession(self.pipeline, document)
-                self.accession_save(accession)
-                self.cache['accession'][id] = accession
-
-    def accession_fetch(self, id):
-        result = None
-        if id not in self.cache['accession']:
-            self.accession_cache(id)
-            
-        if id in self.cache['accession']:
-            result = self.cache['accession'][id]
-            
-        return result
+        document = None
+        url = configuration['expression']['ncbi accession url'].format(id)
+        node = fetch(url)
+        if node and 'INSDSeq_primary-accession' in node:
+            document = node
+        return document
 
     def assemble_query(self, query):
         assembled = {}
@@ -4629,30 +4775,48 @@ class Pipeline(object):
         id = hashlib.sha1(to_json(request).encode('utf8')).hexdigest()
         statistic = self.resolver.statistic_fetch(id)
         if statistic is None:
-            self.log.debug('calculating statistic for\n%s', to_json(q))
-            statistic = Statistic(self, None, q, id)
+            statistic = Statistic(self, None, request)
             cursor = self.resolver.make_cursor('sample', q, limit, skip)
+            self.log.debug('collecting statistic %s', statistic.name)
             for node in cursor:
-                sample = Sample(self, node)
-                statistic.add_sample(sample)
+                statistic.add_sample(Sample(self, node))
             cursor.close()
             statistic.done()
             self.resolver.statistic_save(statistic)
-        else:
-            self.log.debug('cached statistic found for\n%s', to_json(q))
         return statistic
+
+    def sample_plot_compare(self, query):
+        statistics = []
+        name = []
+        colors = [
+            ['#C0392b', '#D14A3C'],
+            ['#669803', '#DDE7AC'],
+        ]
+        if len(query) > 1 and len(query) < 3:
+            for id in query:
+                statistic = self.resolver.statistic_fetch(id)
+                if statistic:
+                    statistics.append(statistic)
+                    name.append(statistic.name)
+                else:
+                    raise ValueError('could not locate query {}'.format(id))
+            histogram = Histogram(' vs '.join(name))
+            for index,statistic in enumerate(statistics):
+                histogram.draw(statistic, colors[index][0], colors[index][1])
+            histogram.save('_'.join(name))
+        else:
+            raise ValueError('comparison plots take 2 queries')
 
     def sample_plot(self, query, limit, skip, profile):
         statistic = self.sample_statistic(query, limit, skip, profile)
         if statistic:
-            name = statistic.id
-            if 'library' in query: name = '{}.{}'.fomrat(query['library'], name)
             allele_heatmap = Heatmap(self, statistic, 'allele')
             family_heatmap = Heatmap(self, statistic, 'family')
-            allele_heatmap.save('{}_allele.png'.format(name))
-            family_heatmap.save('{}_family.png'.format(name))
-            histogram = Histogram(statistic)
-            histogram.draw(name)
+            allele_heatmap.save('{}_allele.png'.format(statistic.name))
+            family_heatmap.save('{}_family.png'.format(statistic.name))
+            histogram = Histogram(statistic.name)
+            histogram.draw(statistic)
+            histogram.save(statistic.name)
 
             # fig, ax = pyplot.subplots()
             # heatmap = ax.pcolor(allele_heatmap.slice['correlation']['VDJ'][0], cmap=pyplot.cm.Blues, edgecolors='none')
@@ -4712,6 +4876,29 @@ class Pipeline(object):
             sample.info(profile)
         cursor.close()
 
+    def rss_populate(self, path):
+        count = 0
+        with io.open(path, 'rb') as file:
+            content = StringIO(file.read().decode('utf8'))
+            document = json.loads(content.getvalue())
+            for node in document:
+                self.resolver.rss_store(node)
+                count += 1
+        self.log.info('populated %d RSSs', count)
+
+    def rss_to_json(self, query, profile):
+        q = self.build_query(query, profile, 'rss')
+        cursor = self.resolver.make_cursor('rss', q)
+        buffer = []
+        for node in cursor:
+            document = node['body'].copy()
+            document.update(node['head'])
+            buffer.append(document)
+        cursor.close()
+        buffer = sorted(buffer, key=lambda x: '' if 'region' not in x else x['region'])
+        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
+        print(to_json(buffer))
+
     def gene_populate(self, path):
         count = 0
         with io.open(path, 'rb') as file:
@@ -4737,12 +4924,13 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
         print(to_json(buffer))
 
-    def gene_to_fasta(self, query, profile, flanking=0):
+    def gene_to_fasta(self, query, profile, flanking, limit):
+        limit = limit if limit is not None else self.configuration['constant']['fasta line length']
         q = self.build_query(query, profile, 'gene')
         cursor = self.resolver.make_cursor('gene', q)
         for node in cursor:
             gene = Gene(self, node)
-            print(gene.to_fasta(flanking))
+            print(gene.to_fasta(flanking, limit))
         cursor.close()
 
     def gene_count(self, query, profile):
@@ -4843,6 +5031,9 @@ class Pipeline(object):
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
                 
+        elif cmd.action == 'plot-compare':
+            self.sample_plot_compare(cmd.instruction['query'])
+
         elif cmd.action == 'count':
             self.sample_count(
                 cmd.query,
@@ -4893,7 +5084,8 @@ class Pipeline(object):
             self.gene_to_fasta(
                 cmd.query,
                 cmd.instruction['profile'],
-                cmd.instruction['flanking'])
+                cmd.instruction['flanking'],
+                cmd.instruction['limit'])
             
         elif cmd.action == 'gene-align':
             self.gene_align(
@@ -4910,6 +5102,15 @@ class Pipeline(object):
                 cmd.query, 
                 cmd.instruction['profile'])
             
+        elif cmd.action == 'rss-info':
+            self.rss_to_json(
+                cmd.query,
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'rss-populate':
+            for path in cmd.instruction['path']:
+                self.rss_populate(path)
+                
         elif cmd.action == 'library-populate':
             for path in cmd.instruction['path']:
                 self.library_populate(path)
