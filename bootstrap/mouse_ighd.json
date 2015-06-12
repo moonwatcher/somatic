@@ -1141,6 +1141,31 @@
         "verified": true
     },
     {
+        "accession": "AY841982",
+        "allele": "DMB1*01",
+        "confirmed": true,
+        "end": 58,
+        "family": "DMB",
+        "framed": true,
+        "functionality": "F",
+        "gene": "DMB1",
+        "id": "DMB1*01-C57BL/6",
+        "identified": true,
+        "length": 10,
+        "organism name": "mus musculus",
+        "read frame": 0,
+        "region": "DH",
+        "sequence": {
+            "nucleotide": "GAGTACCTAC",
+            "read frame": 0,
+            "strand": true
+        },
+        "start": 48,
+        "strain": "C57BL/6",
+        "strand": true,
+        "verified": true
+    },
+    {
         "accession": "M60961",
         "allele": "DSP2.x*01",
         "confirmed": true,

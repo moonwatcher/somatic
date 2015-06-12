@@ -524,7 +524,7 @@ notidentified = set([
 ])
 
 document = None
-with io.open('/Users/lg/code/somatic/bootstrap/mouse_c57bl6_rss.json', 'r') as f:
+with io.open('/Users/lg/code/somatic/bootstrap/mouse_ighv_c57bl6_bn000872.json', 'r') as f:
     document = json.loads(f.read())
 
 for rss in document:

@@ -557,6 +557,17 @@ configuration = {
                     'help': 'print alignment diagram'
                 }
             },
+            'distance': {
+                'flag': [
+                    '--distance'
+                ],
+                'parameter': {
+                    'default': 0,
+                    'type': 'int',
+                    'dest': 'distance',
+                    'help': 'max distance allowed to stretch gene boundaries'
+                }
+            },
             'limit': {
                 'flag': [
                     '-L',
@@ -1042,6 +1053,32 @@ configuration = {
                         'id'
                     ],
                     'instruction': {
+                        'help': 'print genes html diagram',
+                        'name': 'gene-html'
+                    }
+                },
+                {
+                    'argument': [
+                        'region',
+                        'strain',
+                        'profile',
+                        'id',
+                        'flanking',
+                        'distance',
+                    ],
+                    'instruction': {
+                        'help': 'verify gene RSS',
+                        'name': 'gene-rss'
+                    }
+                },
+                {
+                    'argument': [
+                        'region',
+                        'strain',
+                        'profile',
+                        'id'
+                    ],
+                    'instruction': {
                         'help': 'count gene records',
                         'name': 'gene-count'
                     }
@@ -1429,6 +1466,203 @@ configuration = {
         'password': 'fPWZq8nCVizzHloVDhs=', 
         'username': 'somatic'
     },
+    'rss': {
+        'VH': {
+            'leniency': 8,
+            'spacer': 23,
+            'nonamer': [
+                'CCAGGGCTG',
+                'GCAAAAACC',
+                'ACAAAAACT',
+                'TCAAAAACT',
+                'ACAAAAATA',
+                'GAATAAGTA',
+                'ACAAAAACA',
+                'ACAAAAACC',
+                'ACCCTCTAA',
+                'AAAAAAACC',
+                'ACAAAATGC',
+                'ACAAGAACC',
+                'ACAATAACT',
+                'TCAAGAACC',
+                'ACATAAACC',
+                'AAAAAAAAT',
+                'ACAGAAACC',
+                'ACAAAATCC',
+                'ACACAAACT',
+                'ACACAAACC',
+                'ACATAAATC',
+                'ATTAACCTG',
+                'ACATAAACA',
+                'AGAAAAACT',
+                'TAAAAAAAA',
+                'TAAAAAAAC',
+                'GCAAAAATC',
+                'AGCACTCAA',
+                'ACTGAAAGA',
+                'TCAGAAAAC',
+                'TCAGAAACC',
+
+                'CAGAAACCC',
+                
+                'GCAGAAACC',
+                'AACTTAATC',
+                'CTTCCTGAC',
+                'ACAGAAAGG',
+                'AGAAAGTGA',
+                'GCATAAACC',
+                'ATATAAGAA',
+                'ACCCAAACC',
+                'ACCTAAACC',
+                'GCACAAACC',
+                'AAGAAAACC',
+                'ACAAAAATC',
+                'ACACAGACC',
+                'TCAAAAACC',
+                'ACATAAACT',
+                'ACAAAACCC',
+                'ACATGAACC',
+                'CAGAAAACT',
+                'CAGAAATCC',
+                'CAGAAAACA',
+                'TAGTAATCC',
+                'CAGAAAACC',
+                'TCAGAAATC',
+                'CCAAACACA',
+                'ACAGTATTT',
+                'CACAAAACC',
+                'ACAGTAATT',
+                'TACAGTATT',
+                'CTGAAAACC',
+                'AAAGTATTT',
+                'TCAGAAACT',
+                'ACAGAAACT',
+                'GCAATAGTT',
+                'CAAAAAACC',
+                'TCAAAACCC',
+                'CAGTAATAC',
+                'CATAAACTC',
+                'CAGAAACAC',
+                'TCAGAAACA',
+                'CATCTGTAC',
+                'TCCAAAACC',
+                'TCAAAAAGT',
+                'TCATAAACC',
+                'ACTAAAACC',
+                'ACAAAAATT',
+                'ACAAATACT',
+
+                # 'ATAGTAATT',
+                # 'CCACAAACC',
+                # 'CCACCAACC',
+                # 'GCACAAACT',
+                # 'TGCAATATT',
+                # 'AACAAAAGC',
+                # 'ACAAACCCT',
+                # 'AAATAAACC',
+                # 'ACACAAAAC',
+                # 'AAACAAACC',
+                # 'ATGTAAACC',
+                # 'ACATTATTT',
+                # 'CAGAAATCT',
+                # 'AGAAACCCT'
+            ],
+            'heptamer': [
+                'CACAGCC',
+                'CACAGTG',
+                'CACAGAC',
+                'CACAATG',
+                'CACCGTG',
+                'CAGAGTG',
+                'CACAGTA',
+                'CACAGAG',
+                'CACATGT',
+                'CACACTG',
+                'CACTCTA',
+                'CACAGCG',
+                'CACAGTT',
+                'CACAGCA',
+                'CACAGTC',
+                'CAGTTGT',
+                'TACAGTG',
+                'CACGGTG',
+                'CAAAGTG',
+                'TATTGCT',
+                'CACTGTA',
+                'CACATTG',
+                'CTCATTG',
+                'CACGTTG',
+                'CATAGTG',
+                'CACAGGT',
+                'CACTGTG',
+
+                # 'TAAGATG',
+                # 'CACAAGG',
+                # 'TATAGGG',
+                # 'TACATTG'
+            ]
+        },
+        'DH': {
+            'leniency': 3,
+            'spacer': 12,
+            'nonamer': [
+                'CTTTTTTGT',
+                'GAATTCAGT',
+                'GATTTTGAA',
+                'GCTTTTTGT',
+                'GATTTTTGT',
+                'GGATTCTGT',
+                'GGTTTTGAC',
+                'CATGGAAGA',
+                'ACCAAAACT',
+                'GCAAAAACC',
+                'ACAAGAAAG',
+                'ACAAAAACC',
+                'CTCAAATTC',
+                'ACAACAAAG',
+                'CTCAAATCC',
+
+                'CCTCTATAA'
+            ],
+            'heptamer': [
+                'CATTGTG',
+                'CACTGTG',
+                'CACAGTG',
+                'TACTGTG',
+                'CACCGTG',
+                'CACCATG',
+                'CAGTGTG',
+                'CACTGTA',
+                'CACAATG',
+                'CACATTG',
+                'CACGGTG',
+
+                'TGAATTC'
+            ]
+        },
+        'JH': {
+            'leniency': 2, 'spacer': 23,
+            'nonamer': [
+                'GGGTTTTTG',
+                'AGTATTTGT',
+                'GAGTTTTAG',
+                'TGACAATCA',
+                'GGTTTTTGT',
+                'ATTTATTGT'
+            ],
+            'heptamer': [
+                'TATTGTG',
+                'GGGTGTG',
+                'GACTGTG',
+                'TTAGGCT',
+                'TAGTGTG',
+                'CAATGTG'
+            ]
+        }
+    },
+    'reference': {
+        'mouse chromosome 12': DB_BASE + '/chr12.fa'
+    }
 }
 
 def parse_match(match):
@@ -1510,6 +1744,41 @@ def to_json(node):
 def simplify(value):
     if value: return value.lower()
     else: return None
+
+def complement(nucleotide):
+    complement = {
+        'A': 'T',
+        'B': 'V',
+        'C': 'G',
+        'D': 'H',
+        'G': 'C',
+        'H': 'D',
+        'K': 'M',
+        'M': 'K',
+        'N': 'N',
+        'R': 'Y',
+        'S': 'S',
+        'T': 'A',
+        'V': 'B',
+        'W': 'W',
+        'Y': 'R',
+        'a': 't',
+        'b': 'v',
+        'c': 'g',
+        'd': 'h',
+        'g': 'c',
+        'h': 'd',
+        'k': 'm',
+        'm': 'k',
+        'n': 'n',
+        'r': 'y',
+        's': 's',
+        't': 'a',
+        'v': 'b',
+        'w': 'w',
+        'y': 'r',
+    }
+    return ''.join([ complement[n] for n in nucleotide ][::-1])
 
 class InvalidSampleError(Exception):
     def __init__(self, message):
@@ -1877,7 +2146,7 @@ class Blat(object):
         self.fasta = []
 
         for record in self.instruction['record'].values():
-            record['flanking'] = record['gene'].to_flanking_fasta(instruction['flank'])
+            record['flanking'] = record['gene'].flanking_accession_query(instruction['flank'])
             self.fasta.append(
                 to_fasta(
                     record['flanking']['id'],
@@ -1932,6 +2201,7 @@ class Blat(object):
                     'block count': 0,
                     'query start': orientation['start'],
                     'query end': orientation['end'],
+                    'query strand': hit['flanked']['query strand'],
                     'repeat match': hit['flanked']['repeat match'],
                     'inserted base in query': 0,
                     'inserted base in target': 0,
@@ -2075,10 +2345,12 @@ class Blat(object):
             block['target sequence'] = self.target.read(block['size'])
             block['query sequence'] = orientation['flanking'].nucleotide[block['query start']:block['query start'] + block['size']]
             flanked['block'].append(block)
+
         del flanked['block size']
         del flanked['query block start']
         del flanked['target block start']
         del flanked['query name']
+
         if 'hit' not in query: query['hit'] = []
         query['hit'].append({'flanked': self.normalize_hit(flanked, orientation)})
 
@@ -2140,7 +2412,7 @@ class Artifact(object):
         
         if self.node is None:
             self.node = {
-                'head': {},
+                'head': { },
                 'body': { 'strand': True }
             }
             
@@ -2211,6 +2483,41 @@ class Artifact(object):
             return None
 
     @property
+    def aligned(self):
+        if 'aligned' in self.head:
+            return self.head['aligned']
+        else:
+            return False
+
+    @property
+    def alignment(self):
+        if 'alignment' in self.body:
+            return self.body['alignment']
+        else:
+            return None
+    
+    @property
+    def reference_start(self):
+        if self.alignment:
+            return self.body['reference start']
+        else:
+            return None
+    
+    @property
+    def reference_end(self):
+        if self.alignment:
+            return self.body['reference end']
+        else:
+            return None
+    
+    @property
+    def reference_strand(self):
+        if self.alignment:
+            return self.body['reference strand']
+        else:
+            return None
+    
+    @property
     def start(self):
         if 'start' in self.body:
             return self.body['start']
@@ -2248,27 +2555,51 @@ class Artifact(object):
     def fasta(self):
         return to_fasta(self.id, self.sequence.nucleotide, None, self.configuration['constant']['fasta line length'])
 
-    def flanking_query(self, flank):
+    def flanking_accession_query(self, flank):
         query = None
-        accession = self.pipeline.resolver.accession_fetch(self.accession)
-        if accession is not None:
-            query = {}
-            query['id'] = self.id
-            query['accession start'] = self.start
-            query['accession end'] = self.end
-            query['flank start'] = max(self.start - flank, 0)
-            query['flank end'] = min(self.end + flank, accession.length)
-            query['flank length'] = query['flank end'] - query['flank start']
-            query['start'] = query['accession start'] - query['flank start']
-            query['end'] = query['accession end'] - query['flank start']
-            query['sequence'] = accession.sequence.crop(query['flank start'], query['flank end'])
-            if not self.strand:
-                query['sequence'] = query['sequence'].reversed
-                end = query['flank length'] - query['start']
-                start = query['flank length'] - query['end']
-                query['end'] = end
-                query['start'] = start
-            query['length'] = query['end'] - query['start']
+        if self.accession:
+            accession = self.pipeline.resolver.accession_fetch(self.accession)
+            if accession is not None:
+                query = {}
+                query['id'] = self.id
+                query['accession start'] = self.start
+                query['accession end'] = self.end
+                query['flank start'] = max(self.start - flank, 0)
+                query['flank end'] = min(self.end + flank, accession.length)
+                query['flank length'] = query['flank end'] - query['flank start']
+                if self.body['strand']:
+                    query['start'] = query['accession start'] - query['flank start']
+                    query['end'] = query['accession end'] - query['flank start']
+                    query['sequence'] = accession.sequence.crop(query['flank start'], query['flank end'])
+                else:
+                    query['start'] = query['flank end'] - query['accession end']
+                    query['end'] = query['flank end'] - query['accession start']
+                    query['sequence'] = accession.sequence.crop(query['flank start'], query['flank end']).reversed
+                query['length'] = query['end'] - query['start']
+        return query
+
+    def flanking_reference_query(self, flank):
+        query = None
+        if self.aligned:
+            reference = self.pipeline.resolver.reference_fetch('mouse chromosome 12')
+            if reference is not None:
+                query = {}
+                query['id'] = self.id
+                query['reference start'] = self.body['reference start']
+                query['reference end'] = self.body['reference end']
+                query['reference strand'] = self.body['reference strand']
+                query['flank start'] = max(query['reference start'] - flank, 0)
+                query['flank end'] = min(query['reference end'] + flank, reference.length)
+                query['flank length'] = query['flank end'] - query['flank start']
+                if self.body['reference strand']:
+                    query['start'] = query['reference start'] - query['flank start']
+                    query['end'] = query['reference end'] - query['flank start']
+                    query['sequence'] = reference.crop(query['flank start'], query['flank end'])
+                else:
+                    query['start'] = query['flank end'] - query['reference end']
+                    query['end'] = query['flank end'] - query['reference start']
+                    query['sequence'] = reference.crop(query['flank start'], query['flank end']).reversed
+                query['length'] = query['end'] - query['start']
         return query
 
     def to_fasta(self, flank, limit):
@@ -2283,35 +2614,45 @@ class Artifact(object):
                     sequence = flanking
         return to_fasta(self.id, sequence.nucleotide, None, limit)
 
-    def check_in_accesion(self):
+    def validate_in_accesion(self):
         accession = self.pipeline.resolver.accession_fetch(self.accession)
         if accession is not None:
-            matching = accession.sequence.crop(self.start, self.end)
-            if not self.strand:
-                matching = matching.reversed
-
-            if not self.sequence.nucleotide:
-                # if no sequence defined, assign sequence from accession 
-                self.sequence.nucleotide = matching.nucleotide
-                self.log.info('sequence assigned to artifact %s from accession %s:%d:%d', self.id, accession.id, self.start, self.end)
-            else:
-                if matching.nucleotide != self.sequence.nucleotide:
-                    self.log.info('artifact sequence in %s does not match accession %s:%d:%d', self.id, accession.id, self.start, self.end)
-                    self.search_in_accession()
+            flanking = self.flanking_accession_query(0)
+            if flanking is not None:
+                if not self.sequence.nucleotide:
+                    # if no sequence defined, assign sequence from accession 
+                    self.sequence.nucleotide = flanking['sequence'].nucleotide
+                    self.log.info('sequence assigned to artifact %s from accession %s:%d:%d', self.id, accession.id, self.start, self.end)
                 else:
-                    self.log.debug('artifact sequence for %s matched to accession %s:%d:%d', self.id, accession.id, self.start, self.end)
-                    
-                if self.strain is None and accession.strain is not None:
-                    self.head['strain'] = accession.strain
-                    self.log.info('strain %s assigned to artifact %s from %s', self.strain, self.id, self.accession)
+                    if flanking['sequence'].nucleotide != self.sequence.nucleotide:
+                        self.log.info('artifact sequence in %s does not match accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                        # self.search_in_accession()
+                    else:
+                        self.log.debug('artifact sequence for %s matched to accession %s:%d:%d', self.id, accession.id, self.start, self.end)
 
-                # This should probably not be here...
-                # if accession.strain is None and self.strain is not None:
-                #     accession.strain = self.strain
-                #     self.pipeline.resolver.accession_save(accession)
-                #     self.log.info('strain %s assigned to accession %s from %s', accession.strain, accession.id, self.id)
+                    if self.strain is None and accession.strain is not None:
+                        self.head['strain'] = accession.strain
+                        self.log.info('strain %s assigned to artifact %s from %s', self.strain, self.id, self.accession)
+            else:
+                self.log.error('coordinates %d:%d invalid for accession %s', self.start, self.end, self.accession)
         else:
             self.log.error('accession %s could not be located', self.accession)
+
+    def validate_in_reference(self):
+        if self.aligned:
+            flanking = self.flanking_reference_query(0)
+            if flanking is not None:
+                if not self.sequence.nucleotide:
+                    # if no sequence defined, assign sequence from the reference 
+                    self.sequence.nucleotide = flanking['sequence'].nucleotide
+                    self.log.info('sequence assigned to artifact %s from reference %d:%d', self.id, self.start, self.end)
+                else:
+                    if flanking['sequence'].nucleotide != self.sequence.nucleotide:
+                        self.log.info('artifact sequence in %s does not match reference %d:%d', self.id, self.start, self.end)
+                    else:
+                        self.log.debug('artifact sequence for %s matched to reference %d:%d', self.id, self.start, self.end)
+            else:
+                self.log.error('coordinates %d:%d invalid for reference', self.start, self.end)
 
     def search_in_accession(self):
         accession = self.pipeline.resolver.accession_fetch(self.accession)
@@ -2349,6 +2690,19 @@ class Gene(Artifact):
             if k not in self.head:
                 self.head[k] = True
 
+        for artifact in [
+            '3 heptamer',
+            '3 nonamer',
+            '3 spacer',
+            '5 heptamer',
+            '5 nonamer',
+            '5 spacer',
+            '3 gap',
+            '5 gap',
+        ]:
+            if artifact in self.body and 'sequence' in self.body[artifact] and isinstance(self.body[artifact]['sequence'], dict):
+                self.body[artifact]['sequence'] = Sequence(self.pipeline, self.body[artifact]['sequence'])
+
     @property
     def framed(self):
         return self.head['framed']
@@ -2356,6 +2710,246 @@ class Gene(Artifact):
     @property
     def functionality(self):
         return self.head['functionality']
+
+    def check_rss(self, flank, distance):
+        for artifact in [
+            '3 heptamer',
+            '3 nonamer',
+            '3 spacer',
+            '5 heptamer',
+            '5 nonamer',
+            '5 spacer',
+            '3 gap',
+            '5 gap',
+        ]:
+            if artifact in self.body and self.body[artifact]['source'] in ['implied', 'pattern']:
+                del self.body[artifact]
+
+        flanking = self.flanking_reference_query(flank)
+        if flanking:
+            if self.region == 'VH':
+                self._check_rss_3(flanking, 'VH', distance)
+
+            elif self.region == 'DH':
+                self._check_rss_5(flanking, 'DH', distance)
+                self._check_rss_3(flanking, 'DH', distance)
+
+            elif self.region == 'JH':
+                self._check_rss_5(flanking, 'JH', distance)
+
+    def rss_html(self):
+        print('<div class="section">')
+        print('<div class="genename">{}</div>'.format(self.id))
+        if self.region == 'VH':
+            print('<div class="gene">{}</div>'.format(self.sequence.nucleotide))
+            self._rss_html_3('VH')
+
+        elif self.region == 'DH':
+            self._rss_html_5('DH')
+            print('<div class="gene">{}</div>'.format(self.sequence.nucleotide))
+            self._rss_html_3('DH')
+
+        elif self.region == 'JH':
+            self._rss_html_5('JH')
+            print('<div class="gene">{}</div>'.format(self.sequence.nucleotide))
+        print('</div>')
+
+    def _check_rss_3(self, flanking, region, distance):
+        position = self._lookup_artifact(flanking, region, True, 0 , 'heptamer')
+        position = self._lookup_artifact(flanking, region, True, position , 'nonamer')
+        self._lookup_spacer(flanking, True)
+        self._align_to_rss(flanking, True, distance)
+        self._check_gap(flanking, True)
+
+    def _check_rss_5(self, flanking, region, distance):
+        position = self._lookup_artifact(flanking, region, False, 0, 'heptamer')
+        position = self._lookup_artifact(flanking, region, False, position , 'nonamer')
+        self._lookup_spacer(flanking, False)
+        self._align_to_rss(flanking, False, distance)
+        self._check_gap(flanking, False)
+
+    def _check_gap(self, flanking, orientation):
+        gap = '{} gap'.format('3' if orientation else '5')
+        heptamer = '{} heptamer'.format('3' if orientation else '5')
+        nonamer = '{} nonamer'.format('3' if orientation else '5')
+
+        if gap in self.body: del self.body[gap]
+        offset = 0
+        if heptamer in self.body:
+            if orientation == self.body['reference strand']:
+                offset = self.body[heptamer]['reference start'] - self.body['reference end']
+            else:
+                offset = self.body['reference start'] - self.body[heptamer]['reference end'] 
+
+        elif nonamer in self.body:
+            if orientation == self.body['reference strand']:
+                offset = self.body[nonamer]['reference start'] - self.body['reference end']
+            else:
+                offset = self.body['reference start'] - self.body[nonamer]['reference end'] 
+
+        if offset > 0:
+            artifact = {
+                'reference strand': flanking['reference strand'],
+                'source': 'implied',
+            }
+
+            if orientation == self.body['reference strand']:
+                artifact['reference start'] = self.body['reference end']
+                artifact['reference end'] = self.body['reference end'] + offset
+            else:
+                artifact['reference start'] = self.body['reference start'] - offset
+                artifact['reference end'] = self.body['reference start']
+
+            if flanking['reference strand']:
+                start = artifact['reference start'] - flanking['flank start']
+                end = artifact['reference end'] - flanking['flank start']
+            else:
+                start = flanking['flank end'] - artifact['reference end']
+                end = flanking['flank end'] - artifact['reference start']
+
+            artifact['sequence'] = flanking['sequence'].crop(start, end)
+            self.body[gap] = artifact
+            self.log.info('annotating %s with %dbp %s %s', self.id, artifact['sequence'].length, gap, artifact['sequence'].nucleotide)
+
+    def _align_to_rss(self, flanking, orientation, distance):
+        name = '{} heptamer'.format('3' if orientation else '5')
+        offset = 0
+        if name in self.body:
+            if orientation == self.body['reference strand']:
+                offset = self.body[name]['reference start'] - self.body['reference end']
+            else:
+                offset = self.body['reference start'] - self.body[name]['reference end'] 
+
+            if offset > 0:
+                if distance is None or offset <= distance:
+                    if orientation == self.body['reference strand']:
+                        self.body['reference end'] += offset
+                    else:
+                        self.body['reference start'] -= offset
+
+                    if orientation == self.body['strand']:
+                        self.body['end'] += offset
+                    else:
+                        self.body['start'] -= offset
+
+                    self.log.info('aligning %s gene with %s by %dbp', self.id, name, offset)
+                    self.body['length'] = self.body['end'] - self.body['start']
+                else:
+                    self.log.info('not aligning %s gene with %s because distance is %dbp which is further than %dbp', self.id, name, offset, distance)
+
+    def _lookup_artifact(self, flanking, region, orientation, offset, type):
+        position = 0
+        name = '{} {}'.format('3' if orientation else '5', type)
+        pattern = self.configuration['rss'][region][name]
+        if name not in self.body:
+            if orientation:
+                # Look in the 3 prime flanking sequence
+                interval = flanking['sequence'].crop(flanking['end'] + offset, flanking['flank length'])
+
+            else:
+                # Look for the reverse complement in the reverse complement of the 5 prime flanking sequence
+                interval = flanking['sequence'].crop(0, flanking['start'] - offset).reversed
+
+            match = pattern.search(interval.nucleotide)
+            if match:
+                artifact = {
+                    'reference strand': flanking['reference strand'],
+                    'source': 'pattern',
+                    'sequence': Sequence(self.pipeline, {
+                        'nucleotide': match.group(0),
+                        'read frame': 0,
+                        'strand': True
+                    }),
+                }
+                if not orientation: artifact['sequence'] = artifact['sequence'].reversed
+
+                if orientation == flanking['reference strand']:
+                    artifact['reference start'] = flanking['reference end'] + match.start() + offset
+                    artifact['reference end'] = flanking['reference end'] + match.end() + offset
+                    gap = artifact['reference start'] - flanking['reference end']
+                else:
+                    artifact['reference start'] = flanking['reference start'] - match.end() - offset
+                    artifact['reference end'] = flanking['reference start'] - match.start() - offset
+                    gap = flanking['reference start'] - artifact['reference end']
+
+                artifact['length'] = artifact['reference end'] - artifact['reference start']
+                self.body[name] = artifact
+                self.log.info('%s %s found %dbp from the %s gene', name, artifact['sequence'].nucleotide, gap, self.id)
+                position = artifact['length'] + gap
+        else:
+            artifact = self.body[name]
+            if orientation == flanking['reference strand']:
+                artifact['reference start'] = flanking['reference end'] + artifact['relative start']
+                artifact['reference end'] = flanking['reference end'] + artifact['relative end']
+                gap = artifact['reference start'] - flanking['reference end']
+            else:
+                artifact['reference start'] = flanking['reference start'] - artifact['relative end']
+                artifact['reference end'] = flanking['reference start'] - artifact['relative start']
+                gap = flanking['reference start'] - artifact['reference end']
+            artifact['length'] = artifact['reference end'] - artifact['reference start']
+            self.log.info('%s %s aligned %dbp from the %s gene', name, artifact['sequence'].nucleotide, gap, self.id)
+            position = artifact['length'] + gap
+        return position
+
+    def _lookup_spacer(self, flanking, orientation):
+        name = '{} spacer'.format('3' if orientation else '5')
+        heptamer_name = '{} heptamer'.format('3' if orientation else '5')
+        nonamer_name = '{} nonamer'.format('3' if orientation else '5')
+        if  name not in self.body and heptamer_name in self.body and nonamer_name in self.body:
+            heptamer = self.body[heptamer_name]
+            nonamer = self.body[nonamer_name]
+            artifact = {
+                'source': 'implied',
+                'reference strand': flanking['reference strand'],
+            }
+            if flanking['reference strand'] == orientation:
+                artifact['reference start'] = heptamer['reference end']
+                artifact['reference end'] = nonamer['reference start']
+            else:
+                artifact['reference start'] = nonamer['reference end']
+                artifact['reference end'] = heptamer['reference start']
+
+            if flanking['reference strand']:
+                start = artifact['reference start'] - flanking['flank start']
+                end = artifact['reference end'] - flanking['flank start']
+            else:
+                start = flanking['flank end'] - artifact['reference end']
+                end = flanking['flank end'] - artifact['reference start']
+
+            artifact['sequence'] = Sequence(self.pipeline, {
+                'nucleotide': flanking['sequence'].nucleotide[start:end],
+                'strand': True,
+                'read frame': 0
+            })
+            artifact['length'] = artifact['reference end'] - artifact['reference start']
+            self.body[name] = artifact
+            self.log.info('%s %s of length %dbp found for %s gene', name, artifact['sequence'].nucleotide, artifact['sequence'].length, self.id)
+
+    def _rss_html_3(self, region):
+        if ('3 heptamer' in self.body or '3 nonamer' in self.body) and '3 gap' in self.body:
+            print('<div class="gap">{}</div>'.format(self.body['3 gap']['sequence'].nucleotide))
+
+        if '3 heptamer' in self.body:
+            print('<div class="heptamer {}">{}</div>'.format(self.body['3 heptamer']['source'], self.body['3 heptamer']['sequence'].nucleotide)) 
+
+        if '3 spacer' in self.body:
+            print('<div class="spacer {}">{}</div>'.format(self.body['3 spacer']['source'], self.body['3 spacer']['sequence'].nucleotide))
+
+        if '3 nonamer' in self.body:
+            print('<div class="nonamer {}">{}</div>'.format(self.body['3 nonamer']['source'], self.body['3 nonamer']['sequence'].nucleotide))
+
+    def _rss_html_5(self, region):
+        if '5 nonamer' in self.body:
+            print('<div class="nonamer {}">{}</div>'.format(self.body['5 nonamer']['source'], self.body['5 nonamer']['sequence'].nucleotide))
+
+        if '5 spacer' in self.body:
+            print('<div class="spacer {}">{}</div>'.format(self.body['5 spacer']['source'], self.body['5 spacer']['sequence'].nucleotide))
+
+        if '5 heptamer' in self.body:
+            print('<div class="heptamer {}">{}</div>'.format(self.body['5 heptamer']['source'], self.body['5 heptamer']['sequence'].nucleotide)) 
+
+        if ('5 heptamer' in self.body or '5 nonamer' in self.body) and '5 gap' in self.body:
+            print('<div class="gap">{}</div>'.format(self.body['5 gap']['sequence'].nucleotide))
 
 
 class RSS(Artifact):
@@ -4252,6 +4846,7 @@ class Resolver(object):
             'accession': {},
             'library': {},
             'rss': {},
+            'reference': {},
         }
 
     @property
@@ -4288,20 +4883,6 @@ class Resolver(object):
             self._connection.close()
 
     def rebuild(self, table):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         objective = []
         existing_collections = self.database.collection_names()
         if table:
@@ -4322,6 +4903,29 @@ class Resolver(object):
             for definition in record['index']:
                 self.log.info('building index %s on collection %s', definition['name'], record['collection'])
                 collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
+
+    def reference_fetch(self, name):
+        reference = None
+        if name in self.configuration['reference']:
+            if name not in self.cache['reference']:
+                record = StringIO()
+                with io.open(self.configuration['reference'][name], 'r') as file:
+                    for line in file:
+                        line = line.strip()
+                        if line[0] != '>':
+                            record.write(line.upper())
+                record.seek(0)
+                sequence = {
+                    'nucleotide': record.getvalue(),
+                    'read frame': 0,
+                    'strand': True
+                }
+                self.cache['reference'][name] = Sequence(self.pipeline, sequence)
+            if name in self.cache['reference']:
+                reference = self.cache['reference'][name]
+        else:
+            self.log.error('unknown reference %s', name)
+        return reference
 
     def statistic_fetch(self, id):
         statistic = None
@@ -4405,6 +5009,36 @@ class Resolver(object):
                 del self.cache['gene'][gene.id]
 
     def gene_store(self, node):
+        # def print_report():
+        #     diff_start = ''
+        #     if gene.start > BN000872['start']: 
+        #         diff_start = '+{}'.format(accession.sequence.crop(BN000872['start'], gene.start).nucleotide)
+        #     elif gene.start < BN000872['start']:
+        #         diff_start = '-{}'.format(accession.sequence.crop(gene.start, BN000872['start']).nucleotide)
+
+        #     diff_end = ''
+        #     if gene.end < BN000872['end']: 
+        #         diff_end = '+{}'.format(accession.sequence.crop(gene.end, BN000872['end']).nucleotide)
+        #     elif gene.end > BN000872['end']:
+        #         diff_end = '-{}'.format(accession.sequence.crop(BN000872['end'], gene.end).nucleotide)
+
+        #     # print('{:<18}|{:<10}|{:<10}|{:<10}|{:<10}|{:<12}|{:<30}|{:<12}|{:<10}|{:<29}|{:<38}|{:<60}'.format(
+        #     print('{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}'.format(
+        #             gene.body['gene'],
+        #             gene.start,
+        #             BN000872['start'],
+        #             gene.end,
+        #             BN000872['end'],
+        #             '' if '3 heptamer' not in BN000872 else BN000872['3 heptamer']['sequence'].nucleotide,
+        #             '' if '3 spacer' not in BN000872 else BN000872['3 spacer']['sequence'].nucleotide,
+        #             '' if '3 nonamer' not in BN000872 else BN000872['3 nonamer']['sequence'].nucleotide,
+        #             '' if '3 spacer' not in BN000872 else BN000872['3 spacer']['length'],
+        #             '' if '3 rss gap' not in BN000872 else BN000872['3 rss gap']['sequence'].nucleotide,
+        #             diff_end,
+        #             diff_start,
+        #         )
+        #     )
+
         if node is not None:
             document = { 'head': {}, 'body': node }
             for k in [
@@ -4422,23 +5056,47 @@ class Resolver(object):
                 if k in node:
                     document['head'][k] = node[k]
                     
-            node['length'] = node['end'] - node['start'] 
-            if 'strand' not in node:
-                node['strand'] = True
-                
-            if 'read frame' in node:
-                document['head']['framed'] = True
-            else:
-                document['head']['framed'] = False
-                node['read frame'] = 0
-                
-            if 'sequence' in node and isinstance(node['sequence'], str):
-                node['sequence'] = {
-                    'nucleotide': node['sequence'],
-                    'strand': node['strand'],
-                    'read frame': node['read frame']
-                }
+            # if 'strand' not in node: node['strand'] = True
+            # if 'sequence' in node and isinstance(node['sequence'], str):
+            #     node['sequence'] = {
+            #         'nucleotide': node['sequence'],
+            #         'strand': node['strand'],
+            #         'read frame': node['read frame']
+            #     }
+
             gene = Gene(self.pipeline, document)
+            # if 'BN000872' in gene.body:
+            #     accession = self.pipeline.resolver.accession_fetch('BN000872')
+            #     BN000872 = gene.body['BN000872']
+
+            #     if '3 heptamer' in BN000872:
+            #         BN000872['3 heptamer']['source'] = 'BN000872'
+            #         BN000872['3 heptamer']['strand'] = True
+            #         BN000872['3 heptamer']['sequence'] = accession.sequence.crop(BN000872['3 heptamer']['start'], BN000872['3 heptamer']['end'])
+            #         BN000872['3 heptamer']['relative start'] = BN000872['3 heptamer']['start'] - BN000872['end']
+            #         BN000872['3 heptamer']['relative end'] = BN000872['3 heptamer']['end'] - BN000872['end']
+
+            #     if '3 nonamer' in BN000872:
+            #         BN000872['3 nonamer']['source'] = 'BN000872'
+            #         BN000872['3 nonamer']['strand'] = True
+            #         BN000872['3 nonamer']['sequence'] = accession.sequence.crop(BN000872['3 nonamer']['start'], BN000872['3 nonamer']['end'])
+            #         BN000872['3 nonamer']['relative start'] = BN000872['3 nonamer']['start'] - BN000872['end']
+            #         BN000872['3 nonamer']['relative end'] = BN000872['3 nonamer']['end'] - BN000872['end']
+
+            #     # gene sequence
+            #     if '3 heptamer' in BN000872:
+            #         gene.body['3 heptamer'] = BN000872['3 heptamer']
+
+            #     if '3 nonamer' in BN000872:
+            #         gene.body['3 nonamer'] = BN000872['3 nonamer']
+
+            #     gene.body['start'] = BN000872['start']
+            #     gene.body['end'] = BN000872['end']
+            #     gene.body['sequence'] = Sequence(self.pipeline, BN000872['sequence']) 
+            #     gene.body['length'] = BN000872['length']
+            #     gene.body['read frame'] = gene.body['sequence'].read_frame
+            #     del gene.body['BN000872']
+            gene.validate_in_accesion()
             self.gene_save(gene)
 
     def rss_store(self, node):
@@ -4467,7 +5125,7 @@ class Resolver(object):
                     'read frame': 0
                 }
             rss = RSS(self.pipeline, document)
-            rss.check_in_accesion()
+            rss.validate_in_accesion()
             self.rss_save(rss)
 
     def rss_save(self, rss):
@@ -4681,6 +5339,13 @@ class Pipeline(object):
         stop = [ k for k,v in self.configuration['nucleic to amino'].items() if v == '*' ]
         motif = self.motif_for(stop)
         self.configuration['stop codon repertoire'] = motif['space']
+        for k,v in self.configuration['rss'].items():
+            heptamer = [ Sequence(self, {'nucleotide': s, 'strand': True, 'read frame': 0}) for s in v['heptamer'] ]
+            nonamer = [ Sequence(self, {'nucleotide': s, 'strand': True, 'read frame': 0}) for s in v['nonamer'] ]
+            v['3 heptamer'] = re.compile('|'.join([s.nucleotide for s in heptamer]))
+            v['3 nonamer'] = re.compile('|'.join([s.nucleotide for s in nonamer]))
+            v['5 heptamer'] = re.compile('|'.join([s.reversed.nucleotide for s in heptamer]))
+            v['5 nonamer'] = re.compile('|'.join([s.reversed.nucleotide for s in nonamer]))
 
     def close(self):
         self.resolver.close()
@@ -4900,6 +5565,7 @@ class Pipeline(object):
         print(to_json(buffer))
 
     def gene_populate(self, path):
+        # print(', '.join([ 'gene', 'imgt start', 'start', 'imgt end', 'end', 'heptamer', 'spacer', 'nonamer', 'spacer length', 'rss gap', 'end diff', 'start diff' ]))
         count = 0
         with io.open(path, 'rb') as file:
             content = StringIO(file.read().decode('utf8'))
@@ -4924,11 +5590,111 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
         print(to_json(buffer))
 
+    def gene_html(self, query, profile):
+        q = self.build_query(query, profile, 'gene')
+        cursor = self.resolver.make_cursor('gene', q)
+        buffer = []
+        for node in cursor:
+            buffer.append(Gene(self, node))
+        cursor.close()
+        buffer = sorted(buffer, key=lambda x: '' if 'allele' not in x.body else x.body['allele'])
+        buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x.body else x.body['gene'])
+        buffer = sorted(buffer, key=lambda x: '' if 'family' not in x.body else x.body['family'])
+        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x.body else x.body['strain'])
+
+        print("""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd" >
+            <html xmlns="http://www.w3.org/1999/xhtml">
+            <head>
+            <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+            <title>IGHV RSS</title>
+            <style type="text/css">
+                html {
+                    font-family: Courier;
+                    font-size: 12px;
+                    background-color: #ffffff;
+                    color: #000000;
+                }
+                body {
+                    margin: 1em;
+                }
+                * {
+                    padding: 0;
+                    margin: 0;
+                }
+                img, object, a {
+                    border-width: 0;
+                    outline: none;
+                }
+                .wrap {
+                    margin: 0 auto;
+                }
+                .section {
+                    white-space: nowrap;
+                    padding: 0.5em;
+                    margin: 0.5em 0;
+                }
+                .genename {
+                    font-weight: bold;
+                    color: #222;
+                }
+                .gene {
+                    display: inline;
+                    color: #555;
+                }
+                .nonamer {
+                    display: inline;
+                    color: #FBAC21;
+                }
+                .spacer {
+                    display: inline;
+                    color: #9ECA2B;
+                }
+                .heptamer {
+                    display: inline;
+                    color: #82A5D6;
+                }
+                .gap {
+                    display: inline;
+                    color: #F14329;
+                }
+                .implied {}
+                .BN000872 {}
+                .placeholder {
+                    text-decoration: line-through;
+                }
+                .pattern {
+                    text-decoration: underline;
+                }
+                a {
+                    text-decoration: none;
+                }
+                a:link,a:visited {
+                    color: #2d4855;
+                }
+                a:hover {
+                    color: #0f70c5;
+                }
+            </style>
+            </head>
+            <body><div class="wrap">""")
+        for gene in buffer:
+            gene.rss_html()
+
+        print("""</div></body></html>""")
+
     def gene_to_fasta(self, query, profile, flanking, limit):
         limit = limit if limit is not None else self.configuration['constant']['fasta line length']
         q = self.build_query(query, profile, 'gene')
         cursor = self.resolver.make_cursor('gene', q)
+        buffer = []
         for node in cursor:
+            buffer.append(node)
+        cursor.close()
+        buffer = sorted(buffer, key=lambda x: '' if 'allele' not in x else x['body']['allele'])
+        buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x else x['body']['gene'])
+        buffer = sorted(buffer, key=lambda x: '' if 'family' not in x else x['body']['family'])
+        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['body']['strain'])
+        for node in buffer:
             gene = Gene(self, node)
             print(gene.to_fasta(flanking, limit))
         cursor.close()
@@ -4936,6 +5702,16 @@ class Pipeline(object):
     def gene_count(self, query, profile):
         q = self.build_query(query, profile, 'gene')
         print(self.resolver.count('gene', q))
+
+    def gene_rss(self, query, profile, flank=0, distance=0):
+        # load the gene sequences
+        q = self.build_query(query, profile, 'gene')
+        cursor = self.resolver.make_cursor('gene', q)
+        for node in cursor:
+            gene = Gene(self, node)
+            gene.check_rss(flank, distance)
+            self.resolver.gene_save(gene)
+        cursor.close()
 
     def gene_align(self, query, profile, flank=0):
         instruction = {
@@ -4963,7 +5739,16 @@ class Pipeline(object):
             if 'summary' in query and query['summary']:
                 if len(query['summary']) == 1:
                     hit = query['summary'][0]
-                    self.log.info('gene %s aligned to %d %d', gene.id, hit['target start'], hit['target end'])
+                    self.log.info(
+                        'gene %s aligned to %d:%d on the %s strand',
+                        gene.id,
+                        hit['target start'],
+                        hit['target end'],
+                        'plus' if hit['query strand'] else 'minus'
+                    )
+                    gene.body['reference start'] = hit['target start']
+                    gene.body['reference end'] = hit['target end']
+                    gene.body['reference strand'] = hit['query strand']
                     gene.body['alignment'] = hit
                     gene.head['aligned'] = True
                     self.resolver.gene_save(gene)
@@ -5075,6 +5860,11 @@ class Pipeline(object):
                 cmd.query,
                 cmd.instruction['profile'])
 
+        elif cmd.action == 'gene-html':
+            self.gene_html(
+                cmd.query,
+                cmd.instruction['profile'])
+
         elif cmd.action == 'gene-count':
             self.gene_count(
                 cmd.query,
@@ -5092,6 +5882,13 @@ class Pipeline(object):
                 cmd.query, 
                 cmd.instruction['profile'],
                 cmd.instruction['flanking'])
+
+        elif cmd.action == 'gene-rss':
+            self.gene_rss(
+                cmd.query, 
+                cmd.instruction['profile'],
+                cmd.instruction['flanking'],
+                cmd.instruction['distance'])
 
         elif cmd.action == 'gene-populate':
             for path in cmd.instruction['path']:
@@ -5132,8 +5929,7 @@ def main():
     logging.getLogger().setLevel(logging.DEBUG)
     
     configuration['interface']['prototype']['profile']['parameter']['choices'] = list(configuration['profile'].keys())
-    configuration['interface']['prototype']['profile']['parameter']['help'] = \
-        '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
+    configuration['interface']['prototype']['profile']['parameter']['help'] = '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
         
     cmd = CommandLineParser(configuration['interface'])
     if cmd.sectioned and cmd.action is None:
@@ -5143,7 +5939,6 @@ def main():
         pipeline = Pipeline()
         try:
             pipeline.execute(cmd)
-            
         except ValueError as e:
             logging.getLogger('main').critical(e)
             sys.exit(1)
