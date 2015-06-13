@@ -52,10 +52,6 @@ from urllib.error import URLError, HTTPError
 from http.client import BadStatusLine
 from copy import deepcopy
 
-
-BIN_BASE = '/Users/lg/code/somatic/bin'
-DB_BASE = '/Users/lg/code/somatic/db'
-
 log_levels = {
     'debug': logging.DEBUG,
     'info': logging.INFO,
@@ -121,7 +117,6 @@ configuration = {
         'all': {
             'accession': {},
             'gene': {},
-            'rss': {},
             'sample': {},
             'diagram': {
                 'track': {},
@@ -146,7 +141,6 @@ configuration = {
             'library': {},
             'accession': {},
             'gene': {},
-            'rss': {},
             'sample': {
                 'valid': True
             },
@@ -433,63 +427,11 @@ configuration = {
             re.VERBOSE
         ),
     },
-    'strain': {
-        'mus musculus': [
-            {
-                'name': 'C57BL/6',
-                'expression': re.compile(r'\b(?:c57bl/6|c57)\b', re.IGNORECASE)
-            },
-            {
-                'name': 'C57BL/6',
-                'expression': re.compile(r'\bc57bl/6j\b', re.IGNORECASE)
-            },
-            {
-                'name': 'C57BL/6',
-                'expression': re.compile(r'\bc57bl/6n\b', re.IGNORECASE)
-            },
-            {
-                'name': 'C57BL/10',
-                'expression': re.compile(r'\bc57bl/10\b', re.IGNORECASE)
-            },
-            {
-                'name': '129/Sv',
-                'expression': re.compile(r'\b129/sv\b', re.IGNORECASE)
-            },
-            {
-                'name': '129/J',
-                'expression': re.compile(r'\b129/j\b', re.IGNORECASE)
-            },
-            {
-                'name': '129/Ole',
-                'expression': re.compile(r'\b129/ole\b', re.IGNORECASE)
-            },
-            {
-                'name': 'BALB/c',
-                'expression': re.compile(r'\bbalb/c\b', re.IGNORECASE)
-            },
-            {
-                'name': 'BALB.K',
-                'expression': re.compile(r'\bbalb\.k\b', re.IGNORECASE)
-            },
-            {
-                'name': 'MRL/lpr',
-                'expression': re.compile(r'\bmrl/lpr\b', re.IGNORECASE)
-            },
-            {
-                'name': 'A/J',
-                'expression': re.compile(r'\ba/j\b', re.IGNORECASE)
-            },
-            {
-                'name': 'NBZ',
-                'expression': re.compile(r'\bnbz\b', re.IGNORECASE)
-            },
-        ]
-    },
     'command': {
         'blat': {
-            'cwd': DB_BASE,
+            'cwd': '/Users/lg/code/somatic/db',
             'arguments': [
-                BIN_BASE + '/blat',
+                '/Users/lg/code/somatic/bin/blat',
                 '-noHead',
                 'chr12.fa',
                 'stdin',
@@ -498,9 +440,9 @@ configuration = {
             ]
         },
         'igblast': {
-            'cwd': DB_BASE + '/igblast',
+            'cwd': '/Users/lg/code/somatic/db/igblast',
             'arguments': [
-                BIN_BASE + '/igblastn',
+                '/Users/lg/code/somatic/bin/igblastn',
                 '-germline_db_V', 'database/mouse_c57bl6_ighv',
                 '-germline_db_J', 'database/mouse_c57bl6_ighj',
                 '-germline_db_D', 'database/mouse_c57bl6_ighd',
@@ -517,9 +459,9 @@ configuration = {
             ]
         },
         'igblast.gapped': {
-            'cwd': DB_BASE + '/igblast',
+            'cwd': '/Users/lg/code/somatic/db/igblast',
             'arguments': [
-                BIN_BASE + '/igblastn',
+                '/Users/lg/code/somatic/bin/igblastn',
                 '-germline_db_V', 'database/mouse_c57bl6_ighv',
                 '-germline_db_J', 'database/mouse_c57bl6_ighj',
                 '-germline_db_D', 'database/mouse_c57bl6_ighd',
@@ -636,6 +578,15 @@ configuration = {
                     'help': 'strain'
                 }
             },
+            'title': {
+                'flag': [
+                    '--title'
+                ],
+                'parameter': {
+                    'dest': 'title',
+                    'help': 'title'
+                }
+            },
             'id': {
                 'flag': [
                     '-d',
@@ -673,6 +624,20 @@ configuration = {
                     ],
                     'dest': 'productive',
                     'help': 'productive alignment'
+                }
+            },
+            'functionality': {
+                'flag': [
+                    '--functionality'
+                ],
+                'parameter': {
+                    'choices': [
+                        'F',
+                        'O',
+                        'P'
+                    ],
+                    'dest': 'functionality',
+                    'help': 'gene functionality'
                 }
             },
             'json': {
@@ -1008,27 +973,6 @@ configuration = {
                         'path'
                     ],
                     'instruction': {
-                        'help': 'load rss sequences from JSON file',
-                        'name': 'rss-populate'
-                    }
-                },
-                {
-                    'argument': [
-                        'region',
-                        'strain',
-                        'profile',
-                        'id'
-                    ],
-                    'instruction': {
-                        'help': 'view JSON rss records',
-                        'name': 'rss-info'
-                    }
-                },
-                {
-                    'argument': [
-                        'path'
-                    ],
-                    'instruction': {
                         'help': 'load gene sequences from JSON file',
                         'name': 'gene-populate'
                     }
@@ -1050,7 +994,9 @@ configuration = {
                         'region',
                         'strain',
                         'profile',
-                        'id'
+                        'id',
+                        'title',
+                        'functionality'
                     ],
                     'instruction': {
                         'help': 'print genes html diagram',
@@ -1103,7 +1049,8 @@ configuration = {
                         'profile',
                         'id',
                         'flanking',
-                        'limit'
+                        'limit',
+                        'functionality'
                     ],
                     'instruction': {
                         'help': 'dump gene sequences to fasta',
@@ -1302,16 +1249,8 @@ configuration = {
         'P count':      { 'bins': 50, 'range': (0,50) },
     },
     'constant': {
-        'mouse chromosome 12': DB_BASE + '/chr12.fa',
         'buffer size': 32,
         'fasta line length': 80,
-        'minimum v identity': 0.7,
-        'minimum d identity': 0.7,
-        'minimum j identity': 0.8,
-        'minimum v alignment': 45,
-        'minimum d alignment': 4,
-        'minimum j alignment': 30,
-        'd overlap penalty factor': 0.5
     },
     'region': {
         'VH': {
@@ -1356,15 +1295,6 @@ configuration = {
                 { 'key': [( 'head.region', ASCENDING )], 'unique': False, 'name': 'gene region' },
                 { 'key': [( 'head.verified', ASCENDING )], 'unique': False, 'name': 'gene verified' },
                 { 'key': [( 'head.functionality', ASCENDING )], 'unique': False, 'name': 'gene functionality' },
-            ]
-        },
-        'rss': {
-            'collection': 'rss',
-            'index': [
-                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'rss id' },
-                { 'key': [( 'head.accession', ASCENDING )], 'unique': False, 'name': 'rss accession' },
-                { 'key': [( 'head.organism name', ASCENDING )], 'unique': False, 'name': 'rss organism name' },
-                { 'key': [( 'head.region', ASCENDING )], 'unique': False, 'name': 'rss region' },
             ]
         },
         'sample': {
@@ -1502,9 +1432,7 @@ configuration = {
                 'ACTGAAAGA',
                 'TCAGAAAAC',
                 'TCAGAAACC',
-
-                'CAGAAACCC',
-                
+                'CAGAAACCC',                
                 'GCAGAAACC',
                 'AACTTAATC',
                 'CTTCCTGAC',
@@ -1551,21 +1479,20 @@ configuration = {
                 'ACTAAAACC',
                 'ACAAAAATT',
                 'ACAAATACT',
-
-                # 'ATAGTAATT',
-                # 'CCACAAACC',
-                # 'CCACCAACC',
-                # 'GCACAAACT',
-                # 'TGCAATATT',
-                # 'AACAAAAGC',
-                # 'ACAAACCCT',
-                # 'AAATAAACC',
-                # 'ACACAAAAC',
-                # 'AAACAAACC',
-                # 'ATGTAAACC',
-                # 'ACATTATTT',
-                # 'CAGAAATCT',
-                # 'AGAAACCCT'
+                'ATAGTAATT',
+                'CCACAAACC',
+                'CCACCAACC',
+                'GCACAAACT',
+                'TGCAATATT',
+                'AACAAAAGC',
+                'ACAAACCCT',
+                'AAATAAACC',
+                'ACACAAAAC',
+                'AAACAAACC',
+                'ATGTAAACC',
+                'ACATTATTT',
+                'CAGAAATCT',
+                'AGAAACCCT'
             ],
             'heptamer': [
                 'CACAGCC',
@@ -1595,11 +1522,10 @@ configuration = {
                 'CATAGTG',
                 'CACAGGT',
                 'CACTGTG',
-
-                # 'TAAGATG',
-                # 'CACAAGG',
-                # 'TATAGGG',
-                # 'TACATTG'
+                'TACATTG',
+                'TAAGATG',
+                'CACAAGG',
+                'TATAGGG',
             ]
         },
         'DH': {
@@ -1621,7 +1547,6 @@ configuration = {
                 'CTCAAATTC',
                 'ACAACAAAG',
                 'CTCAAATCC',
-
                 'CCTCTATAA'
             ],
             'heptamer': [
@@ -1636,12 +1561,12 @@ configuration = {
                 'CACAATG',
                 'CACATTG',
                 'CACGGTG',
-
                 'TGAATTC'
             ]
         },
         'JH': {
-            'leniency': 2, 'spacer': 23,
+            'leniency': 2, 
+            'spacer': 23,
             'nonamer': [
                 'GGGTTTTTG',
                 'AGTATTTGT',
@@ -1660,8 +1585,13 @@ configuration = {
             ]
         }
     },
+    'signal': {
+        'ocatmer': 'ATGCAAA[GT]',
+        'TATA box': 'TAAATA',
+        'Initiator': '[TC][TC]A[ATCG][AT][TC][TC]',
+    },
     'reference': {
-        'mouse chromosome 12': DB_BASE + '/chr12.fa'
+        'mouse chromosome 12': '/Users/lg/code/somatic/db/chr12.fa'
     }
 }
 
@@ -1845,7 +1775,8 @@ class CommandLineParser(object):
             'id',
             'region',
             'format',
-            'strain'
+            'strain',
+            'functionality',
         ]:
             if k in self.instruction:
                 v = self.instruction[k]
@@ -2413,7 +2344,7 @@ class Artifact(object):
         if self.node is None:
             self.node = {
                 'head': { },
-                'body': { 'strand': True }
+                'body': { 'accession strand': True }
             }
             
         if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
@@ -2427,7 +2358,7 @@ class Artifact(object):
         buffer.append(self.region if self.region else 'unknown region')
         buffer.append(self.strain if self.strain else 'unknown strain')
         if 'accession' in self.head: buffer.append(self.head['accession'])
-        if 'strand' in self.body: buffer.append('+' if self.body['strand'] else '-')
+        if 'accession strand' in self.body: buffer.append('+' if self.accession_strand else '-')
         buffer.append('{}bp'.format(self.length))
         return '[ {} ]'.format(', '.join(buffer))
 
@@ -2442,6 +2373,18 @@ class Artifact(object):
     @property
     def body(self):
         return self.node['body']
+
+    @property
+    def document(self):
+        return transform_to_document(self.node)
+
+    @property
+    def json(self):
+        return to_json(self.node)
+
+    @property
+    def fasta(self):
+        return to_fasta(self.id, self.sequence.nucleotide, None, self.configuration['constant']['fasta line length'])
 
     @property
     def valid(self):
@@ -2498,38 +2441,42 @@ class Artifact(object):
     
     @property
     def reference_start(self):
-        if self.alignment:
+        if 'reference start' in self.body:
             return self.body['reference start']
         else:
             return None
     
     @property
     def reference_end(self):
-        if self.alignment:
+        if 'reference end' in self.body:
             return self.body['reference end']
         else:
             return None
     
     @property
     def reference_strand(self):
-        if self.alignment:
+        if 'reference strand' in self.body:
             return self.body['reference strand']
         else:
             return None
     
     @property
-    def start(self):
-        if 'start' in self.body:
-            return self.body['start']
+    def accession_start(self):
+        if 'accession start' in self.body:
+            return self.body['accession start']
         else:
             return None
 
     @property
-    def end(self):
-        if 'end' in self.body:
-            return self.body['end']
+    def accession_end(self):
+        if 'accession end' in self.body:
+            return self.body['accession end']
         else:
             return None
+
+    @property
+    def accession_strand(self):
+        return self.body['accession strand']
 
     @property
     def length(self):
@@ -2539,22 +2486,6 @@ class Artifact(object):
     def sequence(self):
         return self.body['sequence']
 
-    @property
-    def strand(self):
-        return self.body['strand']
-
-    @property
-    def document(self):
-        return transform_to_document(self.node)
-
-    @property
-    def json(self):
-        return to_json(self.node)
-
-    @property
-    def fasta(self):
-        return to_fasta(self.id, self.sequence.nucleotide, None, self.configuration['constant']['fasta line length'])
-
     def flanking_accession_query(self, flank):
         query = None
         if self.accession:
@@ -2562,12 +2493,12 @@ class Artifact(object):
             if accession is not None:
                 query = {}
                 query['id'] = self.id
-                query['accession start'] = self.start
-                query['accession end'] = self.end
-                query['flank start'] = max(self.start - flank, 0)
-                query['flank end'] = min(self.end + flank, accession.length)
+                query['accession start'] = self.accession_start
+                query['accession end'] = self.accession_end
+                query['flank start'] = max(self.accession_start - flank, 0)
+                query['flank end'] = min(self.accession_end + flank, accession.length)
                 query['flank length'] = query['flank end'] - query['flank start']
-                if self.body['strand']:
+                if self.accession_strand:
                     query['start'] = query['accession start'] - query['flank start']
                     query['end'] = query['accession end'] - query['flank start']
                     query['sequence'] = accession.sequence.crop(query['flank start'], query['flank end'])
@@ -2602,17 +2533,23 @@ class Artifact(object):
                 query['length'] = query['end'] - query['start']
         return query
 
+    def flanking_query(self, flank):
+        query = self.flanking_reference_query(flank)
+        if query is None:
+            query = self.flanking_accession_query(flank)
+        return query
+
     def to_fasta(self, flank, limit):
         sequence = self.sequence
         if flank is not None and flank > 0:
-            accession = self.pipeline.resolver.accession_fetch(self.accession)
-            if accession is not None:
-                flanking = accession.sequence.crop(self.start - flank, self.end + flank)
-                if flanking is not None:
-                    if not self.strand:
-                        flanking = flanking.reversed
-                    sequence = flanking
+            flanking = self.flanking_query(flank)
+            if flanking is not None:
+                sequence = flanking['sequence']
         return to_fasta(self.id, sequence.nucleotide, None, limit)
+
+    def validate(self):
+        self.validate_in_accesion()
+        self.validate_in_reference()
 
     def validate_in_accesion(self):
         accession = self.pipeline.resolver.accession_fetch(self.accession)
@@ -2622,19 +2559,19 @@ class Artifact(object):
                 if not self.sequence.nucleotide:
                     # if no sequence defined, assign sequence from accession 
                     self.sequence.nucleotide = flanking['sequence'].nucleotide
-                    self.log.info('sequence assigned to artifact %s from accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                    self.log.info('sequence assigned to artifact %s from accession %s:%d:%d', self.id, accession.id, self.accession_start, self.accession_end)
                 else:
                     if flanking['sequence'].nucleotide != self.sequence.nucleotide:
-                        self.log.info('artifact sequence in %s does not match accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                        self.log.info('artifact sequence in %s does not match accession %s:%d:%d', self.id, accession.id, self.accession_start, self.accession_end)
                         # self.search_in_accession()
                     else:
-                        self.log.debug('artifact sequence for %s matched to accession %s:%d:%d', self.id, accession.id, self.start, self.end)
+                        self.log.debug('artifact sequence for %s matched to accession %s:%d:%d', self.id, accession.id, self.accession_start, self.accession_end)
 
                     if self.strain is None and accession.strain is not None:
                         self.head['strain'] = accession.strain
                         self.log.info('strain %s assigned to artifact %s from %s', self.strain, self.id, self.accession)
             else:
-                self.log.error('coordinates %d:%d invalid for accession %s', self.start, self.end, self.accession)
+                self.log.error('coordinates %d:%d invalid for accession %s', self.accession_start, self.accession_end, self.accession)
         else:
             self.log.error('accession %s could not be located', self.accession)
 
@@ -2645,14 +2582,14 @@ class Artifact(object):
                 if not self.sequence.nucleotide:
                     # if no sequence defined, assign sequence from the reference 
                     self.sequence.nucleotide = flanking['sequence'].nucleotide
-                    self.log.info('sequence assigned to artifact %s from reference %d:%d', self.id, self.start, self.end)
+                    self.log.info('sequence assigned to artifact %s from reference %d:%d', self.id, self.accession_start, self.accession_end)
                 else:
                     if flanking['sequence'].nucleotide != self.sequence.nucleotide:
-                        self.log.info('artifact sequence in %s does not match reference %d:%d', self.id, self.start, self.end)
+                        self.log.info('artifact sequence in %s does not match reference %d:%d', self.id, self.accession_start, self.accession_end)
                     else:
-                        self.log.debug('artifact sequence for %s matched to reference %d:%d', self.id, self.start, self.end)
+                        self.log.debug('artifact sequence for %s matched to reference %d:%d', self.id, self.accession_start, self.accession_end)
             else:
-                self.log.error('coordinates %d:%d invalid for reference', self.start, self.end)
+                self.log.error('coordinates %d:%d invalid for reference', self.accession_start, self.accession_end)
 
     def search_in_accession(self):
         accession = self.pipeline.resolver.accession_fetch(self.accession)
@@ -2672,11 +2609,11 @@ class Artifact(object):
                 self.accession,
                 position[0],
                 position[1],
-                self.start - position[0],
-                self.end - position[1])
+                self.accession_start - position[0],
+                self.accession_end - position[1])
 
-            self.body['start'] = position[0]
-            self.body['end'] = position[1]
+            self.body['accession start'] = position[0]
+            self.body['accession end'] = position[1]
         else:
             self.log.error('%s found %d times in %s', self.id, len(positions), self.accession)
             self.log.debug(str(positions))
@@ -2739,7 +2676,17 @@ class Gene(Artifact):
 
     def rss_html(self):
         print('<div class="section">')
-        print('<div class="genename">{}</div>'.format(self.id))
+        print('<div class="genename">{} {}</div>'.format(self.id, self.functionality))
+
+        if self.framed:
+            print('<div class="frame codon">{}</div>'.format(self.sequence.codon))
+        else:
+            for frame in [0,1,2]:
+                if self.sequence.read_frame == frame:
+                    print('<div class="frame codon">{}</div>'.format(self.sequence.codon_at_frame(frame)))
+                else:
+                    print('<div class="codon">{}</div>'.format(self.sequence.codon_at_frame(frame)))
+
         if self.region == 'VH':
             print('<div class="gene">{}</div>'.format(self.sequence.nucleotide))
             self._rss_html_3('VH')
@@ -2827,13 +2774,13 @@ class Gene(Artifact):
                     else:
                         self.body['reference start'] -= offset
 
-                    if orientation == self.body['strand']:
-                        self.body['end'] += offset
+                    if orientation == self.accession_strand:
+                        self.body['accession end'] += offset
                     else:
-                        self.body['start'] -= offset
+                        self.body['accession start'] -= offset
 
                     self.log.info('aligning %s gene with %s by %dbp', self.id, name, offset)
-                    self.body['length'] = self.body['end'] - self.body['start']
+                    self.body['length'] = self.accession_end - self.accession_start
                 else:
                     self.log.info('not aligning %s gene with %s because distance is %dbp which is further than %dbp', self.id, name, offset, distance)
 
@@ -2950,12 +2897,6 @@ class Gene(Artifact):
 
         if ('5 heptamer' in self.body or '5 nonamer' in self.body) and '5 gap' in self.body:
             print('<div class="gap">{}</div>'.format(self.body['5 gap']['sequence'].nucleotide))
-
-
-class RSS(Artifact):
-    def __init__(self, pipeline, node=None):
-        Artifact.__init__(self, pipeline, node)
-        self.log = logging.getLogger('RSS')
 
 
 class Sample(object):
@@ -4845,7 +4786,6 @@ class Resolver(object):
             'sample': {},
             'accession': {},
             'library': {},
-            'rss': {},
             'reference': {},
         }
 
@@ -5009,36 +4949,6 @@ class Resolver(object):
                 del self.cache['gene'][gene.id]
 
     def gene_store(self, node):
-        # def print_report():
-        #     diff_start = ''
-        #     if gene.start > BN000872['start']: 
-        #         diff_start = '+{}'.format(accession.sequence.crop(BN000872['start'], gene.start).nucleotide)
-        #     elif gene.start < BN000872['start']:
-        #         diff_start = '-{}'.format(accession.sequence.crop(gene.start, BN000872['start']).nucleotide)
-
-        #     diff_end = ''
-        #     if gene.end < BN000872['end']: 
-        #         diff_end = '+{}'.format(accession.sequence.crop(gene.end, BN000872['end']).nucleotide)
-        #     elif gene.end > BN000872['end']:
-        #         diff_end = '-{}'.format(accession.sequence.crop(BN000872['end'], gene.end).nucleotide)
-
-        #     # print('{:<18}|{:<10}|{:<10}|{:<10}|{:<10}|{:<12}|{:<30}|{:<12}|{:<10}|{:<29}|{:<38}|{:<60}'.format(
-        #     print('{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}'.format(
-        #             gene.body['gene'],
-        #             gene.start,
-        #             BN000872['start'],
-        #             gene.end,
-        #             BN000872['end'],
-        #             '' if '3 heptamer' not in BN000872 else BN000872['3 heptamer']['sequence'].nucleotide,
-        #             '' if '3 spacer' not in BN000872 else BN000872['3 spacer']['sequence'].nucleotide,
-        #             '' if '3 nonamer' not in BN000872 else BN000872['3 nonamer']['sequence'].nucleotide,
-        #             '' if '3 spacer' not in BN000872 else BN000872['3 spacer']['length'],
-        #             '' if '3 rss gap' not in BN000872 else BN000872['3 rss gap']['sequence'].nucleotide,
-        #             diff_end,
-        #             diff_start,
-        #         )
-        #     )
-
         if node is not None:
             document = { 'head': {}, 'body': node }
             for k in [
@@ -5055,16 +4965,8 @@ class Resolver(object):
             ]:
                 if k in node:
                     document['head'][k] = node[k]
-                    
-            # if 'strand' not in node: node['strand'] = True
-            # if 'sequence' in node and isinstance(node['sequence'], str):
-            #     node['sequence'] = {
-            #         'nucleotide': node['sequence'],
-            #         'strand': node['strand'],
-            #         'read frame': node['read frame']
-            #     }
-
             gene = Gene(self.pipeline, document)
+
             # if 'BN000872' in gene.body:
             #     accession = self.pipeline.resolver.accession_fetch('BN000872')
             #     BN000872 = gene.body['BN000872']
@@ -5097,58 +4999,9 @@ class Resolver(object):
             #     gene.body['read frame'] = gene.body['sequence'].read_frame
             #     del gene.body['BN000872']
             gene.validate_in_accesion()
+
+            gene.validate()
             self.gene_save(gene)
-
-    def rss_store(self, node):
-        if node is not None:
-            if 'id' not in node: node['id'] = str(uuid.uuid4())
-            if 'accession' in node: node['accession'] = node['accession'].upper()
-            document = { 'head': {}, 'body': node }
-            for k in [
-                'id',
-                'accession',
-                'organism name',
-                'strain',
-                'region',
-            ]:
-                if k in node:
-                    document['head'][k] = node[k]
-                    
-            node['length'] = node['end'] - node['start'] 
-            if 'strand' not in node:
-                node['strand'] = True
-                
-            if 'sequence' in node and isinstance(node['sequence'], str):
-                node['sequence'] = {
-                    'nucleotide': node['sequence'],
-                    'strand': node['strand'],
-                    'read frame': 0
-                }
-            rss = RSS(self.pipeline, document)
-            rss.validate_in_accesion()
-            self.rss_save(rss)
-
-    def rss_save(self, rss):
-        if rss is not None:
-            existing = self.rss_fetch(rss.id)
-            if existing:
-                self.log.debug('existing rss found for %s', rss.id)
-                rss.node['_id'] = existing.node['_id']
-                
-            self.database['rss'].save(rss.document)
-            if rss.id in self.cache['rss']:
-                del self.cache['rss'][rss.id]
-
-    def rss_fetch(self, id):
-        if id not in self.cache['rss']:
-            document = self.database['rss'].find_one({'head.id': id})
-            if document:
-                rss = RSS(self.pipeline, document)
-                self.cache['rss'][id] = rss
-        if id in self.cache['rss']:
-            return self.cache['rss'][id]
-        else:
-            return None
 
     def accession_save(self, accession):
         if accession is not None:
@@ -5541,29 +5394,6 @@ class Pipeline(object):
             sample.info(profile)
         cursor.close()
 
-    def rss_populate(self, path):
-        count = 0
-        with io.open(path, 'rb') as file:
-            content = StringIO(file.read().decode('utf8'))
-            document = json.loads(content.getvalue())
-            for node in document:
-                self.resolver.rss_store(node)
-                count += 1
-        self.log.info('populated %d RSSs', count)
-
-    def rss_to_json(self, query, profile):
-        q = self.build_query(query, profile, 'rss')
-        cursor = self.resolver.make_cursor('rss', q)
-        buffer = []
-        for node in cursor:
-            document = node['body'].copy()
-            document.update(node['head'])
-            buffer.append(document)
-        cursor.close()
-        buffer = sorted(buffer, key=lambda x: '' if 'region' not in x else x['region'])
-        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
-        print(to_json(buffer))
-
     def gene_populate(self, path):
         # print(', '.join([ 'gene', 'imgt start', 'start', 'imgt end', 'end', 'heptamer', 'spacer', 'nonamer', 'spacer length', 'rss gap', 'end diff', 'start diff' ]))
         count = 0
@@ -5590,7 +5420,7 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
         print(to_json(buffer))
 
-    def gene_html(self, query, profile):
+    def gene_html(self, query, profile, title):
         q = self.build_query(query, profile, 'gene')
         cursor = self.resolver.make_cursor('gene', q)
         buffer = []
@@ -5601,13 +5431,16 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x.body else x.body['gene'])
         buffer = sorted(buffer, key=lambda x: '' if 'family' not in x.body else x.body['family'])
         buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x.body else x.body['strain'])
+        buffer = sorted(buffer, key=lambda x: '' if 'reference start' not in x.body else x.body['reference start'])
 
         print("""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd" >
             <html xmlns="http://www.w3.org/1999/xhtml">
             <head>
-            <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
-            <title>IGHV RSS</title>
-            <style type="text/css">
+            <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />""")
+
+        if title is not None: print('<title>{}</title>'.format(title))
+
+        print("""<style type="text/css">
                 html {
                     font-family: Courier;
                     font-size: 12px;
@@ -5640,6 +5473,12 @@ class Pipeline(object):
                 .gene {
                     display: inline;
                     color: #555;
+                }
+                .codon {
+                    color: #5A7251;
+                }
+                .frame {
+                    font-weight: bold;
                 }
                 .nonamer {
                     display: inline;
@@ -5677,9 +5516,8 @@ class Pipeline(object):
             </style>
             </head>
             <body><div class="wrap">""")
-        for gene in buffer:
-            gene.rss_html()
 
+        for gene in buffer: gene.rss_html()
         print("""</div></body></html>""")
 
     def gene_to_fasta(self, query, profile, flanking, limit):
@@ -5718,7 +5556,7 @@ class Pipeline(object):
             'record': {}, 
             'total': 0, 
             'flank': flank,
-            'target path': self.configuration['constant']['mouse chromosome 12']
+            'target path': self.configuration['reference']['mouse chromosome 12']
         }
         
         # load the gene sequences
@@ -5863,7 +5701,8 @@ class Pipeline(object):
         elif cmd.action == 'gene-html':
             self.gene_html(
                 cmd.query,
-                cmd.instruction['profile'])
+                cmd.instruction['profile'],
+                cmd.instruction['title'])
 
         elif cmd.action == 'gene-count':
             self.gene_count(
@@ -5899,15 +5738,6 @@ class Pipeline(object):
                 cmd.query, 
                 cmd.instruction['profile'])
             
-        elif cmd.action == 'rss-info':
-            self.rss_to_json(
-                cmd.query,
-                cmd.instruction['profile'])
-
-        elif cmd.action == 'rss-populate':
-            for path in cmd.instruction['path']:
-                self.rss_populate(path)
-                
         elif cmd.action == 'library-populate':
             for path in cmd.instruction['path']:
                 self.library_populate(path)

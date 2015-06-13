@@ -1393,6 +1393,6 @@ def main():
     execute(index)
 
 if __name__ == '__main__':
-    # main()
-    record()
+    main()
+    # record()
 
