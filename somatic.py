@@ -3225,7 +3225,7 @@ class Sample(object):
                         top = search['strained']
 
                 # if there are multiple matches and at least one is functional, keep only the functional
-                if len(top) > 1 and strain is not None:
+                if len(top) > 1:
                     search['functional'] = [ hit for hit in top if hit['functionality'] == 'F' ]
                     if search['functional']:
                         top = search['functional']
