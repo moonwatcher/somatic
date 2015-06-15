@@ -1,11 +1,9 @@
 ##Import Data to R##
 
-somatic has a sub command that will export one or more survey objects to a compressed R file.
-
-for instance 
+After samples have been populated and survey objects where calculated somatic can export one or more survey objects to a compressed R file. for instance 
 
 ```
-somatic survey-R spffo33 spfmz33 spfpreb33
+somatic survey-r spffo33 spfmz33 spfpreb33
 ```
 
 To load the data into an R session simply type:
