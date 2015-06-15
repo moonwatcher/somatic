@@ -73,39 +73,6 @@ The matrices have the gene names as row and column labels.
 Here is an example session:
 
 ```
-
-
-
-
-[detached (from session 0)]
-ALBIREO:~ lg%                                                                                                                                                                                                                     ~
-ALBIREO:~ lg% cd                                                                                                                                                                                                                  ~
-ALBIREO:~ lg% cd thesis/R                                                                                                                                                                                                         ~
-ALBIREO:R lg% ls -la                                                                                                                                                                                                     ~/thesis/R
-total 182144
-drwxr-xr-x   2 lg  staff       102 Jun 15 07:08 .
-drwxr-xr-x  11 lg  staff       544 Jun 15 07:08 ..
--rw-r--r--   1 lg  staff  93250069 Jun 15 12:06 somatic.bz2
-ALBIREO:R lg% R                                                                                                                                                                                                          ~/thesis/R
-
-R version 3.2.0 (2015-04-16) -- "Full of Ingredients"
-Copyright (C) 2015 The R Foundation for Statistical Computing
-Platform: x86_64-apple-darwin14.3.0 (64-bit)
-
-R is free software and comes with ABSOLUTELY NO WARRANTY.
-You are welcome to redistribute it under certain conditions.
-Type 'license()' or 'licence()' for distribution details.
-
-  Natural language support but running in an English locale
-
-R is a collaborative project with many contributors.
-Type 'contributors()' for more information and
-'citation()' on how to cite R or R packages in publications.
-
-Type 'demo()' for some demos, 'help()' for on-line help, or
-'help.start()' for an HTML browser interface to help.
-Type 'q()' to quit R.
-
 > load('somatic.bz2')
 > summary(somatic)
           Length Class  Mode
