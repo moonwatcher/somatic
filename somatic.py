@@ -4034,6 +4034,62 @@ class Pipeline(object):
                 self.resolver.survey_save(survey)
         return survey
 
+    def survey_r_export(self, names):
+        from rpy2.robjects import numpy2ri, r, FloatVector, DataFrame, Matrix, ListVector, StrVector
+        from rpy2 import robjects
+        # from rpy2.robjects.numpy2ri import numpy2ri
+        # numpy2ri.activate()
+        
+        r(
+            """
+            setClass(
+                "Survey",
+                representation(
+                    vj="data.frame",
+                    vdj="data.frame",
+                    vj_correlation="matrix",
+                    vdj_correlation="list"
+                )
+            )
+            """
+        )
+        r('somatic <- list()')
+        for name in names:
+            survey = self.resolver.survey_find(name)
+            if survey:
+                rsurvey = {
+                    'vj': {},
+                    'vdj': {},
+                    'vdj correlation': {}
+                }
+                for k,v in survey.vj['feature'].items():
+                    rsurvey['vj'][k.replace(' ', '_').replace('-', '_')] = FloatVector(array(v, dtype="float64"))
+
+                for k,v in survey.vdj['feature'].items():
+                    rsurvey['vdj'][k.replace(' ', '_').replace('-', '_')] = FloatVector(array(v, dtype="float64"))
+
+                rsurvey['vj'] = DataFrame(rsurvey['vj'])
+                rsurvey['vdj'] = DataFrame(rsurvey['vdj'])
+                r.assign('vjdf', rsurvey['vj'])
+                r.assign('vdjdf', rsurvey['vdj'])
+
+                m = survey.slice['allele']['correlation']['vj']
+                rsurvey['vj correlation'] = robjects.r.matrix(FloatVector(m.T.ravel()), nrow=m.shape[0])
+                rsurvey['vj correlation'].rownames = StrVector(survey.lookup['allele']['JH']['label'])
+                rsurvey['vj correlation'].colnames = StrVector(survey.lookup['allele']['VH']['label'])
+                r.assign('vjc', rsurvey['vj correlation'])
+
+                for j in range(survey.slice['allele']['dimension']['JH']):
+                    m = survey.slice['allele']['correlation']['vdj'][j]
+                    rsurvey['vdj correlation'][str(j)] = robjects.r.matrix(FloatVector(m.T.ravel()), nrow=m.shape[0])
+                    rsurvey['vdj correlation'][str(j)].rownames = StrVector(survey.lookup['allele']['DH']['label'])
+                    rsurvey['vdj correlation'][str(j)].colnames = StrVector(survey.lookup['allele']['VH']['label'])
+                r.assign('vdjc', robjects.vectors.ListVector(rsurvey['vdj correlation']))
+                
+                r('survey <- new("Survey", vj=vjdf, vdj=vdjdf, vj_correlation=vjc, vdj_correlation=vdjc)')
+                r('somatic <- c(somatic, {}=survey)'.format(survey.name))
+        r('save(somatic, file="rdata.gz", compress=TRUE)')
+
     def plot(self, names):
         plot_name = []
         surveys = []
@@ -4376,6 +4432,9 @@ class Pipeline(object):
 
         elif cmd.action == 'plot':
             self.plot(cmd.instruction['names'])
+                
+        elif cmd.action == 'survey-R':
+            self.survey_r_export(cmd.instruction['names'])
                 
         elif cmd.action == 'count':
             self.sample_count(
