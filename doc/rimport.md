@@ -1,7 +1,18 @@
-##load##
+##Import Data to R##
+
+somatic has a sub command that will export one or more survey objects to a compressed R file.
+
+for instance 
+
+```
+somatic survey-R spffo33 spfmz33 spfpreb33
+```
+
 To load the data into an R session simply type:
 
-```load('somatic.gz')```
+```
+load('somatic.gz')
+```
 
 This will create a *List* variable in the R session called *somatic*.
 

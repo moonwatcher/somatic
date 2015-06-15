@@ -4433,7 +4433,7 @@ class Pipeline(object):
         elif cmd.action == 'plot':
             self.plot(cmd.instruction['names'])
                 
-        elif cmd.action == 'survey-R':
+        elif cmd.action == 'survey-r':
             self.survey_r_export(cmd.instruction['names'])
                 
         elif cmd.action == 'count':
