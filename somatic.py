@@ -18,6 +18,7 @@
 #
 
 import sys
+import os
 import logging
 import re
 import json
@@ -26,6 +27,7 @@ import io
 import hashlib
 import math
 import pymongo
+import pickle
 
 from numpy import *
 import matplotlib
@@ -58,1541 +60,6 @@ log_levels = {
     'warning': logging.WARNING,
     'error': logging.ERROR,
     'critical': logging.CRITICAL
-}
-
-configuration = {
-    'diagram': {
-        'prototype': {
-            'name': {
-                'format': lambda x: x,
-                'title': 'name',
-                'width': 'auto',
-                'value': 'gene'
-            },
-            'strain': {
-                'format': lambda x: x,
-                'title': 'strain',
-                'width': 'auto',
-                'value': 'strain',
-            },
-            'region': {
-                'format': lambda x: x,
-                'title': 'R',
-                'width': 'auto',
-                'value': 'region',
-            },
-            'functionality': {
-                'format': lambda x: x,
-                'title': 'F',
-                'width': 1,
-                'value': 'functionality',
-            },
-            'in frame': {
-                'format': lambda x: '*' if x else ' ',
-                'title': 'I',
-                'width': 1,
-                'value': 'in frame',
-            },
-            'picked': {
-                'format': lambda x: '*' if x else ' ',
-                'title': 'P',
-                'width': 1,
-                'value': 'picked',
-            },
-            'gapped': {
-                'format': lambda x: '*' if x else ' ',
-                'title': 'G',
-                'width': 1,
-                'value': 'gapped',
-            },
-            'strand': {
-                'format': lambda x: '+' if x else '-',
-                'title': 'S',
-                'width': 1,
-                'value': 'subject strand',
-            }
-        }
-    },
-    'profile': {
-        'all': {
-            'accession': {},
-            'gene': {},
-            'sample': {},
-            'diagram': {
-                'track': {},
-                'feature': [
-                    'region',
-                    'name',
-                    'strain',
-                    'strand',
-                    'functionality',
-                    'in frame',
-                    'gapped',
-                    'picked',
-                ]
-            },
-        },
-        'aligned': {
-            'gene': {
-                'aligned': True
-            },
-        },
-        'default': {
-            'library': {},
-            'accession': {},
-            'gene': {},
-            'sample': {
-                'valid': True
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True,
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                    'in frame',
-                    'gapped',
-                    'picked',
-                ]
-            },
-        },
-        'invalid': {
-            'sample': {
-                'valid': False,
-            },
-            'diagram': {
-                'track': {},
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'productive3033': {
-            'sample': {
-                'productive': True,
-                '$and': [ { 'average phred': { '$gt': 30 } }, { 'average phred': { '$lt': 33 } } ] 
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'productive': {
-            'sample': {
-                'productive': True,
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'nonproductive': {
-            'sample': {
-                'valid': True,
-                'productive': False,
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'productive33+': {
-            'sample': {
-                'productive': True,
-                'average phred': { '$gt': 33 },
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'nonproductive33+': {
-            'sample': {
-                'valid': True,
-                'productive': False,
-                'average phred': { '$gt': 33 },
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': True
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-        'droppedproductive': {
-            'sample': {
-                'productive': True,
-            },
-            'diagram': {
-                'track': {
-                    'valid': True,
-                    'picked': False
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                    'in frame',
-                ]
-            },
-        },
-        'gapped': {
-            'sample': {
-                'valid': True,
-                'gapped': True,
-            },
-            'diagram': {
-                'track': {
-                    'valid': False
-                },
-                'feature': [
-                    'region',
-                    'name',
-                    'functionality',
-                ]
-            },
-        },
-    },
-    'expression': {
-        'ncbi accession url': 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}',
-        'gapped sequence': re.compile('^\s+Query_[0-9]+\s+(?P<offset>[0-9]+)\s+(?P<sequence>[ATCGN-]+)\s+[0-9]+$'),
-        'blat hit': re.compile(
-            r"""
-            (?P<match>[^\t]+)\t
-            (?P<mismatch>[^\t]+)\t
-            (?P<repeat_match>[^\t]+)\t
-            (?P<n_count>[^\t]+)\t
-            (?P<inserts_in_query>[^\t]+)\t
-            (?P<inserted_base_in_query>[^\t]+)\t
-            (?P<inserts_in_target>[^\t]+)\t
-            (?P<inserted_base_in_target>[^\t]+)\t
-            (?P<query_strand>[^\t]+)\t
-            (?P<query_name>[^\t]+)\t
-            (?P<query_size>[^\t]+)\t
-            (?P<query_start>[^\t]+)\t
-            (?P<query_end>[^\t]+)\t
-            (?P<target_name>[^\t]+)\t
-            (?P<target_size>[^\t]+)\t
-            (?P<target_start>[^\t]+)\t
-            (?P<target_end>[^\t]+)\t
-            (?P<block_count>[^\t]+)\t
-            (?P<block_size>[^\t]+)\t
-            (?P<query_block_start>[^\t]+)\t
-            (?P<target_block_start>[^\t]+)
-            """,
-            re.VERBOSE
-        ),
-        'expand hit': re.compile(
-            r"""
-            (?P<region>VH|DH|JH),
-            (?P<subject_id>[^,]+),
-            (?P<query_start>[^,]+),
-            (?P<query_end>[^,]+),
-            (?P<subject_start>[^,]+),
-            (?P<subject_end>[^,]+),
-            (?P<gap_openings>[^,]+),
-            (?P<gaps>[^,]+),
-            (?P<mismatch>[^,]+),
-            (?P<identical>[^,]+),
-            (?P<bit_score>[^,]+),
-            (?P<evalue>[^,]+),
-            (?P<alignment_length>[^,]+),
-            (?P<subject_strand>[^,]),
-            (?P<query_strand>[^,])
-            """,
-            re.VERBOSE
-        ),
-        'igblast compressed hit': '{region},{subject id},{query start},{query end},{subject start},{subject end},{gap openings},{gaps},{mismatch},{identical},{bit score},{evalue},{alignment length},{subject strand},{query strand}',
-        'igblast hit': re.compile(
-            r"""
-            (?P<region>[VDJ])\t
-            (?:reversed\|)?(?:[^,]+)\t
-            (?P<subject_id>[^,]+)\t
-            (?P<query_start>[^,]+)\t
-            (?P<query_end>[^,]+)\t
-            (?P<subject_start>[^,]+)\t
-            (?P<subject_end>[^,]+)\t
-            (?P<gap_openings>[^,]+)\t
-            (?P<gaps>[^,]+)\t
-            (?P<mismatch>[^,]+)\t
-            (?P<identical>[^,]+)\t
-            (?P<bit_score>[^,]+)\t
-            (?P<evalue>[^,]+)\t
-            (?P<alignment_length>[^,]+)\t
-            (?P<subject_strand>[^,]+)
-            """,
-            re.VERBOSE
-        ),
-        'igblast reversed query': '# Note that your query represents the minus strand of a V gene and has been converted to the plus strand.',
-        'imgt fasta header': re.compile(
-            r"""
-            ^>
-            (?P<accession>[^|]*)\|
-            (?P<allele_name>(?P<gene_name>(?P<subgroup>[^-]+)[^\*]+)\*[0-9]+)\|
-            (?P<organism_name>[^|_]*)(?:_(?P<strain>[^|]+))?\|
-            (?P<functionality>[\[\(]?(?:F|ORF|P)[\]\)]?)\|
-            (?P<region>V|D|J)-REGION\|
-            (?:(?P<start>[0-9]+)\.\.(?P<end>[0-9]+))?\s*\|
-            (?P<length>[0-9]+)\snt\|
-            (?P<read_frame>[123]|NR)\|
-            [^|]*\|
-            [^|]*\|
-            [^|]*\|
-            [^|]*\|
-            [^|]*\|
-            [^|]*\|
-            (?P<polarity>rev-compl)?\s*\|$
-            """,
-            re.VERBOSE
-        ),
-        'nucleotide sequence': re.compile('^[ACGTRYKMSWBDHVN]+$', re.IGNORECASE)
-    },
-    'fasta header': {
-        'imgt accession': re.compile(
-            r"""
-            ^>
-            (?P<accession_number>[^ ]+)\s
-            (?P<description>.*)$
-            """,
-            re.VERBOSE
-        ),
-        'ncbi accession': re.compile(
-            r"""
-            ^>gi\|
-            [0-9]+\|
-            [a-z]+\|
-            (?P<accession_number>[^\.]+)+
-            \.(?P<accession_version>[0-9]+)\|
-            (?P<description>.*)$
-            """,
-            re.VERBOSE
-        ),
-        'imgt gene': re.compile(
-            r"""
-            ^>
-            (?P<accession>[^|]*)\|
-            (?P<allele_name>(?P<gene_name>(?P<subgroup>[^-]+)[^\*]+)\*[0-9]+)\|
-            (?P<organism_name>[^|_]*)(?:_(?P<strain>[^|]+))?\|
-            (?P<functionality>[\[\(]?(?:F|ORF|P)[\]\)]?)\|
-            (?P<region>V|D|J)-REGION\|
-            (?:(?P<start>[0-9]+)\.\.(?P<end>[0-9]+))?\s*\|
-            (?P<length>[0-9]+)\snt\|
-            (?P<read_frame>[123]|NR)\|
-            [^|]*\|
-            [^|]*\|
-            [^|]*\|
-            [^|]*\|
-            [^|]*\|
-            [^|]*\|
-            (?P<polarity>rev-compl)?\s*\|$
-            """,
-            re.VERBOSE
-        ),
-    },
-    'command': {
-        'blat': {
-            'cwd': '/Users/lg/code/somatic/db',
-            'arguments': [
-                '/Users/lg/code/somatic/bin/blat',
-                '-noHead',
-                'chr12.fa',
-                'stdin',
-                'stdout',
-                '-minIdentity=98'
-            ]
-        },
-        'igblast': {
-            'cwd': '/Users/lg/code/somatic/db/igblast',
-            'arguments': [
-                '/Users/lg/code/somatic/bin/igblastn',
-                '-germline_db_V', 'database/mouse_c57bl6_ighv',
-                '-germline_db_J', 'database/mouse_c57bl6_ighj',
-                '-germline_db_D', 'database/mouse_c57bl6_ighd',
-                '-num_alignments_V', '3',
-                '-num_alignments_J', '3',
-                '-num_alignments_D', '5',
-                '-organism', 'mouse',
-                '-domain_system', 'imgt',
-                '-query', '-',
-                '-auxiliary_data', 'optional_file/mouse_gl.aux',
-                '-show_translation',
-                '-outfmt',
-                '7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand',
-            ]
-        },
-        'igblast.gapped': {
-            'cwd': '/Users/lg/code/somatic/db/igblast',
-            'arguments': [
-                '/Users/lg/code/somatic/bin/igblastn',
-                '-germline_db_V', 'database/mouse_c57bl6_ighv',
-                '-germline_db_J', 'database/mouse_c57bl6_ighj',
-                '-germline_db_D', 'database/mouse_c57bl6_ighd',
-                '-num_alignments_V', '3',
-                '-num_alignments_J', '3',
-                '-num_alignments_D', '5',
-                '-organism', 'mouse',
-                '-domain_system', 'imgt',
-                '-query', '-',
-                '-auxiliary_data', 'optional_file/mouse_gl.aux',
-                '-show_translation',
-                '-outfmt', '4',
-            ]
-        }
-    },
-    'interface': {
-        'global': {
-            'argument': [
-                'version',
-                'verbosity'
-            ]
-        },
-        'instruction': {
-            'description': 'Lior Galanti lior.galanti@nyu.edu NYU Center for Genomics & Systems Biology'
-        },
-        'prototype': {
-            'alignment': {
-                'flag': [
-                    '-A',
-                    '--alignment'
-                ],
-                'parameter': {
-                    'action': 'store_true',
-                    'dest': 'alignment',
-                    'help': 'print alignment diagram'
-                }
-            },
-            'distance': {
-                'flag': [
-                    '--distance'
-                ],
-                'parameter': {
-                    'default': 0,
-                    'type': 'int',
-                    'dest': 'distance',
-                    'help': 'max distance allowed to stretch gene boundaries'
-                }
-            },
-            'limit': {
-                'flag': [
-                    '-L',
-                    '--limit'
-                ],
-                'parameter': {
-                    'type': 'int',
-                    'dest': 'limit',
-                    'help': 'max results to return'
-                }
-            },
-            'skip': {
-                'flag': [
-                    '-S',
-                    '--skip'
-                ],
-                'parameter': {
-                    'type': 'int',
-                    'dest': 'skip',
-                    'help': 'skip the first SKIP results'
-                }
-            },
-            'flanking': {
-                'flag': [
-                    '-F',
-                    '--flanking'
-                ],
-                'parameter': {
-                    'default': 0,
-                    'type': 'int',
-                    'dest': 'flanking',
-                    'help': 'include flanking region on each side'
-                }
-            },
-            'gapped': {
-                'flag': [
-                    '-G',
-                    '--gapped'
-                ],
-                'parameter': {
-                    'choices': [
-                        'Y',
-                        'N'
-                    ],
-                    'dest': 'gapped',
-                    'help': 'gapped alignment'
-                }
-            },
-            'drop': {
-                'flag': [
-                    '-D',
-                    '--drop'
-                ],
-                'parameter': {
-                    'action': 'store_true',
-                    'dest': 'drop',
-                    'help': 'drop library items'
-                }
-            },
-            'strain': {
-                'flag': [
-                    '--strain'
-                ],
-                'parameter': {
-                    'dest': 'strain',
-                    'help': 'strain'
-                }
-            },
-            'title': {
-                'flag': [
-                    '--title'
-                ],
-                'parameter': {
-                    'dest': 'title',
-                    'help': 'title'
-                }
-            },
-            'id': {
-                'flag': [
-                    '-d',
-                    '--id'
-                ],
-                'parameter': {
-                    'dest': 'id',
-                    'help': 'sample id',
-                    'metavar': 'ID'
-                }
-            },
-            'in frame': {
-                'flag': [
-                    '-F',
-                    '--in-frame'
-                ],
-                'parameter': {
-                    'choices': [
-                        'Y',
-                        'N'
-                    ],
-                    'dest': 'in frame',
-                    'help': 'in frame alignment'
-                }
-            },
-            'productive': {
-                'flag': [
-                    '-P',
-                    '--productive'
-                ],
-                'parameter': {
-                    'choices': [
-                        'Y',
-                        'N'
-                    ],
-                    'dest': 'productive',
-                    'help': 'productive alignment'
-                }
-            },
-            'functionality': {
-                'flag': [
-                    '--functionality'
-                ],
-                'parameter': {
-                    'choices': [
-                        'F',
-                        'O',
-                        'P'
-                    ],
-                    'dest': 'functionality',
-                    'help': 'gene functionality'
-                }
-            },
-            'json': {
-                'flag': [
-                    '-J',
-                    '--json'
-                ],
-                'parameter': {
-                    'action': 'store_true',
-                    'dest': 'json',
-                    'help': 'print json info'
-                }
-            },
-            'library': {
-                'flag': [
-                    '-l',
-                    '--library'
-                ],
-                'parameter': {
-                    'dest': 'library',
-                    'help': 'library name',
-                    'metavar': 'NAME'
-                }
-            },
-            'format': {
-                'flag': [
-                    '-f',
-                    '--format'
-                ],
-                'parameter': {
-                    'choices': [
-                        'imgt',
-                        'ncbi'
-                    ],
-                    'dest': 'format',
-                    'help': 'fasta header format'
-                }
-            },
-            'path': {
-                'flag': [
-                    'path'
-                ],
-                'parameter': {
-                    'help': 'file paths',
-                    'metavar': 'PATH',
-                    'nargs': '*'
-                }
-            },
-            'query': {
-                'flag': [
-                    'query'
-                ],
-                'parameter': {
-                    'help': 'query id',
-                    'metavar': 'UUID',
-                    'nargs': '*'
-                }
-            },
-            'premature': {
-                'flag': [
-                    '-T',
-                    '--premature'
-                ],
-                'parameter': {
-                    'choices': [
-                        'Y',
-                        'N'
-                    ],
-                    'dest': 'premature',
-                    'help': 'premature termination alignment'
-                }
-            },
-            'region': {
-                'flag': [
-                    '-r',
-                    '--region'
-                ],
-                'parameter': {
-                    'choices': [
-                        'VH',
-                        'DH',
-                        'JH'
-                    ],
-                    'dest': 'region',
-                    'help': 'region'
-                }
-            },
-            'profile': {
-                'flag': [
-                    '-p',
-                    '--profile'
-                ],
-                'parameter': {
-                    'default': 'default',
-                    'choices': None,
-                    'metavar': 'NAME',
-                    'dest': 'profile',
-                    'help': 'profile is one of default, productive, productive.dropped, psudo, premature, inframe, outframe'
-                }
-            },
-            'valid': {
-                'flag': [
-                    '-V',
-                    '--valid'
-                ],
-                'parameter': {
-                    'choices': [
-                        'Y',
-                        'N'
-                    ],
-                    'dest': 'valid',
-                    'help': 'valid alignment'
-                }
-            },
-            'verbosity': {
-                'flag': [
-                    '-v',
-                    '--verbosity'
-                ],
-                'parameter': {
-                    'choices': [
-                        'debug',
-                        'info',
-                        'warning',
-                        'error',
-                        'critical'
-                    ],
-                    'default': 'info',
-                    'dest': 'verbosity',
-                    'help': 'logging verbosity level',
-                    'metavar': 'LEVEL'
-                }
-            },
-            'version': {
-                'flag': [
-                    '--version'
-                ],
-                'parameter': {
-                    'action': 'version',
-                    'version': '%(prog)s 1.0'
-                }
-            },
-            'table': {
-                'flag': [
-                    '--table'
-                ],
-                'parameter': {
-                    'dest': 'table',
-                    'help': 'table name',
-                    'nargs': '*'
-                }
-            },
-        },
-        'section': {
-            'action': [
-                {
-                    'argument': [
-                        'library',
-                        'strain',
-                        'drop'
-                    ],
-                    'instruction': {
-                        'description': 'match each read in file to regions with igblast and store results in the library. takes data from stdin',
-                        'help': 'populate samples for library',
-                        'name': 'populate'
-                    }
-                },
-                {
-                    'argument': [
-                        'library'
-                    ],
-                    'instruction': {
-                        'description': 'remove all samples for the provided library name',
-                        'help': 'drop samples of a given library',
-                        'name': 'drop'
-                    }
-                },
-                {
-                    'argument': [
-                        'profile',
-                        'library',
-                        'id',
-                        'gapped',
-                        'valid',
-                        'in frame',
-                        'premature',
-                        'limit',
-                        'skip',
-                        'productive',
-                    ],
-                    'instruction': {
-                        'help': 'view sample alignment',
-                        'name': 'view'
-                    }
-                },
-                {
-                    'argument': [
-                        'profile',
-                        'library',
-                        'id',
-                        'gapped',
-                        'valid',
-                        'in frame',
-                        'premature',
-                        'productive',
-                    ],
-                    'instruction': {
-                        'help': 'count sample alignment',
-                        'name': 'count'
-                    }
-                },
-                {
-                    'argument': [
-                        'profile',
-                        'library',
-                        'id',
-                        'gapped',
-                        'valid',
-                        'in frame',
-                        'premature',
-                        'limit',
-                        'skip',
-                        'productive',
-                    ],
-                    'instruction': {
-                        'help': 'print sample fasta stream',
-                        'name': 'fasta'
-                    }
-                },
-                {
-                    'argument': [
-                        'profile',
-                        'library',
-                        'id',
-                        'gapped',
-                        'valid',
-                        'in frame',
-                        'premature',
-                        'limit',
-                        'skip',
-                        'productive',
-                    ],
-                    'instruction': {
-                        'help': 'print sample fastq stream',
-                        'name': 'fastq'
-                    }
-                },
-                {
-                    'argument': [
-                        'profile',
-                        'library',
-                        'id',
-                        'gapped',
-                        'valid',
-                        'in frame',
-                        'premature',
-                        'limit',
-                        'skip',
-                        'productive',
-                    ],
-                    'instruction': {
-                        'help': 'view JSON sample record',
-                        'name': 'info'
-                    }
-                },
-                {
-                    'argument': [
-                        'profile',
-                        'library',
-                        'id',
-                        'gapped',
-                        'valid',
-                        'in frame',
-                        'premature',
-                        'limit',
-                        'skip',
-                        'productive',
-                    ],
-                    'instruction': {
-                        'help': 'calculate statistic for records',
-                        'name': 'statistic'
-                    }
-                },
-                {
-                    'argument': [
-                        'profile',
-                        'library',
-                        'id',
-                        'gapped',
-                        'valid',
-                        'in frame',
-                        'premature',
-                        'limit',
-                        'skip',
-                        'productive',
-                    ],
-                    'instruction': {
-                        'help': 'draw plots',
-                        'name': 'plot'
-                    }
-                },
-                {
-                    'argument': [
-                        'query'
-                    ],
-                    'instruction': {
-                        'help': 'draw compared plots',
-                        'name': 'plot-compare'
-                    }
-                },
-                {
-                    'argument': [
-                        'path'
-                    ],
-                    'instruction': {
-                        'help': 'load library definition from JSON file',
-                        'name': 'library-populate'
-                    }
-                },
-                {
-                    'argument': [
-                        'strain',
-                        'profile',
-                        'id'
-                    ],
-                    'instruction': {
-                        'help': 'view JSON library records',
-                        'name': 'library-info'
-                    }
-                },
-                {
-                    'argument': [
-                        'path'
-                    ],
-                    'instruction': {
-                        'help': 'load gene sequences from JSON file',
-                        'name': 'gene-populate'
-                    }
-                },
-                {
-                    'argument': [
-                        'region',
-                        'strain',
-                        'profile',
-                        'id'
-                    ],
-                    'instruction': {
-                        'help': 'view JSON gene records',
-                        'name': 'gene-info'
-                    }
-                },
-                {
-                    'argument': [
-                        'region',
-                        'strain',
-                        'profile',
-                        'id',
-                        'title',
-                        'functionality'
-                    ],
-                    'instruction': {
-                        'help': 'print genes html diagram',
-                        'name': 'gene-html'
-                    }
-                },
-                {
-                    'argument': [
-                        'region',
-                        'strain',
-                        'profile',
-                        'id',
-                        'flanking',
-                        'distance',
-                    ],
-                    'instruction': {
-                        'help': 'verify gene RSS',
-                        'name': 'gene-rss'
-                    }
-                },
-                {
-                    'argument': [
-                        'region',
-                        'strain',
-                        'profile',
-                        'id'
-                    ],
-                    'instruction': {
-                        'help': 'count gene records',
-                        'name': 'gene-count'
-                    }
-                },
-                {
-                    'argument': [
-                        'region',
-                        'strain',
-                        'profile',
-                        'id',
-                        'flanking',
-                    ],
-                    'instruction': {
-                        'help': 'align gene sequences to genome',
-                        'name': 'gene-align'
-                    }
-                },
-                {
-                    'argument': [
-                        'region',
-                        'strain',
-                        'profile',
-                        'id',
-                        'flanking',
-                        'limit',
-                        'functionality'
-                    ],
-                    'instruction': {
-                        'help': 'dump gene sequences to fasta',
-                        'name': 'gene-fasta'
-                    }
-                },
-                {
-                    'argument': [
-                        'format',
-                        'profile',
-                        'strain',
-                        'id',
-                    ],
-                    'instruction': {
-                        'help': 'dump accession sequences to fasta',
-                        'name': 'accession-fasta'
-                    }
-                },
-                {
-                    'argument': [
-                        'region',
-                        'strain',
-                        'profile',
-                        'id',
-                    ],
-                    'instruction': {
-                        'help': 'dump gene sequences to igblast auxiliary file',
-                        'name': 'gene-igblast-aux'
-                    }
-                },
-                {
-                    'argument': [
-                        'table',
-                    ],
-                    'instruction': {
-                        'help': 'rebuild database indexes',
-                        'name': 'rebuild'
-                    }
-                },
-                {
-                    'argument': [
-                        'profile',
-                        'library',
-                        'strain',
-                        'json',
-                        'alignment'
-                    ],
-                    'instruction': {
-                        'help': 'process alignment without updating the database',
-                        'name': 'simulate'
-                    }
-                },
-            ],
-            'instruction': {
-                'description': '',
-                'dest': 'action',
-                'help': None,
-                'metavar': 'ACTION',
-                'title': 'pipeline operations'
-            }
-        }
-    },
-    'iupac amino acid notation': {
-        'A': {  'code':'ala',   'weight': 89,   'charge': 1.8,  'name': 'Alanine' },
-        'R': {  'code':'arg',   'weight': 174,  'charge': -4.5, 'name': 'Arginine' },
-        'N': {  'code':'asn',   'weight': 132,  'charge': -3.5, 'name': 'Asparagine' },
-        'D': {  'code':'asp',   'weight': 133,  'charge': -3.5, 'name': 'Aspartic acid' },
-        'C': {  'code':'cys',   'weight': 121,  'charge': 2.5,  'name': 'Cysteine' },
-        'Q': {  'code':'gln',   'weight': 146,  'charge': -3.5, 'name': 'Glutamine' },
-        'E': {  'code':'glu',   'weight': 147,  'charge': -3.5, 'name': 'Glutamic acid' },
-        'G': {  'code':'gly',   'weight': 75,   'charge': -0.4, 'name': 'Glycine' },
-        'H': {  'code':'his',   'weight': 155,  'charge': -3.2, 'name': 'Histidine' },
-        'I': {  'code':'ile',   'weight': 131,  'charge': 4.5,  'name': 'Isoleucine' },
-        'L': {  'code':'leu',   'weight': 131,  'charge': 3.8,  'name': 'Leucine' },
-        'K': {  'code':'lys',   'weight': 146,  'charge': -3.9, 'name': 'Lysine' },
-        'M': {  'code':'met',   'weight': 149,  'charge': 1.9,  'name': 'Methionine' },
-        'F': {  'code':'phe',   'weight': 165,  'charge': 2.8,  'name': 'Phenylalanine' },
-        'P': {  'code':'pro',   'weight': 115,  'charge': -1.6, 'name': 'Proline' },
-        'S': {  'code':'ser',   'weight': 105,  'charge': -0.8, 'name': 'Serine' },
-        'T': {  'code':'thr',   'weight': 119,  'charge': -0.7, 'name': 'Threonine' },
-        'W': {  'code':'trp',   'weight': 204,  'charge': -0.9, 'name': 'Tryptophan' },
-        'Y': {  'code':'tyr',   'weight': 181,  'charge': -1.3, 'name': 'Tyrosine' },
-        'V': {  'code':'val',   'weight': 117,  'charge': 4.2,  'name': 'Valine' },
-        'B': {  'code':'asx',                                   'name': 'Aspartic acid or Asparagine' },
-        'Z': {  'code':'glx',                                   'name': 'Glutamine or Glutamic acid' },
-        'J': {  'code':'xle',                                   'name': 'Leucine or Isoleucine' },
-        'X': {  'code':'xaa',                                   'name': 'Any amino acid' },
-        '*': {  'code':'stop',                                  'name': 'Stop codon' },
-    },
-    'iupac nucleic acid notation': {
-        'A': {  'reverse': 'T',  'option':[ 'A' ],                  'name': 'Adenine' },
-        'C': {  'reverse': 'G',  'option':[ 'C' ],                  'name': 'Cytosine' },
-        'G': {  'reverse': 'C',  'option':[ 'G' ],                  'name': 'Guanine' },
-        'T': {  'reverse': 'A',  'option':[ 'T' ],                  'name': 'Thymine' },
-        'R': {  'reverse': 'Y',  'option':[ 'G', 'A' ],             'name': 'Purine' },
-        'Y': {  'reverse': 'R',  'option':[ 'T', 'C' ],             'name': 'Pyrimidine' },
-        'K': {  'reverse': 'M',  'option':[ 'G', 'T' ],             'name': 'Keto' },
-        'M': {  'reverse': 'K',  'option':[ 'A', 'C' ],             'name': 'Amino' },
-        'S': {  'reverse': 'S',  'option':[ 'G', 'C' ],             'name': 'Strong bonds' },
-        'W': {  'reverse': 'W',  'option':[ 'A', 'T' ],             'name': 'Weak bonds' },
-        'B': {  'reverse': 'V',  'option':[ 'G', 'T', 'C' ],        'name': 'Not A' },
-        'D': {  'reverse': 'H',  'option':[ 'G', 'A', 'T' ],        'name': 'Not C' },
-        'H': {  'reverse': 'D',  'option':[ 'A', 'C', 'T' ],        'name': 'Not G' },
-        'V': {  'reverse': 'B',  'option':[ 'G', 'C', 'A' ],        'name': 'Not T' },
-        'N': {  'reverse': 'N',  'option':[ 'A', 'G', 'C', 'T' ],   'name': 'Any' }
-    },
-    'nucleic to amino': {
-        'GCT':'A',
-        'GCC':'A',
-        'GCA':'A',
-        'GCG':'A',
-        'TTA':'L',
-        'TTG':'L',
-        'CTT':'L',
-        'CTC':'L',
-        'CTA':'L',
-        'CTG':'L',
-        'CGT':'R',
-        'CGC':'R',
-        'CGA':'R',
-        'CGG':'R',
-        'AGA':'R',
-        'AGG':'R',
-        'AAA':'K',
-        'AAG':'K',
-        'AAT':'N',
-        'AAC':'N',
-        'ATG':'M',
-        'GAT':'D',
-        'GAC':'D',
-        'TTT':'F',
-        'TTC':'F',
-        'TGT':'C',
-        'TGC':'C',
-        'CCT':'P',
-        'CCC':'P',
-        'CCA':'P',
-        'CCG':'P',
-        'CAA':'Q',
-        'CAG':'Q',
-        'TCT':'S',
-        'TCC':'S',
-        'TCA':'S',
-        'TCG':'S',
-        'AGT':'S',
-        'AGC':'S',
-        'GAA':'E',
-        'GAG':'E',
-        'ACT':'T',
-        'ACC':'T',
-        'ACA':'T',
-        'ACG':'T',
-        'GGT':'G',
-        'GGC':'G',
-        'GGA':'G',
-        'GGG':'G',
-        'TGG':'W',
-        'CAT':'H',
-        'CAC':'H',
-        'TAT':'Y',
-        'TAC':'Y',
-        'ATT':'I',
-        'ATC':'I',
-        'ATA':'I',
-        'GTT':'V',
-        'GTC':'V',
-        'GTA':'V',
-        'GTG':'V',
-        'TAA':'*',
-        'TGA':'*',
-        'TAG':'*',
-    },
-    'histogram': {
-        'CDR3 length':  { 'bins': 40, 'range': (0,120) },
-        'CDR3 charge':  { 'bins': 80, 'range': (-80,80) },
-        'CDR3 weight':  { 'bins': 50, 'range': (0,5000) },
-        'chew':         { 'bins': 50, 'range': (0,50) },
-
-        'V 3 chew':     { 'bins': 50, 'range': (0,50) },
-        'J 5 chew':     { 'bins': 50, 'range': (0,50) },
-        'D 3 chew':     { 'bins': 50, 'range': (0,50) },
-        'D 5 chew':     { 'bins': 50, 'range': (0,50) },
-
-        'V-D length':   { 'bins': 50, 'range': (0,50) },
-        'D-J length':   { 'bins': 50, 'range': (0,50) },
-        'V-J length':   { 'bins': 50, 'range': (0,50) },
-
-        'V-D N count':  { 'bins': 50, 'range': (0,50) },
-        'D-J N count':  { 'bins': 50, 'range': (0,50) },
-        'V-J N count':  { 'bins': 50, 'range': (0,50) },
-        'N count':      { 'bins': 50, 'range': (0,50) },
-
-        'V-D P count':  { 'bins': 50, 'range': (0,50) },
-        'D-J P count':  { 'bins': 50, 'range': (0,50) },
-        'V-J P count':  { 'bins': 50, 'range': (0,50) },
-        'P count':      { 'bins': 50, 'range': (0,50) },
-    },
-    'constant': {
-        'buffer size': 32,
-        'fasta line length': 80,
-    },
-    'region': {
-        'VH': {
-            'name': 'VH',
-            'minimum identity': 0.7,
-            'minimum alignment': 45
-        },
-        'DH': {
-            'name': 'DH',
-            'minimum identity': 0.7,
-            'minimum alignment': 4,
-            'overlap penalty factor': 0.5,
-        },
-        'JH': {
-            'name': 'JH',
-            'minimum identity': 0.8,
-            'minimum alignment': 30
-        }
-    },
-    'table': {
-        'ncbi_accession': {
-            'collection': 'ncbi_accession',
-            'index': [
-                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'accession id' }
-            ]
-        },
-        'accession': {
-            'collection': 'accession',
-            'index': [
-                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'accession id' },
-                { 'key': [( 'head.organism name', ASCENDING )], 'unique': False, 'name': 'accession organism name' },
-                { 'key': [( 'head.strain', ASCENDING )], 'unique': False, 'name': 'accession strain' },
-                { 'key': [( 'head.format', ASCENDING )], 'unique': False, 'name': 'accession format' },
-            ]
-        },
-        'gene': {
-            'collection': 'gene',
-            'index': [
-                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'gene id' },
-                { 'key': [( 'head.accession', ASCENDING )], 'unique': False, 'name': 'gene accession' },
-                { 'key': [( 'head.organism name', ASCENDING )], 'unique': False, 'name': 'gene organism name' },
-                { 'key': [( 'head.region', ASCENDING )], 'unique': False, 'name': 'gene region' },
-                { 'key': [( 'head.verified', ASCENDING )], 'unique': False, 'name': 'gene verified' },
-                { 'key': [( 'head.functionality', ASCENDING )], 'unique': False, 'name': 'gene functionality' },
-            ]
-        },
-        'sample': {
-            'collection': 'sample',
-            'index': [
-                {   'key': [( 'head.id', ASCENDING )], 'unique': False, 'name': 'sample id' },
-                {   'key': [( 'head.valid', ASCENDING )], 'unique': False, 'name': 'sample valid' },
-                {   'key': [( 'head.gapped', ASCENDING )], 'unique': False, 'name': 'sample gapped' },
-                {   'key': [( 'head.library', ASCENDING )], 'unique': False, 'name': 'sample library' },
-                {
-                    'key': [
-                        ( 'head.id', ASCENDING ),
-                        ( 'head.library', ASCENDING ),
-                    ],
-                    'unique': True,
-                    'name': 'unique sample in library'
-                },
-                {
-                    'key': [
-                        ( 'head.valid', ASCENDING ),
-                        ( 'head.library', ASCENDING ),
-                    ],
-                    'unique': False,
-                    'name': 'valid sample with library'
-                },
-                {
-                    'key': [
-                        ( 'head.library', ASCENDING ),
-                        ( 'head.valid', ASCENDING ),
-                        ( 'head.productive', ASCENDING ),
-                    ],
-                    'unique': False,
-                    'name': 'valid productive sample with library'
-                },
-                {
-                    'key': [
-                        ( 'head.library', ASCENDING ),
-                        ( 'head.valid', ASCENDING ),
-                        ( 'head.productive', ASCENDING ),
-                        ( 'head.average phred', ASCENDING ),
-                    ],
-                    'unique': False,
-                    'name': 'valid productive sample with phred and library'
-                },
-            ]
-        },
-        'library': {
-            'collection': 'library',
-            'index': [
-                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'library id' }
-            ]
-        },
-        'statistic': {
-            'collection': 'statistic',
-            'index': [
-                { 'key': [( 'head.id', ASCENDING )], 'unique': True, 'name': 'statistic id' }
-            ]
-        }
-    },
-    'scale': {
-        'color': [
-            '#00007F', '#000083', '#000087', '#00008B', '#00008F', '#000093', '#000097', '#00009B',
-            '#00009F', '#0000A3', '#0000A7', '#0000AB', '#0000AF', '#0000B3', '#0000B7', '#0000BB',
-            '#0000BF', '#0000C3', '#0000C7', '#0000CB', '#0000CF', '#0000D3', '#0000D7', '#0000DB',
-            '#0000DF', '#0000E3', '#0000E7', '#0000EB', '#0000EF', '#0000F3', '#0000F7', '#0000FB',
-            '#0000FF', '#0004FF', '#0008FF', '#000CFF', '#0010FF', '#0014FF', '#0018FF', '#001CFF',
-            '#0020FF', '#0024FF', '#0028FF', '#002CFF', '#0030FF', '#0034FF', '#0038FF', '#003CFF',
-            '#0040FF', '#0044FF', '#0048FF', '#004CFF', '#0050FF', '#0054FF', '#0058FF', '#005CFF',
-            '#0060FF', '#0064FF', '#0068FF', '#006CFF', '#0070FF', '#0074FF', '#0078FF', '#007CFF',
-            '#0080FF', '#0084FF', '#0088FF', '#008CFF', '#0090FF', '#0094FF', '#0098FF', '#009CFF',
-            '#00A0FF', '#00A4FF', '#00A8FF', '#00ACFF', '#00B0FF', '#00B4FF', '#00B8FF', '#00BCFF',
-            '#00C0FF', '#00C4FF', '#00C8FF', '#00CCFF', '#00D0FF', '#00D4FF', '#00D8FF', '#00DCFF',
-            '#00E0FF', '#00E4FF', '#00E8FF', '#00ECFF', '#00F0FF', '#00F4FF', '#00F8FF', '#00FCFF',
-            '#01FFFD', '#05FFF9', '#09FFF5', '#0DFFF1', '#11FFED', '#15FFE9', '#19FFE5', '#1DFFE1',
-            '#21FFDD', '#25FFD9', '#29FFD5', '#2DFFD1', '#31FFCD', '#35FFC9', '#39FFC5', '#3DFFC1',
-            '#41FFBD', '#45FFB9', '#49FFB5', '#4DFFB1', '#51FFAD', '#55FFA9', '#59FFA5', '#5DFFA1',
-            '#61FF9D', '#65FF99', '#69FF95', '#6DFF91', '#71FF8D', '#75FF89', '#79FF85', '#7DFF81',
-            '#81FF7D', '#85FF79', '#89FF75', '#8DFF71', '#91FF6D', '#95FF69', '#99FF65', '#9DFF61',
-            '#A1FF5D', '#A5FF59', '#A9FF55', '#ADFF51', '#B1FF4D', '#B5FF49', '#B9FF45', '#BDFF41',
-            '#C1FF3D', '#C5FF39', '#C9FF35', '#CDFF31', '#D1FF2D', '#D5FF29', '#D9FF25', '#DDFF21',
-            '#E1FF1D', '#E5FF19', '#E9FF15', '#EDFF11', '#F1FF0D', '#F5FF09', '#F9FF05', '#FDFF01',
-            '#FFFC00', '#FFF800', '#FFF400', '#FFF000', '#FFEC00', '#FFE800', '#FFE400', '#FFE000',
-            '#FFDC00', '#FFD800', '#FFD400', '#FFD000', '#FFCC00', '#FFC800', '#FFC400', '#FFC000',
-            '#FFBC00', '#FFB800', '#FFB400', '#FFB000', '#FFAC00', '#FFA800', '#FFA400', '#FFA000',
-            '#FF9C00', '#FF9800', '#FF9400', '#FF9000', '#FF8C00', '#FF8800', '#FF8400', '#FF8000',
-            '#FF7C00', '#FF7800', '#FF7400', '#FF7000', '#FF6C00', '#FF6800', '#FF6400', '#FF6000',
-            '#FF5C00', '#FF5800', '#FF5400', '#FF5000', '#FF4C00', '#FF4800', '#FF4400', '#FF4000',
-            '#FF3C00', '#FF3800', '#FF3400', '#FF3000', '#FF2C00', '#FF2800', '#FF2400', '#FF2000',
-            '#FF1C00', '#FF1800', '#FF1400', '#FF1000', '#FF0C00', '#FF0800', '#FF0400', '#FF0000',
-            '#FB0000', '#F70000', '#F30000', '#EF0000', '#EB0000', '#E70000', '#E30000', '#DF0000',
-            '#DB0000', '#D70000', '#D30000', '#CF0000', '#CB0000', '#C70000', '#C30000', '#BF0000',
-            '#BB0000', '#B70000', '#B30000', '#AF0000', '#AB0000', '#A70000', '#A30000', '#9F0000',
-            '#9B0000', '#970000', '#930000', '#8F0000', '#8B0000', '#870000', '#830000', '#7F0000',
-        ]
-    },
-    'database': {
-        'database': 'somatic', 
-        'host': 'albireo.bio.nyu.edu', 
-        'password': 'fPWZq8nCVizzHloVDhs=', 
-        'username': 'somatic'
-    },
-    'rss': {
-        'VH': {
-            'leniency': 8,
-            'spacer': 23,
-            'nonamer': [
-                'CCAGGGCTG',
-                'GCAAAAACC',
-                'ACAAAAACT',
-                'TCAAAAACT',
-                'ACAAAAATA',
-                'GAATAAGTA',
-                'ACAAAAACA',
-                'ACAAAAACC',
-                'ACCCTCTAA',
-                'AAAAAAACC',
-                'ACAAAATGC',
-                'ACAAGAACC',
-                'ACAATAACT',
-                'TCAAGAACC',
-                'ACATAAACC',
-                'AAAAAAAAT',
-                'ACAGAAACC',
-                'ACAAAATCC',
-                'ACACAAACT',
-                'ACACAAACC',
-                'ACATAAATC',
-                'ATTAACCTG',
-                'ACATAAACA',
-                'AGAAAAACT',
-                'TAAAAAAAA',
-                'TAAAAAAAC',
-                'GCAAAAATC',
-                'AGCACTCAA',
-                'ACTGAAAGA',
-                'TCAGAAAAC',
-                'TCAGAAACC',
-                'CAGAAACCC',                
-                'GCAGAAACC',
-                'AACTTAATC',
-                'CTTCCTGAC',
-                'ACAGAAAGG',
-                'AGAAAGTGA',
-                'GCATAAACC',
-                'ATATAAGAA',
-                'ACCCAAACC',
-                'ACCTAAACC',
-                'GCACAAACC',
-                'AAGAAAACC',
-                'ACAAAAATC',
-                'ACACAGACC',
-                'TCAAAAACC',
-                'ACATAAACT',
-                'ACAAAACCC',
-                'ACATGAACC',
-                'CAGAAAACT',
-                'CAGAAATCC',
-                'CAGAAAACA',
-                'TAGTAATCC',
-                'CAGAAAACC',
-                'TCAGAAATC',
-                'CCAAACACA',
-                'ACAGTATTT',
-                'CACAAAACC',
-                'ACAGTAATT',
-                'TACAGTATT',
-                'CTGAAAACC',
-                'AAAGTATTT',
-                'TCAGAAACT',
-                'ACAGAAACT',
-                'GCAATAGTT',
-                'CAAAAAACC',
-                'TCAAAACCC',
-                'CAGTAATAC',
-                'CATAAACTC',
-                'CAGAAACAC',
-                'TCAGAAACA',
-                'CATCTGTAC',
-                'TCCAAAACC',
-                'TCAAAAAGT',
-                'TCATAAACC',
-                'ACTAAAACC',
-                'ACAAAAATT',
-                'ACAAATACT',
-                'ATAGTAATT',
-                'CCACAAACC',
-                'CCACCAACC',
-                'GCACAAACT',
-                'TGCAATATT',
-                'AACAAAAGC',
-                'ACAAACCCT',
-                'AAATAAACC',
-                'ACACAAAAC',
-                'AAACAAACC',
-                'ATGTAAACC',
-                'ACATTATTT',
-                'CAGAAATCT',
-                'AGAAACCCT'
-            ],
-            'heptamer': [
-                'CACAGCC',
-                'CACAGTG',
-                'CACAGAC',
-                'CACAATG',
-                'CACCGTG',
-                'CAGAGTG',
-                'CACAGTA',
-                'CACAGAG',
-                'CACATGT',
-                'CACACTG',
-                'CACTCTA',
-                'CACAGCG',
-                'CACAGTT',
-                'CACAGCA',
-                'CACAGTC',
-                'CAGTTGT',
-                'TACAGTG',
-                'CACGGTG',
-                'CAAAGTG',
-                'TATTGCT',
-                'CACTGTA',
-                'CACATTG',
-                'CTCATTG',
-                'CACGTTG',
-                'CATAGTG',
-                'CACAGGT',
-                'CACTGTG',
-                'TACATTG',
-                'TAAGATG',
-                'CACAAGG',
-                'TATAGGG',
-            ]
-        },
-        'DH': {
-            'leniency': 3,
-            'spacer': 12,
-            'nonamer': [
-                'CTTTTTTGT',
-                'GAATTCAGT',
-                'GATTTTGAA',
-                'GCTTTTTGT',
-                'GATTTTTGT',
-                'GGATTCTGT',
-                'GGTTTTGAC',
-                'CATGGAAGA',
-                'ACCAAAACT',
-                'GCAAAAACC',
-                'ACAAGAAAG',
-                'ACAAAAACC',
-                'CTCAAATTC',
-                'ACAACAAAG',
-                'CTCAAATCC',
-                'CCTCTATAA'
-            ],
-            'heptamer': [
-                'CATTGTG',
-                'CACTGTG',
-                'CACAGTG',
-                'TACTGTG',
-                'CACCGTG',
-                'CACCATG',
-                'CAGTGTG',
-                'CACTGTA',
-                'CACAATG',
-                'CACATTG',
-                'CACGGTG',
-                'TGAATTC'
-            ]
-        },
-        'JH': {
-            'leniency': 2, 
-            'spacer': 23,
-            'nonamer': [
-                'GGGTTTTTG',
-                'AGTATTTGT',
-                'GAGTTTTAG',
-                'TGACAATCA',
-                'GGTTTTTGT',
-                'ATTTATTGT'
-            ],
-            'heptamer': [
-                'TATTGTG',
-                'GGGTGTG',
-                'GACTGTG',
-                'TTAGGCT',
-                'TAGTGTG',
-                'CAATGTG'
-            ]
-        }
-    },
-    'signal': {
-        'ocatmer': 'ATGCAAA[GT]',
-        'TATA box': 'TAAATA',
-        'Initiator': '[TC][TC]A[ATCG][AT][TC][TC]',
-    },
-    'reference': {
-        'mouse chromosome 12': '/Users/lg/code/somatic/db/chr12.fa'
-    }
 }
 
 def parse_match(match):
@@ -1650,7 +117,7 @@ def transform_to_document(node):
         return node.document
     elif isinstance(node, Sequence):
         return node.document
-    elif isinstance(node, Statistic):
+    elif isinstance(node, Survey):
         return node.document
     elif isinstance(node, ndarray):
         bytesio = BytesIO()
@@ -1709,6 +176,165 @@ def complement(nucleotide):
         'y': 'r',
     }
     return ''.join([ complement[n] for n in nucleotide ][::-1])
+
+def load_configuration():
+    configuration = None
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'configuration/core.json')
+    with io.open(path, 'rb') as file:
+        content = StringIO(file.read().decode('utf8'))
+        configuration = json.loads(content.getvalue())
+
+    if configuration is not None:
+        configuration['interface']['prototype']['profile']['parameter']['choices'] = list(configuration['profile'].keys())
+        configuration['interface']['prototype']['profile']['parameter']['help'] = '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
+        configuration['expression'] = {
+            'ncbi accession url': 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}',
+            'gapped sequence': re.compile('^\s+Query_[0-9]+\s+(?P<offset>[0-9]+)\s+(?P<sequence>[ATCGN-]+)\s+[0-9]+$'),
+            'blat hit': re.compile(
+                r"""
+                (?P<match>[^\t]+)\t
+                (?P<mismatch>[^\t]+)\t
+                (?P<repeat_match>[^\t]+)\t
+                (?P<n_count>[^\t]+)\t
+                (?P<inserts_in_query>[^\t]+)\t
+                (?P<inserted_base_in_query>[^\t]+)\t
+                (?P<inserts_in_target>[^\t]+)\t
+                (?P<inserted_base_in_target>[^\t]+)\t
+                (?P<query_strand>[^\t]+)\t
+                (?P<query_name>[^\t]+)\t
+                (?P<query_size>[^\t]+)\t
+                (?P<query_start>[^\t]+)\t
+                (?P<query_end>[^\t]+)\t
+                (?P<target_name>[^\t]+)\t
+                (?P<target_size>[^\t]+)\t
+                (?P<target_start>[^\t]+)\t
+                (?P<target_end>[^\t]+)\t
+                (?P<block_count>[^\t]+)\t
+                (?P<block_size>[^\t]+)\t
+                (?P<query_block_start>[^\t]+)\t
+                (?P<target_block_start>[^\t]+)
+                """,
+                re.VERBOSE
+            ),
+            'expand hit': re.compile(
+                r"""
+                (?P<region>VH|DH|JH),
+                (?P<subject_id>[^,]+),
+                (?P<query_start>[^,]+),
+                (?P<query_end>[^,]+),
+                (?P<subject_start>[^,]+),
+                (?P<subject_end>[^,]+),
+                (?P<gap_openings>[^,]+),
+                (?P<gaps>[^,]+),
+                (?P<mismatch>[^,]+),
+                (?P<identical>[^,]+),
+                (?P<bit_score>[^,]+),
+                (?P<evalue>[^,]+),
+                (?P<alignment_length>[^,]+),
+                (?P<subject_strand>[^,]),
+                (?P<query_strand>[^,])
+                """,
+                re.VERBOSE
+            ),
+            'igblast compressed hit': '{region},{subject id},{query start},{query end},{subject start},{subject end},{gap openings},{gaps},{mismatch},{identical},{bit score},{evalue},{alignment length},{subject strand},{query strand}',
+            'igblast hit': re.compile(
+                r"""
+                (?P<region>[VDJ])\t
+                (?:reversed\|)?(?:[^,]+)\t
+                (?P<subject_id>[^,]+)\t
+                (?P<query_start>[^,]+)\t
+                (?P<query_end>[^,]+)\t
+                (?P<subject_start>[^,]+)\t
+                (?P<subject_end>[^,]+)\t
+                (?P<gap_openings>[^,]+)\t
+                (?P<gaps>[^,]+)\t
+                (?P<mismatch>[^,]+)\t
+                (?P<identical>[^,]+)\t
+                (?P<bit_score>[^,]+)\t
+                (?P<evalue>[^,]+)\t
+                (?P<alignment_length>[^,]+)\t
+                (?P<subject_strand>[^,]+)
+                """,
+                re.VERBOSE
+            ),
+            'igblast reversed query': '# Note that your query represents the minus strand of a V gene and has been converted to the plus strand.',
+            'imgt fasta header': re.compile(
+                r"""
+                ^>
+                (?P<accession>[^|]*)\|
+                (?P<allele_name>(?P<gene_name>(?P<subgroup>[^-]+)[^\*]+)\*[0-9]+)\|
+                (?P<organism_name>[^|_]*)(?:_(?P<strain>[^|]+))?\|
+                (?P<functionality>[\[\(]?(?:F|ORF|P)[\]\)]?)\|
+                (?P<region>V|D|J)-REGION\|
+                (?:(?P<start>[0-9]+)\.\.(?P<end>[0-9]+))?\s*\|
+                (?P<length>[0-9]+)\snt\|
+                (?P<read_frame>[123]|NR)\|
+                [^|]*\|
+                [^|]*\|
+                [^|]*\|
+                [^|]*\|
+                [^|]*\|
+                [^|]*\|
+                (?P<polarity>rev-compl)?\s*\|$
+                """,
+                re.VERBOSE
+            ),
+            'nucleotide sequence': re.compile('^[ACGTRYKMSWBDHVN]+$', re.IGNORECASE)
+        }
+        configuration['diagram'] = {
+            'prototype': {
+                'name': {
+                    'format': lambda x: x,
+                    'title': 'name',
+                    'width': 'auto',
+                    'value': 'gene'
+                },
+                'strain': {
+                    'format': lambda x: x,
+                    'title': 'strain',
+                    'width': 'auto',
+                    'value': 'strain',
+                },
+                'region': {
+                    'format': lambda x: x,
+                    'title': 'R',
+                    'width': 'auto',
+                    'value': 'region',
+                },
+                'functionality': {
+                    'format': lambda x: x,
+                    'title': 'F',
+                    'width': 1,
+                    'value': 'functionality',
+                },
+                'in frame': {
+                    'format': lambda x: '*' if x else ' ',
+                    'title': 'I',
+                    'width': 1,
+                    'value': 'in frame',
+                },
+                'picked': {
+                    'format': lambda x: '*' if x else ' ',
+                    'title': 'P',
+                    'width': 1,
+                    'value': 'picked',
+                },
+                'gapped': {
+                    'format': lambda x: '*' if x else ' ',
+                    'title': 'G',
+                    'width': 1,
+                    'value': 'gapped',
+                },
+                'strand': {
+                    'format': lambda x: '+' if x else '-',
+                    'title': 'S',
+                    'width': 1,
+                    'value': 'subject strand',
+                }
+            }
+        }
+
+    return configuration
 
 class InvalidSampleError(Exception):
     def __init__(self, message):
@@ -3562,82 +2188,112 @@ class Histogram(object):
         self.log = logging.getLogger('Histogram')
         self.name = name
         self.plots = {
-            'CDR3 length': {
+            'VDJ CDR3 length': {
                 'position': [0,0],
-                'name': 'CDR3 length',
+                'name': 'VDJ CDR3 length',
             },
-            'CDR3 charge': {
+            'VDJ CDR3 charge': {
                 'position': [0,1],
-                'name': 'CDR3 charge',
+                'name': 'VDJ CDR3 charge',
             },
-            'CDR3 weight': {
+            'VDJ CDR3 weight': {
                 'position': [0,2],
-                'name': 'CDR3 atomic weight',
-            },
-            'V-D N count': {
-                'position': [1,0],
-                'name': 'V-D Junction N count',
-            },
-            'D-J N count': {
-                'position': [1,1],
-                'name': 'D-J Junction N count',
-            },
-            'V-J N count': {
-                'position': [1,2],
-                'name': 'V-J Junction N count',
-            },
-            'N count': {
-                'position': [1,3],
-                'name': 'Total Junction N count',
-            },
-            'V-D P count': {
-                'position': [2,0],
-                'name': 'V-D Junction P count',
-            },
-            'D-J P count': {
-                'position': [2,1],
-                'name': 'D-J Junction P count',
-            },
-            'V-J P count': {
-                'position': [2,2],
-                'name': 'V-J Junction P count',
-            },
-            'P count': {
-                'position': [2,3],
-                'name': 'Total Junction P count',
-            },
-            'V-D length': {
-                'position': [3,0],
-                'name': 'V-D Junction length',
-            },
-            'D-J length': {
-                'position': [3,1],
-                'name': 'D-J Junction length',
-            },
-            'V-J length': {
-                'position': [3,2],
-                'name': 'V-J Junction length',
-            },
-            'chew': {
-                'position': [3,3],
-                'name': 'Total chew back',
+                'name': 'VDJ CDR3 atomic weight',
             },
 
-            'V 3 chew': {
+            'VJ CDR3 length': {
+                'position': [1,0],
+                'name': 'VJ CDR3 length',
+            },
+            'VJ CDR3 charge': {
+                'position': [1,1],
+                'name': 'VJ CDR3 charge',
+            },
+            'VJ CDR3 weight': {
+                'position': [1,2],
+                'name': 'VJ CDR3 atomic weight',
+            },
+
+            'VDJ V-D N count': {
+                'position': [2,0],
+                'name': 'VDJ V-D Junction N count',
+            },
+            'VDJ D-J N count': {
+                'position': [2,1],
+                'name': 'VDJ D-J Junction N count',
+            },
+            'VDJ N count': {
+                'position': [2,2],
+                'name': 'VDJ Total Junction N count',
+            },
+            'VJ V-J N count': {
+                'position': [2,3],
+                'name': 'VJ V-J Junction N count',
+            },
+
+            'VDJ V-D P count': {
+                'position': [3,0],
+                'name': 'VDJ V-D Junction P count',
+            },
+            'VDJ D-J P count': {
+                'position': [3,1],
+                'name': 'VDJ D-J Junction P count',
+            },
+            'VDJ P count': {
+                'position': [3,2],
+                'name': 'VDJ Total Junction P count',
+            },
+            'VJ V-J P count': {
+                'position': [3,3],
+                'name': 'VJ V-J Junction P count',
+            },
+
+            'VDJ V-D length': {
                 'position': [4,0],
-                'name': 'V 3\' chew back',
+                'name': 'VDJ V-D Junction length',
             },
-            'D 5 chew': {
+            'VDJ D-J length': {
                 'position': [4,1],
-                'name': 'D 5\' chew back',
+                'name': 'VDJ D-J Junction length',
             },
-            'D 3 chew': {
+            'VJ V-J length': {
                 'position': [4,2],
-                 'name': 'D 3\' chew back',
-           },
-            'J 5 chew': {
-                'position': [4,3],
-                'name': 'J 5\' chew back',
+                'name': 'VJ V-J Junction length',
+            },
+
+            'VDJ chew': {
+                'position': [5,0],
+                'name': 'VDJ Total chew back',
+            },
+            'VJ chew': {
+                'position': [5,1],
+                'name': 'VJ Total chew back',
+            },
+
+            'VDJ V 3 chew': {
+                'position': [6,0],
+                'name': 'VDJ V 3\' chew back',
+            },
+            'VDJ D 5 chew': {
+                'position': [6,1],
+                'name': 'VDJ D 5\' chew back',
+            },
+            'VDJ D 3 chew': {
+                'position': [6,2],
+                 'name': 'VDJ D 3\' chew back',
+            },
+            'VDJ J 5 chew': {
+                'position': [6,3],
+                'name': 'VDJ J 5\' chew back',
+            },
+
+            'VJ V 3 chew': {
+                'position': [7,0],
+                'name': 'VJ V 3\' chew back',
+            },
+            'VJ J 5 chew': {
+                'position': [7,1],
+                'name': 'VJ J 5\' chew back',
             },
         }
         space = [0,0]
@@ -3651,17 +2307,18 @@ class Histogram(object):
         for key,plot in self.plots.items():
             plot['plot'] = pyplot.subplot2grid(space, plot['position'])
 
-    def draw(self, statistic, edgecolor='#669803', facecolor='#DDE7AC', alpha=0.65):
-        for key, distribution in statistic.body['distribution'].items():
-            plot = self.plots[key]
-            bins = array(distribution['histogram']['bins']) / amax(distribution['histogram']['bins'])
-            # bins = array(distribution['histogram']['bins']) / statistic.count
-            edges = array(distribution['histogram']['edges'])
-            width = 0.7 * (edges[1] - edges[0])
-            center = (edges[:-1] + edges[1:]) / 2 
-            label = '{}\nmean {:.2f}\nsd {:.2f}\ncount {}'.format(statistic.name, distribution['mean'], distribution['std'], statistic.count)
-            plot['plot'].bar(center, bins, label=label, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
-            plot['plot'].set_title(plot['name'], fontweight='bold')
+    def draw(self, survey, edgecolor='#669803', facecolor='#DDE7AC', alpha=0.65):
+        for kind in ['vdj', 'vj']:
+            for key, distribution in survey.body[kind]['distribution'].items():
+                plot = self.plots[key]
+                # bins = array(distribution['histogram']['bins']) / amax(distribution['histogram']['bins'])
+                bins = array(distribution['histogram']['bins']) / survey.body[kind]['sample count']
+                edges = array(distribution['histogram']['edges'])
+                width = 0.7 * (edges[1] - edges[0])
+                center = (edges[:-1] + edges[1:]) / 2 
+                label = '{}\nmean {:.2f}\nsd {:.2f}\ncount {}'.format(survey.name, distribution['mean'], distribution['std'], survey.body[kind]['sample count'])
+                plot['plot'].bar(center, bins, label=label, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
+                plot['plot'].set_title(plot['name'], fontweight='bold')
 
     def save(self, path):
         for key,plot in self.plots.items():
@@ -3669,9 +2326,9 @@ class Histogram(object):
         pyplot.savefig('{}.pdf'.format(path))
 
 
-class Statistic(object):
-    def __init__(self, pipeline, node=None, request=None):
-        self.log = logging.getLogger('Statistic')
+class Survey(object):
+    def __init__(self, pipeline, node=None, request=None, name=None):
+        self.log = logging.getLogger('Survey')
         self.pipeline = pipeline
         self.node = node
         self._lookup = None
@@ -3684,10 +2341,6 @@ class Statistic(object):
                         binary = BytesIO(v)
                         binary.seek(0)
                         slice['correlation'][k] = load(binary)
-            # for name, feature in self.body['feature'].items():
-            #     bytesio = BytesIO(feature)
-            #     bytesio.seek(0)
-            #     self.body['feature'][name] = load(bytesio)
         else:
             # constructing a new object
             if request:
@@ -3695,20 +2348,20 @@ class Statistic(object):
                     'head': {
                         'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
                         'strain': 'C57BL/6',
-                        'sample count': 0
+                        'sample count': 0,
                     },
                     'body': {
                         'query': json.dumps(request, sort_keys=True, ensure_ascii=False),
-                        'feature': {},
+                        'repertoire': {},
+                        'slice': {},
+                        'vdj': { 'feature': {}, 'sample count': 0 },
+                        'vj': { 'feature': {}, 'sample count': 0 },
                     }
                 }
-
+                self.head['name'] = name if name is not None else self.id
                 for word in ['library', 'profile']:
                     if word in request['query']:
                        self.head[word] = request['query'][word]
-
-                for feature in self.configuration['histogram'].keys():
-                    self.body['feature'][feature] = []
 
                 self.body['repertoire'] = {
                     'VH': self._fetch_region_repertoire({'head.region': 'VH', 'head.strain': self.strain}),
@@ -3716,12 +2369,18 @@ class Statistic(object):
                     'JH': self._fetch_region_repertoire({'head.region': 'JH', 'head.strain': self.strain}),
                 }
 
+                for feature in self.configuration['histogram']['vj'].keys():
+                    self.vj['feature'][feature] = []
+
+                for feature in self.configuration['histogram']['vdj'].keys():
+                    self.vdj['feature'][feature] = []
+
                 self.body['slice'] = {
                     'family': self._initialize_slice('family'),
                     'allele': self._initialize_slice('allele'),
                 }
             else:
-                raise ValueError('must specify a query to calculate statistic')
+                raise ValueError('must specify a query to calculate survey')
 
     @property
     def configuration(self):
@@ -3789,15 +2448,12 @@ class Statistic(object):
 
     @property
     def name(self):
-        if 'library' in self.head:
-            return self.head['library']
-        else:
-            return self.id
+        return self.head['name']
 
     @property
     def document(self):
         document = transform_to_document(self.node)
-        for k in [ 'feature' ]:
+        for k in [ 'vj', 'vdj' ]:
             if k in document['body']:
                 del document['body'][k]
         return document
@@ -3828,8 +2484,12 @@ class Statistic(object):
         return self.head['strain']
 
     @property
-    def feature(self):
-        return self.body['feature']
+    def vdj(self):
+        return self.body['vdj']
+
+    @property
+    def vj(self):
+        return self.body['vj']
 
     @property
     def repertoire(self):
@@ -3837,128 +2497,171 @@ class Statistic(object):
 
     def add_sample(self, sample):
         if 'CDR3' in sample.primary:
-            breakdown = {
-                'sample': sample,
-                'portion': None,
-                'combination': None,
-                'region': {
-                    'VH': [],
-                    'DH': [],
-                    'JH': [],
-                }
-            }
-
-            # collect CDR3 statistics
-            self.feature['CDR3 length'].append(sample.primary['CDR3']['query'].length)
-            self.feature['CDR3 charge'].append(sample.primary['CDR3']['charge'])
-            self.feature['CDR3 weight'].append(sample.primary['CDR3']['weight'])
-
-            # collect the picked VH, DH and JH hits and count the number of possible combinations 
-            for hit in breakdown['sample'].hit:
-                if hit['picked'] and hit['region'] in breakdown['region'].keys():
-                    breakdown['region'][hit['region']].append(hit)
-            breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
-            if breakdown['region']['DH']:
-                breakdown['combination'] *= len(breakdown['region']['DH'])
-            breakdown['portion'] = 1.0 / float(breakdown['combination'])
-
-            chewback = {
-                'V 3 chew': [ h['3 chew'].length for h in breakdown['region']['VH'] if '3 chew' in h ],
-                'J 5 chew': [ h['5 chew'].length for h in breakdown['region']['JH'] if '5 chew' in h ],
-                'D 3 chew': [ h['3 chew'].length for h in breakdown['region']['DH'] if '3 chew' in h ],
-                'D 5 chew': [ h['5 chew'].length for h in breakdown['region']['DH'] if '5 chew' in h ],
-            }
-
-            total = 0
-            for k,v in chewback.items():
-                if v:
-                    c = mean(v)
-                    total += c
-                    self.feature[k].append(c)
-                else:
-                    self.feature[k].append(0)
-            self.feature['chew'].append(total)
-
-            # this is the case where we have a D
-            if breakdown['region']['DH']:
-                total_N = 0
-                total_P = 0
-                if 'V-D' in sample.primary:
-                    self.feature['V-D length'].append(sample.primary['V-D']['query'].length)
-                    self.feature['V-D N count'].append(sample.primary['V-D']['palindrome'].count('N'))
-                    self.feature['V-D P count'].append(sample.primary['V-D']['palindrome'].count('P'))
-                    total_N += sample.primary['V-D']['palindrome'].count('N')
-                    total_P += sample.primary['V-D']['palindrome'].count('P')
-                else:
-                    self.feature['V-D length'].append(0)
-                    self.feature['V-D N count'].append(0)
-
-                if 'D-J' in sample.primary:
-                    self.feature['D-J length'].append(sample.primary['D-J']['query'].length)
-                    self.feature['D-J N count'].append(sample.primary['D-J']['palindrome'].count('N'))
-                    self.feature['D-J P count'].append(sample.primary['D-J']['palindrome'].count('P'))
-                    total_N += sample.primary['D-J']['palindrome'].count('N')
-                    total_P += sample.primary['D-J']['palindrome'].count('P')
-                else:
-                    self.feature['D-J length'].append(0)
-                    self.feature['D-J N count'].append(0)
-
-                self.feature['N count'].append(total_N)
-                self.feature['P count'].append(total_P)
-
-            # and the case without the D
-            else:
-                if 'V-J' in sample.primary:
-                    self.feature['V-J length'].append(sample.primary['V-J']['query'].length)
-                    self.feature['V-J N count'].append(sample.primary['V-J']['palindrome'].count('N'))
-                    self.feature['V-J P count'].append(sample.primary['V-J']['palindrome'].count('P'))
-                    self.feature['N count'].append(sample.primary['V-J']['palindrome'].count('N'))
-                    self.feature['P count'].append(sample.primary['V-J']['palindrome'].count('P'))
-                else:
-                    self.feature['V-J length'].append(0)
-                    self.feature['V-J N count'].append(0)
-                    self.feature['N count'].append(0)
-                    self.feature['P count'].append(0)
-
-            for slice in self.slice.keys():
-                self._add_sample_to_slice(slice, breakdown)
             self.head['sample count'] += 1
+            if 'DH' not in sample.primary:
+                self.vj['sample count'] += 1
+                breakdown = {
+                    'type': 'vj',
+                    'sample': sample,
+                    'portion': None,
+                    'combination': None,
+                    'region': { 'VH': [], 'JH': [] }
+                }
+
+                # collect CDR3 features
+                self.vj['feature']['VJ CDR3 length'].append(sample.primary['CDR3']['query'].length)
+                self.vj['feature']['VJ CDR3 charge'].append(sample.primary['CDR3']['charge'])
+                self.vj['feature']['VJ CDR3 weight'].append(sample.primary['CDR3']['weight'])
+
+                length = 0 if 'V-J' not in sample.primary else sample.primary['V-J']['query'].length
+                ncount = 0 if 'V-J' not in sample.primary else sample.primary['V-J']['palindrome'].count('N')
+                pcount = 0 if 'V-J' not in sample.primary else sample.primary['V-J']['palindrome'].count('P')
+
+                self.vj['feature']['VJ V-J length'].append(length)
+                self.vj['feature']['VJ V-J N count'].append(ncount)
+                self.vj['feature']['VJ V-J P count'].append(pcount)
+
+                # collect the picked VH and JH hits and count the number of possible combinations 
+                for hit in sample.hit:
+                    if hit['picked'] and hit['region'] in breakdown['region'].keys():
+                        breakdown['region'][hit['region']].append(hit)
+                breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
+                breakdown['portion'] = 1.0 / float(breakdown['combination'])
+                chewback = {
+                    'VJ V 3 chew': [ h['3 chew'].length for h in breakdown['region']['VH'] if '3 chew' in h ],
+                    'VJ J 5 chew': [ h['5 chew'].length for h in breakdown['region']['JH'] if '5 chew' in h ],
+                }
+                total = 0
+                for k,v in chewback.items():
+                    if v:
+                        c = mean(v)
+                        total += c
+                        self.vj['feature'][k].append(c)
+                    else:
+                        self.vj['feature'][k].append(0)
+                self.vj['feature']['VJ chew'].append(total)
+
+                for slice in self.slice.keys():
+                    self._add_sample_to_slice(slice, breakdown)
+            else:
+                self.vdj['sample count'] += 1
+                breakdown = {
+                    'type': 'vdj',
+                    'sample': sample,
+                    'portion': None,
+                    'combination': None,
+                    'region': { 'VH': [], 'DH': [], 'JH': [] }
+                }
+
+                # collect CDR3 features
+                self.vdj['feature']['VDJ CDR3 length'].append(sample.primary['CDR3']['query'].length)
+                self.vdj['feature']['VDJ CDR3 charge'].append(sample.primary['CDR3']['charge'])
+                self.vdj['feature']['VDJ CDR3 weight'].append(sample.primary['CDR3']['weight'])
+
+                ntotal = 0
+                ptotal = 0
+
+                for junction in ['V-D', 'D-J']:
+                    length = 0 if junction not in sample.primary else sample.primary[junction]['query'].length
+                    ncount = 0 if junction not in sample.primary else sample.primary[junction]['palindrome'].count('N')
+                    pcount = 0 if junction not in sample.primary else sample.primary[junction]['palindrome'].count('P')
+                    ntotal += ncount
+                    ptotal += pcount
+
+                    self.vdj['feature']['VDJ {} length'.format(junction)].append(length)
+                    self.vdj['feature']['VDJ {} N count'.format(junction)].append(ncount)
+                    self.vdj['feature']['VDJ {} P count'.format(junction)].append(pcount)
+
+                self.vdj['feature']['VDJ N count'].append(ntotal)
+                self.vdj['feature']['VDJ P count'].append(ptotal)
+
+                # collect the picked VH, DH and JH hits and count the number of possible combinations 
+                for hit in breakdown['sample'].hit:
+                    if hit['picked'] and hit['region'] in breakdown['region'].keys():
+                        breakdown['region'][hit['region']].append(hit)
+                breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH']) * len(breakdown['region']['DH'])
+                # print(to_json(breakdown))
+                breakdown['portion'] = 1.0 / float(breakdown['combination'])
+
+                chewback = {
+                    'VDJ V 3 chew': [ h['3 chew'].length for h in breakdown['region']['VH'] if '3 chew' in h ],
+                    'VDJ J 5 chew': [ h['5 chew'].length for h in breakdown['region']['JH'] if '5 chew' in h ],
+                    'VDJ D 3 chew': [ h['3 chew'].length for h in breakdown['region']['DH'] if '3 chew' in h ],
+                    'VDJ D 5 chew': [ h['5 chew'].length for h in breakdown['region']['DH'] if '5 chew' in h ],
+                }
+
+                total = 0
+                for k,v in chewback.items():
+                    if v:
+                        c = mean(v)
+                        total += c
+                        self.vdj['feature'][k].append(c)
+                    else:
+                        self.vdj['feature'][k].append(0)
+                self.vdj['feature']['VDJ chew'].append(total)
+
+                for slice in self.slice.keys():
+                    self._add_sample_to_slice(slice, breakdown)
         else:
             self.log.error('%s is missing a CDR3 region', sample.id)
 
     def done(self):
-        self.body['distribution'] = {}
-        for name, feature in self.body['feature'].items():
-            feature = array(feature)
-            self.body['feature'][name] = feature
-            self.body['distribution'][name] = {
-                'min': float(amin(feature)),
-                'max': float(amax(feature)),
-                'std': float(std(feature)),
-                'mean': float(mean(feature)),
-                'median': float(median(feature)),
-            }
-            bins, edges = histogram(feature, **self.configuration['histogram'][name])
-            self.body['distribution'][name]['histogram'] = { 
-                'bins': [ float(x) for x in bins ], 
-                'edges': [ float(x) for x in edges ]
-            }
+        for kind in ['vj', 'vdj']:
+            self.body[kind]['distribution'] = {}
+            for name, feature in self.body[kind]['feature'].items():
+                feature = array(feature, dtype=float64)
+                self.body[kind]['feature'][name] = feature
+                self.body[kind]['distribution'][name] = {
+                    'min': float(amin(feature)),
+                    'max': float(amax(feature)),
+                    'std': float(std(feature)),
+                    'mean': float(mean(feature)),
+                    'median': float(median(feature)),
+                }
+                bins, edges = histogram(feature, **self.configuration['histogram'][kind][name])
+                self.body[kind]['distribution'][name]['histogram'] = { 
+                    'bins': [ float(x) for x in bins ], 
+                    'edges': [ float(x) for x in edges ]
+                }
+
+    def save(self):
+        path = os.path.join(self.configuration['cache']['path'], self.id)
+        try:
+            with io.open(path, 'wb') as f:
+                pickle.dump(self.node, f)
+            self.log.debug('saved cache to %s', path)
+        except OSError as e:
+            self.log.error('failed writing cached survey file to %s', path)
+            self.log.debug(str(e))
+
+    def load(self):
+        path = os.path.join(self.configuration['cache']['path'], self.id)
+        if os.path.exists(path):
+            try:
+                node = None
+                with io.open(path, 'rb') as f:
+                    node = pickle.load(f)
+                self.body['vdj'] = node['body']['vdj']
+                self.body['vj'] = node['body']['vj']
+                self.log.debug('cached survey loaded from %s', path)
+            except KeyError:
+                self.log.warning('failed loading cached survey from %s', path)
 
     def _add_sample_to_slice(self, slice, breakdown):
-        if breakdown['region']['DH']:
+        if breakdown['type'] == 'vj':
+            for j in range(len(breakdown['region']['JH'])):
+                for v in range(len(breakdown['region']['VH'])):
+                    ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                    vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                    self.slice[slice]['correlation']['vj'][ji][vi] += breakdown['portion']
+        else:
             for j in range(len(breakdown['region']['JH'])):
                 for d in range(len(breakdown['region']['DH'])):
                     for v in range(len(breakdown['region']['VH'])):
                         ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
                         di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
                         vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                        self.slice[slice]['correlation']['VDJ'][ji][di][vi] += breakdown['portion']
-        else:
-            for j in range(len(breakdown['region']['JH'])):
-                for v in range(len(breakdown['region']['VH'])):
-                    ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                    vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                    self.slice[slice]['correlation']['VJ'][ji][vi] += breakdown['portion']
+                        self.slice[slice]['correlation']['vdj'][ji][di][vi] += breakdown['portion']
 
     def _fetch_region_repertoire(self, query):
         repertoire = []
@@ -3968,36 +2671,52 @@ class Statistic(object):
             ('body.allele', pymongo.ASCENDING),
         ])
         for gene in cursor:
-            repertoire.append({   
+            node = {
                 'id': gene['head']['id'],
                 'allele': gene['body']['allele'],
                 'gene': gene['body']['gene'],
                 'family': gene['body']['family'],
-            })
+                'functionality': gene['body']['functionality'],
+                'start': gene['body']['reference start'],
+                'end': gene['body']['reference end'],
+                'strand': gene['body']['reference strand'],
+                'length': gene['body']['length'],
+            }
+            for artifact in [
+                '3 heptamer',
+                '3 nonamer',
+                '3 spacer',
+                '5 heptamer',
+                '5 nonamer',
+                '5 spacer',
+                '3 gap',
+                '5 gap',
+            ]:
+                if artifact in gene['body']:
+                    node[artifact] = gene['body'][artifact]['sequence']['nucleotide']
+            repertoire.append(node)
+        repertoire = sorted(repertoire, key=lambda x: x['start'])
         return repertoire
 
     def _initialize_slice(self, slice):
         node = {
-            'correlation': {
-                'VJ': None,
-                'VDJ': None,
-            },
+            'correlation': { 'vj': None, 'vdj': None },
             'dimension': {},
         }
 
         for region in [ 'VH', 'DH', 'JH' ]:
             node['dimension'][region] = len(self.lookup[slice][region]['label'])
 
-        node['correlation']['VJ'] = zeros((node['dimension']['JH'], node['dimension']['VH']))
+        node['correlation']['vj'] = zeros((node['dimension']['JH'], node['dimension']['VH']))
         self.log.debug(
-            '%s VJ correlation matrix established with %s JH, %s VH',
+            '%s VJ correlation matrix is %s JH by %s VH',
             slice,
             node['dimension']['JH'], 
             node['dimension']['VH'])
 
-        node['correlation']['VDJ'] = zeros((node['dimension']['JH'], node['dimension']['DH'], node['dimension']['VH']))
+        node['correlation']['vdj'] = zeros((node['dimension']['JH'], node['dimension']['DH'], node['dimension']['VH']))
         self.log.debug(
-            '%s VDJ correlation matrix established with %s JH, %s DH, %s VH',
+            '%s VDJ correlation matrix is %s JH by %s DH by %s VH',
             slice,
             node['dimension']['JH'],
             node['dimension']['DH'],
@@ -4006,12 +2725,12 @@ class Statistic(object):
 
 
 class Heatmap(object):
-    def __init__(self, pipeline, statistic, slice):
+    def __init__(self, pipeline, survey, slice):
         self.log = logging.getLogger('Heatmap')
         self.pipeline = pipeline
-        self.statistic = statistic
-        self.slice = self.statistic.slice[slice]
-        self.lookup = self.statistic.lookup[slice]
+        self.survey = survey
+        self.slice = self.survey.slice[slice]
+        self.lookup = self.survey.lookup[slice]
         self.background_color = '#EEEEEE'
         self.font_color = '#020202'
         self.cell_size =  8
@@ -4044,11 +2763,11 @@ class Heatmap(object):
         for j in range(self.slice['dimension']['JH']):
             height = j * ( self.slice_height + self.slice_padding ) + self.height_padding 
             self._draw_row_labels((self.width + self.padding , height))
-            self._draw_heatmap(self.slice['correlation']['VDJ'][j], (0, height))
+            self._draw_heatmap(self.slice['correlation']['vdj'][j], (0, height))
 
         height = self.slice['dimension']['JH'] * ( self.slice_height + self.slice_padding ) + self.height_padding
         self._draw_j_row_labels((self.width + self.padding , height))
-        self._draw_heatmap(self.slice['correlation']['VJ'], (0, height))
+        self._draw_heatmap(self.slice['correlation']['vj'], (0, height))
 
     def _draw_row_labels(self, origin):
         draw = ImageDraw.Draw(self.image)
@@ -4112,30 +2831,30 @@ class Heatmap(object):
         vmax = 0
 
         # switch to a logarithmic scale
-        for i in range(self.slice['correlation']['VDJ'].shape[0]):
-            for j in range(self.slice['correlation']['VDJ'].shape[1]):
-                for k in range(self.slice['correlation']['VDJ'].shape[2]):
-                    if self.slice['correlation']['VDJ'][i][j][k] > 0:
-                        self.slice['correlation']['VDJ'][i][j][k] = math.log(1.0 + self.slice['correlation']['VDJ'][i][j][k])
-                        vmax = max(vmax, self.slice['correlation']['VDJ'][i][j][k])
+        for i in range(self.slice['correlation']['vdj'].shape[0]):
+            for j in range(self.slice['correlation']['vdj'].shape[1]):
+                for k in range(self.slice['correlation']['vdj'].shape[2]):
+                    if self.slice['correlation']['vdj'][i][j][k] > 0:
+                        self.slice['correlation']['vdj'][i][j][k] = math.log(1.0 + self.slice['correlation']['vdj'][i][j][k])
+                        vmax = max(vmax, self.slice['correlation']['vdj'][i][j][k])
 
-        for i in range(self.slice['correlation']['VJ'].shape[0]):
-            for j in range(self.slice['correlation']['VJ'].shape[1]):
-                if self.slice['correlation']['VJ'][i][j] > 0:
-                    self.slice['correlation']['VJ'][i][j] = math.log(1.0 + self.slice['correlation']['VJ'][i][j])
-                    vmax = max(vmax, self.slice['correlation']['VJ'][i][j])
+        for i in range(self.slice['correlation']['vj'].shape[0]):
+            for j in range(self.slice['correlation']['vj'].shape[1]):
+                if self.slice['correlation']['vj'][i][j] > 0:
+                    self.slice['correlation']['vj'][i][j] = math.log(1.0 + self.slice['correlation']['vj'][i][j])
+                    vmax = max(vmax, self.slice['correlation']['vj'][i][j])
 
         # normalize
-        for i in range(self.slice['correlation']['VDJ'].shape[0]):
-            for j in range(self.slice['correlation']['VDJ'].shape[1]):
-                for k in range(self.slice['correlation']['VDJ'].shape[2]):
-                    if self.slice['correlation']['VDJ'][i][j][k] > 0:
-                        self.slice['correlation']['VDJ'][i][j][k] = self.slice['correlation']['VDJ'][i][j][k] / vmax
+        for i in range(self.slice['correlation']['vdj'].shape[0]):
+            for j in range(self.slice['correlation']['vdj'].shape[1]):
+                for k in range(self.slice['correlation']['vdj'].shape[2]):
+                    if self.slice['correlation']['vdj'][i][j][k] > 0:
+                        self.slice['correlation']['vdj'][i][j][k] = self.slice['correlation']['vdj'][i][j][k] / vmax
 
-        for i in range(self.slice['correlation']['VJ'].shape[0]):
-            for j in range(self.slice['correlation']['VJ'].shape[1]):
-                if self.slice['correlation']['VJ'][i][j] > 0:
-                    self.slice['correlation']['VJ'][i][j] = self.slice['correlation']['VJ'][i][j] / vmax
+        for i in range(self.slice['correlation']['vj'].shape[0]):
+            for j in range(self.slice['correlation']['vj'].shape[1]):
+                if self.slice['correlation']['vj'][i][j] > 0:
+                    self.slice['correlation']['vj'][i][j] = self.slice['correlation']['vj'][i][j] / vmax
 
     def save(self, path):
         self.image.save(path)
@@ -4842,7 +3561,7 @@ class Resolver(object):
                         
             for definition in record['index']:
                 self.log.info('building index %s on collection %s', definition['name'], record['collection'])
-                collection.create_index(definition['key'], name=definition['name'], unique=definition['unique'])
+                collection.create_index([tuple(k) for k in definition['key']], name=definition['name'], unique=definition['unique'])
 
     def reference_fetch(self, name):
         reference = None
@@ -4867,27 +3586,38 @@ class Resolver(object):
             self.log.error('unknown reference %s', name)
         return reference
 
-    def statistic_fetch(self, id):
-        statistic = None
-        document = self.database['statistic'].find_one({'head.id': id})
+    def survey_find(self, name):
+        survey = None
+        if name is not None:
+            document = self.database['survey'].find_one({'head.name': name})
+            if document:
+                survey = Survey(self.pipeline, document)
+                survey.load()
+        return survey
+
+    def survey_fetch(self, id):
+        survey = None
+        document = self.database['survey'].find_one({'head.id': id})
         if document:
-            statistic = Statistic(self.pipeline, document)
-        return statistic
+            survey = Survey(self.pipeline, document)
+            survey.load()
+        return survey
 
-    def statistic_drop(self, id):
-        statistic = statistic_fetch(id)
-        if statistic:
-            result = self.database['statistic'].delete({ 'head.id': id })
+    def survey_drop(self, id):
+        survey = survey_fetch(id)
+        if survey:
+            result = self.database['survey'].delete({ 'head.id': id })
             if result:
-                self.log.info('dropped statistic record for\n%s', statistic.query)
+                self.log.info('dropped survey record for\n%s', survey.query)
 
-    def statistic_save(self, statistic):
-        if statistic is not None:
-            existing = self.statistic_fetch(statistic.id)
+    def survey_save(self, survey):
+        if survey is not None:
+            existing = self.survey_fetch(survey.id)
             if existing:
-                self.log.debug('existing statistic found for %s', statistic.id)
-                statistic.node['_id'] = existing.node['_id']
-            self.database['statistic'].save(statistic.document)
+                self.log.debug('existing survey found for %s', survey.id)
+                survey.node['_id'] = existing.node['_id']
+            self.database['survey'].save(survey.document)
+            survey.save()
 
     def library_store(self, node):
         if node is not None:
@@ -5177,7 +3907,7 @@ class Resolver(object):
 
 
 class Pipeline(object):
-    def __init__(self):
+    def __init__(self, configuration):
         self.log = logging.getLogger('Pipeline')
         self.configuration = configuration
         self.resolver = Resolver(self)
@@ -5222,7 +3952,7 @@ class Pipeline(object):
             for nucleotide in triplet:
                 motif = []
                 codon['motif'].append(motif)
-                for k,n in configuration['iupac nucleic acid notation'].items():
+                for k,n in self.configuration['iupac nucleic acid notation'].items():
                     if nucleotide in n['option']:
                         motif.append(k)
             codon['possible'] = expand(codon['motif'])
@@ -5287,58 +4017,55 @@ class Pipeline(object):
     def library_drop(self, library):
         self.resolver.library_drop(library)
 
-    def sample_statistic(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        request = { 'limit': limit, 'skip': skip, 'query': q }
-        id = hashlib.sha1(to_json(request).encode('utf8')).hexdigest()
-        statistic = self.resolver.statistic_fetch(id)
-        if statistic is None:
-            statistic = Statistic(self, None, request)
-            cursor = self.resolver.make_cursor('sample', q, limit, skip)
-            self.log.debug('collecting statistic %s', statistic.name)
-            for node in cursor:
-                statistic.add_sample(Sample(self, node))
-            cursor.close()
-            statistic.done()
-            self.resolver.statistic_save(statistic)
-        return statistic
+    def sample_survey(self, query, limit, skip, profile, name=None):
+        survey = self.resolver.survey_find(name)
+        if survey is None:
+            q = self.build_query(query, profile, 'sample')
+            request = { 'limit': limit, 'skip': skip, 'query': q }
+            id = hashlib.sha1(to_json(request).encode('utf8')).hexdigest()
+            survey = self.resolver.survey_fetch(id)
+            if survey is None:
+                survey = Survey(self, None, request, name)
+                cursor = self.resolver.make_cursor('sample', q, limit, skip)
+                self.log.debug('collecting samples for survey %s', survey.name)
+                for node in cursor:
+                    survey.add_sample(Sample(self, node))
+                cursor.close()
+                survey.done()
+                self.resolver.survey_save(survey)
+        return survey
 
-    def sample_plot_compare(self, query):
-        statistics = []
-        name = []
+    def plot(self, names):
+        plot_name = []
+        surveys = []
         colors = [
             ['#C0392b', '#D14A3C'],
             ['#669803', '#DDE7AC'],
+            ['#C64AC3', '#D75BD4'],
+            ['#EEB63E', '#FFC74F'],
         ]
-        if len(query) > 1 and len(query) < 3:
-            for id in query:
-                statistic = self.resolver.statistic_fetch(id)
-                if statistic:
-                    statistics.append(statistic)
-                    name.append(statistic.name)
+        if len(names) > 0 and len(names) < 5:
+            for name in names:
+                survey = self.resolver.survey_find(name)
+                if survey:
+                    surveys.append(survey)
+                    plot_name.append(survey.name)
+
+                    allele_heatmap = Heatmap(self, survey, 'allele')
+                    allele_heatmap.save('{}_allele.png'.format(survey.name))
+
+                    family_heatmap = Heatmap(self, survey, 'family')
+                    family_heatmap.save('{}_family.png'.format(survey.name))
+
                 else:
-                    raise ValueError('could not locate query {}'.format(id))
-            histogram = Histogram(' vs '.join(name))
-            for index,statistic in enumerate(statistics):
-                histogram.draw(statistic, colors[index][0], colors[index][1])
-            histogram.save('_'.join(name))
+                    raise ValueError('could not locate survey {}'.format(name))
+
+            histogram = Histogram(' vs '.join(plot_name))
+            for index,survey in enumerate(surveys):
+                histogram.draw(survey, colors[index][0], colors[index][1])
+            histogram.save('_'.join(plot_name))
         else:
-            raise ValueError('comparison plots take 2 queries')
-
-    def sample_plot(self, query, limit, skip, profile):
-        statistic = self.sample_statistic(query, limit, skip, profile)
-        if statistic:
-            allele_heatmap = Heatmap(self, statistic, 'allele')
-            family_heatmap = Heatmap(self, statistic, 'family')
-            allele_heatmap.save('{}_allele.png'.format(statistic.name))
-            family_heatmap.save('{}_family.png'.format(statistic.name))
-            histogram = Histogram(statistic.name)
-            histogram.draw(statistic)
-            histogram.save(statistic.name)
-
-            # fig, ax = pyplot.subplots()
-            # heatmap = ax.pcolor(allele_heatmap.slice['correlation']['VDJ'][0], cmap=pyplot.cm.Blues, edgecolors='none')
-            # pyplot.savefig('{}.eps'.format('heat'), format='eps', )
+            raise ValueError('comparison plots take up to 4 surveys')
 
     def sample_populate(self, library, strain, drop):
         count = 0
@@ -5639,24 +4366,18 @@ class Pipeline(object):
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
                 
-        elif cmd.action == 'statistic':
-            statistic = self.sample_statistic(
+        elif cmd.action == 'survey':
+            survey = self.sample_survey(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
-                cmd.instruction['profile'])
-            print(statistic.json)
+                cmd.instruction['profile'],
+                cmd.instruction['name'])
+            print(survey.json)
 
         elif cmd.action == 'plot':
-            self.sample_plot(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
+            self.plot(cmd.instruction['names'])
                 
-        elif cmd.action == 'plot-compare':
-            self.sample_plot_compare(cmd.instruction['query'])
-
         elif cmd.action == 'count':
             self.sample_count(
                 cmd.query,
@@ -5758,15 +4479,13 @@ def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
     
-    configuration['interface']['prototype']['profile']['parameter']['choices'] = list(configuration['profile'].keys())
-    configuration['interface']['prototype']['profile']['parameter']['help'] = '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
-        
+    configuration = load_configuration()    
     cmd = CommandLineParser(configuration['interface'])
     if cmd.sectioned and cmd.action is None:
         cmd.help()
     else:
         logging.getLogger().setLevel(log_levels[cmd.instruction['verbosity']])
-        pipeline = Pipeline()
+        pipeline = Pipeline(configuration)
         try:
             pipeline.execute(cmd)
         except ValueError as e:
@@ -5780,3 +4499,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+ 

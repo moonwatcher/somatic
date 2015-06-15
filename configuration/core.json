@@ -1,0 +1,2177 @@
+{
+    "command": {
+        "blat": {
+            "arguments": [
+                "/Users/lg/code/somatic/bin/blat", 
+                "-noHead", 
+                "chr12.fa", 
+                "stdin", 
+                "stdout", 
+                "-minIdentity=98"
+            ], 
+            "cwd": "/Users/lg/code/somatic/db"
+        }, 
+        "igblast": {
+            "arguments": [
+                "/Users/lg/code/somatic/bin/igblastn", 
+                "-germline_db_V", 
+                "database/mouse_c57bl6_ighv", 
+                "-germline_db_J", 
+                "database/mouse_c57bl6_ighj", 
+                "-germline_db_D", 
+                "database/mouse_c57bl6_ighd", 
+                "-num_alignments_V", 
+                "3", 
+                "-num_alignments_J", 
+                "3", 
+                "-num_alignments_D", 
+                "5", 
+                "-organism", 
+                "mouse", 
+                "-domain_system", 
+                "imgt", 
+                "-query", 
+                "-", 
+                "-auxiliary_data", 
+                "optional_file/mouse_gl.aux", 
+                "-show_translation", 
+                "-outfmt", 
+                "7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand"
+            ], 
+            "cwd": "/Users/lg/code/somatic/db/igblast"
+        }, 
+        "igblast.gapped": {
+            "arguments": [
+                "/Users/lg/code/somatic/bin/igblastn", 
+                "-germline_db_V", 
+                "database/mouse_c57bl6_ighv", 
+                "-germline_db_J", 
+                "database/mouse_c57bl6_ighj", 
+                "-germline_db_D", 
+                "database/mouse_c57bl6_ighd", 
+                "-num_alignments_V", 
+                "3", 
+                "-num_alignments_J", 
+                "3", 
+                "-num_alignments_D", 
+                "5", 
+                "-organism", 
+                "mouse", 
+                "-domain_system", 
+                "imgt", 
+                "-query", 
+                "-", 
+                "-auxiliary_data", 
+                "optional_file/mouse_gl.aux", 
+                "-show_translation", 
+                "-outfmt", 
+                "4"
+            ], 
+            "cwd": "/Users/lg/code/somatic/db/igblast"
+        }
+    }, 
+    "constant": {
+        "buffer size": 32, 
+        "fasta line length": 80
+    }, 
+    "cache": {
+        "path": "/Users/lg/code/somatic/cache"
+    },
+    "database": {
+        "database": "somatic", 
+        "host": "albireo.bio.nyu.edu", 
+        "password": "fPWZq8nCVizzHloVDhs=", 
+        "username": "somatic"
+    }, 
+    "histogram": {
+        "vdj": {
+            "VDJ CDR3 charge": {
+                "bins": 80, 
+                "range": [
+                    -80, 
+                    80
+                ]
+            }, 
+            "VDJ CDR3 length": {
+                "bins": 40, 
+                "range": [
+                    0, 
+                    120
+                ]
+            }, 
+            "VDJ CDR3 weight": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    5000
+                ]
+            }, 
+            "VDJ D 3 chew": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ D 5 chew": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ D-J N count": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ D-J P count": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ D-J length": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ J 5 chew": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ N count": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ P count": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ V 3 chew": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ V-D N count": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ V-D P count": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ V-D length": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VDJ chew": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }
+        }, 
+        "vj": {
+            "VJ CDR3 charge": {
+                "bins": 80, 
+                "range": [
+                    -80, 
+                    80
+                ]
+            }, 
+            "VJ CDR3 length": {
+                "bins": 40, 
+                "range": [
+                    0, 
+                    120
+                ]
+            }, 
+            "VJ CDR3 weight": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    5000
+                ]
+            }, 
+            "VJ J 5 chew": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VJ V 3 chew": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VJ V-J N count": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VJ V-J P count": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VJ V-J length": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }, 
+            "VJ chew": {
+                "bins": 50, 
+                "range": [
+                    0, 
+                    50
+                ]
+            }
+        }
+    }, 
+    "interface": {
+        "global": {
+            "argument": [
+                "version", 
+                "verbosity"
+            ]
+        }, 
+        "instruction": {
+            "description": "Lior Galanti lior.galanti@nyu.edu NYU Center for Genomics & Systems Biology"
+        }, 
+        "prototype": {
+            "alignment": {
+                "flag": [
+                    "-A", 
+                    "--alignment"
+                ], 
+                "parameter": {
+                    "action": "store_true", 
+                    "dest": "alignment", 
+                    "help": "print alignment diagram"
+                }
+            }, 
+            "distance": {
+                "flag": [
+                    "--distance"
+                ], 
+                "parameter": {
+                    "default": 0, 
+                    "dest": "distance", 
+                    "help": "max distance allowed to stretch gene boundaries", 
+                    "type": "int"
+                }
+            }, 
+            "drop": {
+                "flag": [
+                    "-D", 
+                    "--drop"
+                ], 
+                "parameter": {
+                    "action": "store_true", 
+                    "dest": "drop", 
+                    "help": "drop library items"
+                }
+            }, 
+            "flanking": {
+                "flag": [
+                    "-F", 
+                    "--flanking"
+                ], 
+                "parameter": {
+                    "default": 0, 
+                    "dest": "flanking", 
+                    "help": "include flanking region on each side", 
+                    "type": "int"
+                }
+            }, 
+            "format": {
+                "flag": [
+                    "-f", 
+                    "--format"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "imgt", 
+                        "ncbi"
+                    ], 
+                    "dest": "format", 
+                    "help": "fasta header format"
+                }
+            }, 
+            "functionality": {
+                "flag": [
+                    "--functionality"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "F", 
+                        "O", 
+                        "P"
+                    ], 
+                    "dest": "functionality", 
+                    "help": "gene functionality"
+                }
+            }, 
+            "gapped": {
+                "flag": [
+                    "-G", 
+                    "--gapped"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "Y", 
+                        "N"
+                    ], 
+                    "dest": "gapped", 
+                    "help": "gapped alignment"
+                }
+            }, 
+            "id": {
+                "flag": [
+                    "-d", 
+                    "--id"
+                ], 
+                "parameter": {
+                    "dest": "id", 
+                    "help": "sample id", 
+                    "metavar": "ID"
+                }
+            }, 
+            "name": {
+                "flag": [
+                    "--name"
+                ], 
+                "parameter": {
+                    "required": true,
+                    "dest": "name", 
+                    "help": "uniqe name of the record", 
+                    "metavar": "NAME"
+                }
+            }, 
+            "in frame": {
+                "flag": [
+                    "-F", 
+                    "--in-frame"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "Y", 
+                        "N"
+                    ], 
+                    "dest": "in frame", 
+                    "help": "in frame alignment"
+                }
+            }, 
+            "json": {
+                "flag": [
+                    "-J", 
+                    "--json"
+                ], 
+                "parameter": {
+                    "action": "store_true", 
+                    "dest": "json", 
+                    "help": "print json info"
+                }
+            }, 
+            "library": {
+                "flag": [
+                    "-l", 
+                    "--library"
+                ], 
+                "parameter": {
+                    "dest": "library", 
+                    "help": "library name", 
+                    "metavar": "NAME"
+                }
+            }, 
+            "limit": {
+                "flag": [
+                    "-L", 
+                    "--limit"
+                ], 
+                "parameter": {
+                    "dest": "limit", 
+                    "help": "max results to return", 
+                    "type": "int"
+                }
+            }, 
+            "path": {
+                "flag": [
+                    "path"
+                ], 
+                "parameter": {
+                    "help": "file paths", 
+                    "metavar": "PATH", 
+                    "nargs": "*"
+                }
+            }, 
+            "premature": {
+                "flag": [
+                    "-T", 
+                    "--premature"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "Y", 
+                        "N"
+                    ], 
+                    "dest": "premature", 
+                    "help": "premature termination alignment"
+                }
+            }, 
+            "productive": {
+                "flag": [
+                    "-P", 
+                    "--productive"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "Y", 
+                        "N"
+                    ], 
+                    "dest": "productive", 
+                    "help": "productive alignment"
+                }
+            }, 
+            "profile": {
+                "flag": [
+                    "-p", 
+                    "--profile"
+                ], 
+                "parameter": {
+                    "choices": null, 
+                    "default": "default", 
+                    "dest": "profile", 
+                    "help": "profile is one of default, productive, productive.dropped, psudo, premature, inframe, outframe", 
+                    "metavar": "NAME"
+                }
+            }, 
+            "names": {
+                "flag": [
+                    "names"
+                ], 
+                "parameter": {
+                    "help": "survey name or uuid", 
+                    "metavar": "NAMES", 
+                    "nargs": "*"
+                }
+            }, 
+            "region": {
+                "flag": [
+                    "-r", 
+                    "--region"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "VH", 
+                        "DH", 
+                        "JH"
+                    ], 
+                    "dest": "region", 
+                    "help": "region"
+                }
+            }, 
+            "skip": {
+                "flag": [
+                    "-S", 
+                    "--skip"
+                ], 
+                "parameter": {
+                    "dest": "skip", 
+                    "help": "skip the first SKIP results", 
+                    "type": "int"
+                }
+            }, 
+            "strain": {
+                "flag": [
+                    "--strain"
+                ], 
+                "parameter": {
+                    "dest": "strain", 
+                    "help": "strain"
+                }
+            }, 
+            "table": {
+                "flag": [
+                    "--table"
+                ], 
+                "parameter": {
+                    "dest": "table", 
+                    "help": "table name", 
+                    "nargs": "*"
+                }
+            }, 
+            "title": {
+                "flag": [
+                    "--title"
+                ], 
+                "parameter": {
+                    "dest": "title", 
+                    "help": "title"
+                }
+            }, 
+            "valid": {
+                "flag": [
+                    "-V", 
+                    "--valid"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "Y", 
+                        "N"
+                    ], 
+                    "dest": "valid", 
+                    "help": "valid alignment"
+                }
+            }, 
+            "verbosity": {
+                "flag": [
+                    "-v", 
+                    "--verbosity"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "debug", 
+                        "info", 
+                        "warning", 
+                        "error", 
+                        "critical"
+                    ], 
+                    "default": "info", 
+                    "dest": "verbosity", 
+                    "help": "logging verbosity level", 
+                    "metavar": "LEVEL"
+                }
+            }, 
+            "version": {
+                "flag": [
+                    "--version"
+                ], 
+                "parameter": {
+                    "action": "version", 
+                    "version": "%[prog]s 1.0"
+                }
+            }
+        }, 
+        "section": {
+            "action": [
+                {
+                    "argument": [
+                        "library", 
+                        "strain", 
+                        "drop"
+                    ], 
+                    "instruction": {
+                        "description": "match each read in file to regions with igblast and store results in the library. takes data from stdin", 
+                        "help": "populate samples for library", 
+                        "name": "populate"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "library"
+                    ], 
+                    "instruction": {
+                        "description": "remove all samples for the provided library name", 
+                        "help": "drop samples of a given library", 
+                        "name": "drop"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "profile", 
+                        "library", 
+                        "id", 
+                        "gapped", 
+                        "valid", 
+                        "in frame", 
+                        "premature", 
+                        "limit", 
+                        "skip", 
+                        "productive"
+                    ], 
+                    "instruction": {
+                        "help": "view sample alignment", 
+                        "name": "view"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "profile", 
+                        "library", 
+                        "id", 
+                        "gapped", 
+                        "valid", 
+                        "in frame", 
+                        "premature", 
+                        "productive"
+                    ], 
+                    "instruction": {
+                        "help": "count sample alignment", 
+                        "name": "count"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "profile", 
+                        "library", 
+                        "id", 
+                        "gapped", 
+                        "valid", 
+                        "in frame", 
+                        "premature", 
+                        "limit", 
+                        "skip", 
+                        "productive"
+                    ], 
+                    "instruction": {
+                        "help": "print sample fasta stream", 
+                        "name": "fasta"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "profile", 
+                        "library", 
+                        "id", 
+                        "gapped", 
+                        "valid", 
+                        "in frame", 
+                        "premature", 
+                        "limit", 
+                        "skip", 
+                        "productive"
+                    ], 
+                    "instruction": {
+                        "help": "print sample fastq stream", 
+                        "name": "fastq"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "profile", 
+                        "library", 
+                        "id", 
+                        "gapped", 
+                        "valid", 
+                        "in frame", 
+                        "premature", 
+                        "limit", 
+                        "skip", 
+                        "productive"
+                    ], 
+                    "instruction": {
+                        "help": "view JSON sample record", 
+                        "name": "info"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "name",
+                        "profile", 
+                        "library", 
+                        "id", 
+                        "gapped", 
+                        "valid", 
+                        "in frame", 
+                        "premature", 
+                        "limit", 
+                        "skip", 
+                        "productive"
+                    ], 
+                    "instruction": {
+                        "help": "calculate survey for records", 
+                        "name": "survey"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "names"
+                    ], 
+                    "instruction": {
+                        "help": "plot surveys", 
+                        "name": "plot"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "path"
+                    ], 
+                    "instruction": {
+                        "help": "load library definition from JSON file", 
+                        "name": "library-populate"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "strain", 
+                        "profile", 
+                        "id"
+                    ], 
+                    "instruction": {
+                        "help": "view JSON library records", 
+                        "name": "library-info"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "path"
+                    ], 
+                    "instruction": {
+                        "help": "load gene sequences from JSON file", 
+                        "name": "gene-populate"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "region", 
+                        "strain", 
+                        "profile", 
+                        "id"
+                    ], 
+                    "instruction": {
+                        "help": "view JSON gene records", 
+                        "name": "gene-info"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "region", 
+                        "strain", 
+                        "profile", 
+                        "id", 
+                        "title", 
+                        "functionality"
+                    ], 
+                    "instruction": {
+                        "help": "print genes html diagram", 
+                        "name": "gene-html"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "region", 
+                        "strain", 
+                        "profile", 
+                        "id", 
+                        "flanking", 
+                        "distance"
+                    ], 
+                    "instruction": {
+                        "help": "verify gene RSS", 
+                        "name": "gene-rss"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "region", 
+                        "strain", 
+                        "profile", 
+                        "id"
+                    ], 
+                    "instruction": {
+                        "help": "count gene records", 
+                        "name": "gene-count"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "region", 
+                        "strain", 
+                        "profile", 
+                        "id", 
+                        "flanking"
+                    ], 
+                    "instruction": {
+                        "help": "align gene sequences to genome", 
+                        "name": "gene-align"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "region", 
+                        "strain", 
+                        "profile", 
+                        "id", 
+                        "flanking", 
+                        "limit", 
+                        "functionality"
+                    ], 
+                    "instruction": {
+                        "help": "dump gene sequences to fasta", 
+                        "name": "gene-fasta"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "format", 
+                        "profile", 
+                        "strain", 
+                        "id"
+                    ], 
+                    "instruction": {
+                        "help": "dump accession sequences to fasta", 
+                        "name": "accession-fasta"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "region", 
+                        "strain", 
+                        "profile", 
+                        "id"
+                    ], 
+                    "instruction": {
+                        "help": "dump gene sequences to igblast auxiliary file", 
+                        "name": "gene-igblast-aux"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "table"
+                    ], 
+                    "instruction": {
+                        "help": "rebuild database indexes", 
+                        "name": "rebuild"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "profile", 
+                        "library", 
+                        "strain", 
+                        "json", 
+                        "alignment"
+                    ], 
+                    "instruction": {
+                        "help": "process alignment without updating the database", 
+                        "name": "simulate"
+                    }
+                }
+            ], 
+            "instruction": {
+                "description": "", 
+                "dest": "action", 
+                "help": null, 
+                "metavar": "ACTION", 
+                "title": "pipeline operations"
+            }
+        }
+    }, 
+    "iupac amino acid notation": {
+        "*": {
+            "code": "stop", 
+            "name": "Stop codon"
+        }, 
+        "A": {
+            "charge": 1.8, 
+            "code": "ala", 
+            "name": "Alanine", 
+            "weight": 89
+        }, 
+        "B": {
+            "code": "asx", 
+            "name": "Aspartic acid or Asparagine"
+        }, 
+        "C": {
+            "charge": 2.5, 
+            "code": "cys", 
+            "name": "Cysteine", 
+            "weight": 121
+        }, 
+        "D": {
+            "charge": -3.5, 
+            "code": "asp", 
+            "name": "Aspartic acid", 
+            "weight": 133
+        }, 
+        "E": {
+            "charge": -3.5, 
+            "code": "glu", 
+            "name": "Glutamic acid", 
+            "weight": 147
+        }, 
+        "F": {
+            "charge": 2.8, 
+            "code": "phe", 
+            "name": "Phenylalanine", 
+            "weight": 165
+        }, 
+        "G": {
+            "charge": -0.4, 
+            "code": "gly", 
+            "name": "Glycine", 
+            "weight": 75
+        }, 
+        "H": {
+            "charge": -3.2, 
+            "code": "his", 
+            "name": "Histidine", 
+            "weight": 155
+        }, 
+        "I": {
+            "charge": 4.5, 
+            "code": "ile", 
+            "name": "Isoleucine", 
+            "weight": 131
+        }, 
+        "J": {
+            "code": "xle", 
+            "name": "Leucine or Isoleucine"
+        }, 
+        "K": {
+            "charge": -3.9, 
+            "code": "lys", 
+            "name": "Lysine", 
+            "weight": 146
+        }, 
+        "L": {
+            "charge": 3.8, 
+            "code": "leu", 
+            "name": "Leucine", 
+            "weight": 131
+        }, 
+        "M": {
+            "charge": 1.9, 
+            "code": "met", 
+            "name": "Methionine", 
+            "weight": 149
+        }, 
+        "N": {
+            "charge": -3.5, 
+            "code": "asn", 
+            "name": "Asparagine", 
+            "weight": 132
+        }, 
+        "P": {
+            "charge": -1.6, 
+            "code": "pro", 
+            "name": "Proline", 
+            "weight": 115
+        }, 
+        "Q": {
+            "charge": -3.5, 
+            "code": "gln", 
+            "name": "Glutamine", 
+            "weight": 146
+        }, 
+        "R": {
+            "charge": -4.5, 
+            "code": "arg", 
+            "name": "Arginine", 
+            "weight": 174
+        }, 
+        "S": {
+            "charge": -0.8, 
+            "code": "ser", 
+            "name": "Serine", 
+            "weight": 105
+        }, 
+        "T": {
+            "charge": -0.7, 
+            "code": "thr", 
+            "name": "Threonine", 
+            "weight": 119
+        }, 
+        "V": {
+            "charge": 4.2, 
+            "code": "val", 
+            "name": "Valine", 
+            "weight": 117
+        }, 
+        "W": {
+            "charge": -0.9, 
+            "code": "trp", 
+            "name": "Tryptophan", 
+            "weight": 204
+        }, 
+        "X": {
+            "code": "xaa", 
+            "name": "Any amino acid"
+        }, 
+        "Y": {
+            "charge": -1.3, 
+            "code": "tyr", 
+            "name": "Tyrosine", 
+            "weight": 181
+        }, 
+        "Z": {
+            "code": "glx", 
+            "name": "Glutamine or Glutamic acid"
+        }
+    }, 
+    "iupac nucleic acid notation": {
+        "A": {
+            "name": "Adenine", 
+            "option": [
+                "A"
+            ], 
+            "reverse": "T"
+        }, 
+        "B": {
+            "name": "Not A", 
+            "option": [
+                "G", 
+                "T", 
+                "C"
+            ], 
+            "reverse": "V"
+        }, 
+        "C": {
+            "name": "Cytosine", 
+            "option": [
+                "C"
+            ], 
+            "reverse": "G"
+        }, 
+        "D": {
+            "name": "Not C", 
+            "option": [
+                "G", 
+                "A", 
+                "T"
+            ], 
+            "reverse": "H"
+        }, 
+        "G": {
+            "name": "Guanine", 
+            "option": [
+                "G"
+            ], 
+            "reverse": "C"
+        }, 
+        "H": {
+            "name": "Not G", 
+            "option": [
+                "A", 
+                "C", 
+                "T"
+            ], 
+            "reverse": "D"
+        }, 
+        "K": {
+            "name": "Keto", 
+            "option": [
+                "G", 
+                "T"
+            ], 
+            "reverse": "M"
+        }, 
+        "M": {
+            "name": "Amino", 
+            "option": [
+                "A", 
+                "C"
+            ], 
+            "reverse": "K"
+        }, 
+        "N": {
+            "name": "Any", 
+            "option": [
+                "A", 
+                "G", 
+                "C", 
+                "T"
+            ], 
+            "reverse": "N"
+        }, 
+        "R": {
+            "name": "Purine", 
+            "option": [
+                "G", 
+                "A"
+            ], 
+            "reverse": "Y"
+        }, 
+        "S": {
+            "name": "Strong bonds", 
+            "option": [
+                "G", 
+                "C"
+            ], 
+            "reverse": "S"
+        }, 
+        "T": {
+            "name": "Thymine", 
+            "option": [
+                "T"
+            ], 
+            "reverse": "A"
+        }, 
+        "V": {
+            "name": "Not T", 
+            "option": [
+                "G", 
+                "C", 
+                "A"
+            ], 
+            "reverse": "B"
+        }, 
+        "W": {
+            "name": "Weak bonds", 
+            "option": [
+                "A", 
+                "T"
+            ], 
+            "reverse": "W"
+        }, 
+        "Y": {
+            "name": "Pyrimidine", 
+            "option": [
+                "T", 
+                "C"
+            ], 
+            "reverse": "R"
+        }
+    }, 
+    "nucleic to amino": {
+        "AAA": "K", 
+        "AAC": "N", 
+        "AAG": "K", 
+        "AAT": "N", 
+        "ACA": "T", 
+        "ACC": "T", 
+        "ACG": "T", 
+        "ACT": "T", 
+        "AGA": "R", 
+        "AGC": "S", 
+        "AGG": "R", 
+        "AGT": "S", 
+        "ATA": "I", 
+        "ATC": "I", 
+        "ATG": "M", 
+        "ATT": "I", 
+        "CAA": "Q", 
+        "CAC": "H", 
+        "CAG": "Q", 
+        "CAT": "H", 
+        "CCA": "P", 
+        "CCC": "P", 
+        "CCG": "P", 
+        "CCT": "P", 
+        "CGA": "R", 
+        "CGC": "R", 
+        "CGG": "R", 
+        "CGT": "R", 
+        "CTA": "L", 
+        "CTC": "L", 
+        "CTG": "L", 
+        "CTT": "L", 
+        "GAA": "E", 
+        "GAC": "D", 
+        "GAG": "E", 
+        "GAT": "D", 
+        "GCA": "A", 
+        "GCC": "A", 
+        "GCG": "A", 
+        "GCT": "A", 
+        "GGA": "G", 
+        "GGC": "G", 
+        "GGG": "G", 
+        "GGT": "G", 
+        "GTA": "V", 
+        "GTC": "V", 
+        "GTG": "V", 
+        "GTT": "V", 
+        "TAA": "*", 
+        "TAC": "Y", 
+        "TAG": "*", 
+        "TAT": "Y", 
+        "TCA": "S", 
+        "TCC": "S", 
+        "TCG": "S", 
+        "TCT": "S", 
+        "TGA": "*", 
+        "TGC": "C", 
+        "TGG": "W", 
+        "TGT": "C", 
+        "TTA": "L", 
+        "TTC": "F", 
+        "TTG": "L", 
+        "TTT": "F"
+    }, 
+    "profile": {
+        "aligned": {
+            "gene": {
+                "aligned": true
+            }
+        }, 
+        "all": {
+            "accession": {}, 
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "strain", 
+                    "strand", 
+                    "functionality", 
+                    "in frame", 
+                    "gapped", 
+                    "picked"
+                ], 
+                "track": {}
+            }, 
+            "gene": {}, 
+            "sample": {}
+        }, 
+        "default": {
+            "accession": {}, 
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality", 
+                    "in frame", 
+                    "gapped", 
+                    "picked"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "gene": {}, 
+            "library": {}, 
+            "sample": {
+                "valid": true
+            }
+        }, 
+        "droppedproductive": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality", 
+                    "in frame"
+                ], 
+                "track": {
+                    "picked": false, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "productive": true
+            }
+        }, 
+        "gapped": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "valid": false
+                }
+            }, 
+            "sample": {
+                "gapped": true, 
+                "valid": true
+            }
+        }, 
+        "invalid": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {}
+            }, 
+            "sample": {
+                "valid": false
+            }
+        }, 
+        "nonproductive": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "productive": false, 
+                "valid": true
+            }
+        }, 
+        "nonproductive33+": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 33
+                }, 
+                "productive": false, 
+                "valid": true
+            }
+        }, 
+        "productive": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "productive": true
+            }
+        }, 
+        "productive33+": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 33
+                }, 
+                "productive": true
+            }
+        }, 
+        "productive36+": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 36
+                }, 
+                "productive": true
+            }
+        }, 
+        "productive38+": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 38
+                }, 
+                "productive": true
+            }
+        }
+    }, 
+    "reference": {
+        "mouse chromosome 12": "/Users/lg/code/somatic/db/chr12.fa"
+    }, 
+    "region": {
+        "DH": {
+            "minimum alignment": 4, 
+            "minimum identity": 0.7, 
+            "name": "DH", 
+            "overlap penalty factor": 0.5
+        }, 
+        "JH": {
+            "minimum alignment": 30, 
+            "minimum identity": 0.8, 
+            "name": "JH"
+        }, 
+        "VH": {
+            "minimum alignment": 45, 
+            "minimum identity": 0.7, 
+            "name": "VH"
+        }
+    }, 
+    "rss": {
+        "DH": {
+            "heptamer": [
+                "CATTGTG", 
+                "CACTGTG", 
+                "CACAGTG", 
+                "TACTGTG", 
+                "CACCGTG", 
+                "CACCATG", 
+                "CAGTGTG", 
+                "CACTGTA", 
+                "CACAATG", 
+                "CACATTG", 
+                "CACGGTG", 
+                "TGAATTC"
+            ], 
+            "leniency": 3, 
+            "nonamer": [
+                "CTTTTTTGT", 
+                "GAATTCAGT", 
+                "GATTTTGAA", 
+                "GCTTTTTGT", 
+                "GATTTTTGT", 
+                "GGATTCTGT", 
+                "GGTTTTGAC", 
+                "CATGGAAGA", 
+                "ACCAAAACT", 
+                "GCAAAAACC", 
+                "ACAAGAAAG", 
+                "ACAAAAACC", 
+                "CTCAAATTC", 
+                "ACAACAAAG", 
+                "CTCAAATCC", 
+                "CCTCTATAA"
+            ], 
+            "spacer": 12
+        }, 
+        "JH": {
+            "heptamer": [
+                "TATTGTG", 
+                "GGGTGTG", 
+                "GACTGTG", 
+                "TTAGGCT", 
+                "TAGTGTG", 
+                "CAATGTG"
+            ], 
+            "leniency": 2, 
+            "nonamer": [
+                "GGGTTTTTG", 
+                "AGTATTTGT", 
+                "GAGTTTTAG", 
+                "TGACAATCA", 
+                "GGTTTTTGT", 
+                "ATTTATTGT"
+            ], 
+            "spacer": 23
+        }, 
+        "VH": {
+            "heptamer": [
+                "CACAGCC", 
+                "CACAGTG", 
+                "CACAGAC", 
+                "CACAATG", 
+                "CACCGTG", 
+                "CAGAGTG", 
+                "CACAGTA", 
+                "CACAGAG", 
+                "CACATGT", 
+                "CACACTG", 
+                "CACTCTA", 
+                "CACAGCG", 
+                "CACAGTT", 
+                "CACAGCA", 
+                "CACAGTC", 
+                "CAGTTGT", 
+                "TACAGTG", 
+                "CACGGTG", 
+                "CAAAGTG", 
+                "TATTGCT", 
+                "CACTGTA", 
+                "CACATTG", 
+                "CTCATTG", 
+                "CACGTTG", 
+                "CATAGTG", 
+                "CACAGGT", 
+                "CACTGTG", 
+                "TACATTG", 
+                "TAAGATG", 
+                "CACAAGG", 
+                "TATAGGG"
+            ], 
+            "leniency": 8, 
+            "nonamer": [
+                "CCAGGGCTG", 
+                "GCAAAAACC", 
+                "ACAAAAACT", 
+                "TCAAAAACT", 
+                "ACAAAAATA", 
+                "GAATAAGTA", 
+                "ACAAAAACA", 
+                "ACAAAAACC", 
+                "ACCCTCTAA", 
+                "AAAAAAACC", 
+                "ACAAAATGC", 
+                "ACAAGAACC", 
+                "ACAATAACT", 
+                "TCAAGAACC", 
+                "ACATAAACC", 
+                "AAAAAAAAT", 
+                "ACAGAAACC", 
+                "ACAAAATCC", 
+                "ACACAAACT", 
+                "ACACAAACC", 
+                "ACATAAATC", 
+                "ATTAACCTG", 
+                "ACATAAACA", 
+                "AGAAAAACT", 
+                "TAAAAAAAA", 
+                "TAAAAAAAC", 
+                "GCAAAAATC", 
+                "AGCACTCAA", 
+                "ACTGAAAGA", 
+                "TCAGAAAAC", 
+                "TCAGAAACC", 
+                "CAGAAACCC", 
+                "GCAGAAACC", 
+                "AACTTAATC", 
+                "CTTCCTGAC", 
+                "ACAGAAAGG", 
+                "AGAAAGTGA", 
+                "GCATAAACC", 
+                "ATATAAGAA", 
+                "ACCCAAACC", 
+                "ACCTAAACC", 
+                "GCACAAACC", 
+                "AAGAAAACC", 
+                "ACAAAAATC", 
+                "ACACAGACC", 
+                "TCAAAAACC", 
+                "ACATAAACT", 
+                "ACAAAACCC", 
+                "ACATGAACC", 
+                "CAGAAAACT", 
+                "CAGAAATCC", 
+                "CAGAAAACA", 
+                "TAGTAATCC", 
+                "CAGAAAACC", 
+                "TCAGAAATC", 
+                "CCAAACACA", 
+                "ACAGTATTT", 
+                "CACAAAACC", 
+                "ACAGTAATT", 
+                "TACAGTATT", 
+                "CTGAAAACC", 
+                "AAAGTATTT", 
+                "TCAGAAACT", 
+                "ACAGAAACT", 
+                "GCAATAGTT", 
+                "CAAAAAACC", 
+                "TCAAAACCC", 
+                "CAGTAATAC", 
+                "CATAAACTC", 
+                "CAGAAACAC", 
+                "TCAGAAACA", 
+                "CATCTGTAC", 
+                "TCCAAAACC", 
+                "TCAAAAAGT", 
+                "TCATAAACC", 
+                "ACTAAAACC", 
+                "ACAAAAATT", 
+                "ACAAATACT", 
+                "ATAGTAATT", 
+                "CCACAAACC", 
+                "CCACCAACC", 
+                "GCACAAACT", 
+                "TGCAATATT", 
+                "AACAAAAGC", 
+                "ACAAACCCT", 
+                "AAATAAACC", 
+                "ACACAAAAC", 
+                "AAACAAACC", 
+                "ATGTAAACC", 
+                "ACATTATTT", 
+                "CAGAAATCT", 
+                "AGAAACCCT"
+            ], 
+            "spacer": 23
+        }
+    }, 
+    "scale": {
+        "color": [
+            "#00007F", 
+            "#000083", 
+            "#000087", 
+            "#00008B", 
+            "#00008F", 
+            "#000093", 
+            "#000097", 
+            "#00009B", 
+            "#00009F", 
+            "#0000A3", 
+            "#0000A7", 
+            "#0000AB", 
+            "#0000AF", 
+            "#0000B3", 
+            "#0000B7", 
+            "#0000BB", 
+            "#0000BF", 
+            "#0000C3", 
+            "#0000C7", 
+            "#0000CB", 
+            "#0000CF", 
+            "#0000D3", 
+            "#0000D7", 
+            "#0000DB", 
+            "#0000DF", 
+            "#0000E3", 
+            "#0000E7", 
+            "#0000EB", 
+            "#0000EF", 
+            "#0000F3", 
+            "#0000F7", 
+            "#0000FB", 
+            "#0000FF", 
+            "#0004FF", 
+            "#0008FF", 
+            "#000CFF", 
+            "#0010FF", 
+            "#0014FF", 
+            "#0018FF", 
+            "#001CFF", 
+            "#0020FF", 
+            "#0024FF", 
+            "#0028FF", 
+            "#002CFF", 
+            "#0030FF", 
+            "#0034FF", 
+            "#0038FF", 
+            "#003CFF", 
+            "#0040FF", 
+            "#0044FF", 
+            "#0048FF", 
+            "#004CFF", 
+            "#0050FF", 
+            "#0054FF", 
+            "#0058FF", 
+            "#005CFF", 
+            "#0060FF", 
+            "#0064FF", 
+            "#0068FF", 
+            "#006CFF", 
+            "#0070FF", 
+            "#0074FF", 
+            "#0078FF", 
+            "#007CFF", 
+            "#0080FF", 
+            "#0084FF", 
+            "#0088FF", 
+            "#008CFF", 
+            "#0090FF", 
+            "#0094FF", 
+            "#0098FF", 
+            "#009CFF", 
+            "#00A0FF", 
+            "#00A4FF", 
+            "#00A8FF", 
+            "#00ACFF", 
+            "#00B0FF", 
+            "#00B4FF", 
+            "#00B8FF", 
+            "#00BCFF", 
+            "#00C0FF", 
+            "#00C4FF", 
+            "#00C8FF", 
+            "#00CCFF", 
+            "#00D0FF", 
+            "#00D4FF", 
+            "#00D8FF", 
+            "#00DCFF", 
+            "#00E0FF", 
+            "#00E4FF", 
+            "#00E8FF", 
+            "#00ECFF", 
+            "#00F0FF", 
+            "#00F4FF", 
+            "#00F8FF", 
+            "#00FCFF", 
+            "#01FFFD", 
+            "#05FFF9", 
+            "#09FFF5", 
+            "#0DFFF1", 
+            "#11FFED", 
+            "#15FFE9", 
+            "#19FFE5", 
+            "#1DFFE1", 
+            "#21FFDD", 
+            "#25FFD9", 
+            "#29FFD5", 
+            "#2DFFD1", 
+            "#31FFCD", 
+            "#35FFC9", 
+            "#39FFC5", 
+            "#3DFFC1", 
+            "#41FFBD", 
+            "#45FFB9", 
+            "#49FFB5", 
+            "#4DFFB1", 
+            "#51FFAD", 
+            "#55FFA9", 
+            "#59FFA5", 
+            "#5DFFA1", 
+            "#61FF9D", 
+            "#65FF99", 
+            "#69FF95", 
+            "#6DFF91", 
+            "#71FF8D", 
+            "#75FF89", 
+            "#79FF85", 
+            "#7DFF81", 
+            "#81FF7D", 
+            "#85FF79", 
+            "#89FF75", 
+            "#8DFF71", 
+            "#91FF6D", 
+            "#95FF69", 
+            "#99FF65", 
+            "#9DFF61", 
+            "#A1FF5D", 
+            "#A5FF59", 
+            "#A9FF55", 
+            "#ADFF51", 
+            "#B1FF4D", 
+            "#B5FF49", 
+            "#B9FF45", 
+            "#BDFF41", 
+            "#C1FF3D", 
+            "#C5FF39", 
+            "#C9FF35", 
+            "#CDFF31", 
+            "#D1FF2D", 
+            "#D5FF29", 
+            "#D9FF25", 
+            "#DDFF21", 
+            "#E1FF1D", 
+            "#E5FF19", 
+            "#E9FF15", 
+            "#EDFF11", 
+            "#F1FF0D", 
+            "#F5FF09", 
+            "#F9FF05", 
+            "#FDFF01", 
+            "#FFFC00", 
+            "#FFF800", 
+            "#FFF400", 
+            "#FFF000", 
+            "#FFEC00", 
+            "#FFE800", 
+            "#FFE400", 
+            "#FFE000", 
+            "#FFDC00", 
+            "#FFD800", 
+            "#FFD400", 
+            "#FFD000", 
+            "#FFCC00", 
+            "#FFC800", 
+            "#FFC400", 
+            "#FFC000", 
+            "#FFBC00", 
+            "#FFB800", 
+            "#FFB400", 
+            "#FFB000", 
+            "#FFAC00", 
+            "#FFA800", 
+            "#FFA400", 
+            "#FFA000", 
+            "#FF9C00", 
+            "#FF9800", 
+            "#FF9400", 
+            "#FF9000", 
+            "#FF8C00", 
+            "#FF8800", 
+            "#FF8400", 
+            "#FF8000", 
+            "#FF7C00", 
+            "#FF7800", 
+            "#FF7400", 
+            "#FF7000", 
+            "#FF6C00", 
+            "#FF6800", 
+            "#FF6400", 
+            "#FF6000", 
+            "#FF5C00", 
+            "#FF5800", 
+            "#FF5400", 
+            "#FF5000", 
+            "#FF4C00", 
+            "#FF4800", 
+            "#FF4400", 
+            "#FF4000", 
+            "#FF3C00", 
+            "#FF3800", 
+            "#FF3400", 
+            "#FF3000", 
+            "#FF2C00", 
+            "#FF2800", 
+            "#FF2400", 
+            "#FF2000", 
+            "#FF1C00", 
+            "#FF1800", 
+            "#FF1400", 
+            "#FF1000", 
+            "#FF0C00", 
+            "#FF0800", 
+            "#FF0400", 
+            "#FF0000", 
+            "#FB0000", 
+            "#F70000", 
+            "#F30000", 
+            "#EF0000", 
+            "#EB0000", 
+            "#E70000", 
+            "#E30000", 
+            "#DF0000", 
+            "#DB0000", 
+            "#D70000", 
+            "#D30000", 
+            "#CF0000", 
+            "#CB0000", 
+            "#C70000", 
+            "#C30000", 
+            "#BF0000", 
+            "#BB0000", 
+            "#B70000", 
+            "#B30000", 
+            "#AF0000", 
+            "#AB0000", 
+            "#A70000", 
+            "#A30000", 
+            "#9F0000", 
+            "#9B0000", 
+            "#970000", 
+            "#930000", 
+            "#8F0000", 
+            "#8B0000", 
+            "#870000", 
+            "#830000", 
+            "#7F0000"
+        ]
+    }, 
+    "signal": {
+        "Initiator": "[TC][TC]A[ATCG][AT][TC][TC]", 
+        "TATA box": "TAAATA", 
+        "ocatmer": "ATGCAAA[GT]"
+    }, 
+    "table": {
+        "accession": {
+            "collection": "accession", 
+            "index": [
+                {
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ]
+                    ], 
+                    "name": "accession id", 
+                    "unique": true
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.organism name", 
+                            1
+                        ]
+                    ], 
+                    "name": "accession organism name", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.strain", 
+                            1
+                        ]
+                    ], 
+                    "name": "accession strain", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.format", 
+                            1
+                        ]
+                    ], 
+                    "name": "accession format", 
+                    "unique": false
+                }
+            ]
+        }, 
+        "gene": {
+            "collection": "gene", 
+            "index": [
+                {
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ]
+                    ], 
+                    "name": "gene id", 
+                    "unique": true
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.accession", 
+                            1
+                        ]
+                    ], 
+                    "name": "gene accession", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.organism name", 
+                            1
+                        ]
+                    ], 
+                    "name": "gene organism name", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.region", 
+                            1
+                        ]
+                    ], 
+                    "name": "gene region", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.verified", 
+                            1
+                        ]
+                    ], 
+                    "name": "gene verified", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.functionality", 
+                            1
+                        ]
+                    ], 
+                    "name": "gene functionality", 
+                    "unique": false
+                }
+            ]
+        }, 
+        "library": {
+            "collection": "library", 
+            "index": [
+                {
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ]
+                    ], 
+                    "name": "library id", 
+                    "unique": true
+                }
+            ]
+        }, 
+        "ncbi_accession": {
+            "collection": "ncbi_accession", 
+            "index": [
+                {
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ]
+                    ], 
+                    "name": "accession id", 
+                    "unique": true
+                }
+            ]
+        }, 
+        "sample": {
+            "collection": "sample", 
+            "index": [
+                {
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ]
+                    ], 
+                    "name": "sample id", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.valid", 
+                            1
+                        ]
+                    ], 
+                    "name": "sample valid", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.gapped", 
+                            1
+                        ]
+                    ], 
+                    "name": "sample gapped", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
+                    "name": "sample library", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ], 
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
+                    "name": "unique sample in library", 
+                    "unique": true
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
+                    "name": "valid sample with library", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ], 
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.productive", 
+                            1
+                        ]
+                    ], 
+                    "name": "valid productive sample with library", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ], 
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.productive", 
+                            1
+                        ], 
+                        [
+                            "head.average phred", 
+                            1
+                        ]
+                    ], 
+                    "name": "valid productive sample with phred and library", 
+                    "unique": false
+                }
+            ]
+        }, 
+        "survey": {
+            "collection": "survey", 
+            "index": [
+                {
+                    "key": [ [ "head.id", 1 ] ], 
+                    "name": "survey id", 
+                    "unique": true
+                },
+                {
+                    "key": [ [ "head.name", 1 ] ], 
+                    "name": "survey name", 
+                    "unique": true
+                }
+            ]
+        }
+    }
+}
