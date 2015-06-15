@@ -735,7 +735,7 @@
                     ], 
                     "instruction": {
                         "help": "export survey to an R object", 
-                        "name": "survey-R"
+                        "name": "survey-r"
                     }
                 }, 
                 {
