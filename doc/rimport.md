@@ -1,7 +1,9 @@
 ##load##
-load('somatic.gz')
+To load the data into an R session simply type:
 
-This will create a *List* variable in the R session called somatic.
+```load('somatic.gz')```
+
+This will create a *List* variable in the R session called *somatic*.
 
 The List is of **S4** objects of the following deceleration:
 

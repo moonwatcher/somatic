@@ -4088,7 +4088,7 @@ class Pipeline(object):
                 
                 r('survey <- new("Survey", vj=vjdf, vdj=vdjdf, vj_correlation=vjc, vdj_correlation=vdjc)')
                 r('somatic <- c(somatic, {}=survey)'.format(survey.name))
-        r('save(somatic, file="rdata.gz", compress=TRUE)')
+        r('save(somatic, file="somatic.gz", compress=TRUE)')
 
     def plot(self, names):
         plot_name = []
