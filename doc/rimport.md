@@ -28,7 +28,7 @@ setClass(
 )
 ```
 
-The *vj* slot is a data frame has the following columns:
+The *vj* slot is a data frame that has the following columns:
 
 ```
 VJ_CDR3_charge
@@ -42,7 +42,7 @@ VJ_V_J_length
 VJ_chew
 ```
 
-The *vdj* slot is a data frame has the following columns:
+The *vdj* slot is a data frame that has the following columns:
 
 ```
 VDJ_CDR3_charge
