@@ -2580,7 +2580,6 @@ class Survey(object):
                     if hit['picked'] and hit['region'] in breakdown['region'].keys():
                         breakdown['region'][hit['region']].append(hit)
                 breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH']) * len(breakdown['region']['DH'])
-                # print(to_json(breakdown))
                 breakdown['portion'] = 1.0 / float(breakdown['combination'])
 
                 chewback = {
@@ -4373,7 +4372,7 @@ class Pipeline(object):
                 cmd.instruction['skip'],
                 cmd.instruction['profile'],
                 cmd.instruction['name'])
-            print(survey.json)
+            # print(survey.json)
 
         elif cmd.action == 'plot':
             self.plot(cmd.instruction['names'])
