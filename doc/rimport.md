@@ -9,7 +9,7 @@ somatic survey-r spffo33 spfmz33 spfpreb33 spfb1a33 gffo33 gfmz33 gfpreb33 gfb1a
 To load the data into an R session simply type:
 
 ```
-load('somatic.gz')
+load('somatic.bz2')
 ```
 
 This will create a *List* variable in the R session called *somatic*.
