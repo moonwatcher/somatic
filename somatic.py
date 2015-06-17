@@ -4194,7 +4194,9 @@ class Pipeline(object):
             count = 0
             if buffer:
                 try:
-                    result = collection.insert_many([ sample.document for sample in buffer ])
+                    document = [ sample.document for sample in buffer ]
+                    result = collection.insert_many(document)
+                    print(to_json(document))
                 except BulkWriteError as e:
                     self.log.critical(e.details)
                     raise SystemExit()
@@ -4202,7 +4204,7 @@ class Pipeline(object):
                 buffer = []
             return count
 
-        collection = self.resolver.database['sample']
+        collection = self.resolver.database['sample_v2']
         q = self.build_query(query, profile, 'sample')
         cursor = self.resolver.make_cursor('sample', q, limit, skip)
         count = 0
