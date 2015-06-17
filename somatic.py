@@ -4202,6 +4202,7 @@ class Pipeline(object):
                 buffer = []
             return count
 
+        collection = self.resolver.database['sample']
         q = self.build_query(query, profile, 'sample')
         cursor = self.resolver.make_cursor('sample', q, limit, skip)
         count = 0
