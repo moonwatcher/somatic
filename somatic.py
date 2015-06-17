@@ -4194,9 +4194,7 @@ class Pipeline(object):
             count = 0
             if buffer:
                 try:
-                    # result = collection.insert_many([ sample.document for sample in buffer ])
-                    print(to_json(buffer))
-                    pass
+                    result = collection.insert_many([ sample.document for sample in buffer ])
                 except BulkWriteError as e:
                     self.log.critical(e.details)
                     raise SystemExit()
