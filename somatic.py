@@ -4164,8 +4164,8 @@ class Pipeline(object):
         plot_name = []
         surveys = []
         colors = [
-            ['#669803', '#DDE7AC'],
             ['#C0392b', '#D14A3C'],
+            ['#669803', '#DDE7AC'],
             ['#EEB63E', '#FFC74F'],
             ['#C64AC3', '#D75BD4'],
         ]
