@@ -2339,15 +2339,13 @@ class Histogram(object):
                     x['value'] /= total
 
         plot = self.plots['expression']
-        width = 0.35
+        width = 0.3
         left = arange(len(survey.body['expression'])) + (float(self.count) * width)
-        # height = array([ math.log(1.0 + x['value'], 2) for x in survey.body['expression'] ]) / survey.count
-        # height = array([ x['value'] for x in survey.body['expression'] ]) / survey.count
         height = array([ x['value'] for x in survey.body['expression'] ], dtype=float64)
         height = array([ math.log(1.0 + (100.0 * x), 2) for x in height ])
         plot['plot'].bar(left, height, label=survey.name, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
         plot['plot'].set_xticks(left)
-        plot['plot'].set_xticklabels([ x['name'] for x in survey.body['expression'] ], rotation='vertical', size=5)
+        plot['plot'].set_xticklabels([ x['name'] for x in survey.body['expression'] ], rotation='vertical', size=5)        
         plot['plot'].autoscale_view()
 
     def save(self, path):
@@ -2683,6 +2681,7 @@ class Survey(object):
             for gene in region:
                 self.body['expression'][gene['allele']] = {
                     'name': gene['allele'],
+                    'functionality': gene['functionality'],
                     'start': gene['start'],
                     'end': gene['end'],
                     'region': name,
