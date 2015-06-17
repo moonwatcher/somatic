@@ -2332,26 +2332,19 @@ class Histogram(object):
         self.count += 1
 
     def draw_expression(self, survey, edgecolor, facecolor, alpha):
-        count = survey.body['vj']['sample count'] + survey.body['vdj']['sample count']
+        for region in ['VH', 'DH', 'JH']:
+            total = sum([ x['value'] for x in survey.body['expression'] if x['region'] == region ])
+            for x in survey.body['expression']:
+                if x['region'] == region:
+                    x['value'] /= total
+
         plot = self.plots['expression']
         width = 0.35
         left = arange(len(survey.body['expression'])) + (float(self.count) * width)
         # height = array([ math.log(1.0 + x['value'], 2) for x in survey.body['expression'] ]) / survey.count
-        height = array([ x['value'] for x in survey.body['expression'] ]) / survey.count
-        height = array([ math.log(1.0 + (100 * x), 2) for x in height ])
-
-
-        # color = []
-        # for gene in survey.body['expression']:
-        #     if gene['region'] == 'JH':
-        #         color.append('#669803')
-        #     elif gene['region'] == 'DH':
-        #         color.append('#C0392b')
-        #     elif gene['region'] == 'VH':
-        #         color.append('#C64AC3')
-
-        # height = [ math.log(1.0 + x['value'], 10) for x in survey.body['expression'] ]
-        # height = [ x['value'] for x in survey.body['expression'] ]
+        # height = array([ x['value'] for x in survey.body['expression'] ]) / survey.count
+        height = array([ x['value'] for x in survey.body['expression'] ], dtype=float64)
+        height = array([ math.log(1.0 + (100.0 * x), 2) for x in height ])
         plot['plot'].bar(left, height, label=survey.name, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
         plot['plot'].set_xticks(left)
         plot['plot'].set_xticklabels([ x['name'] for x in survey.body['expression'] ], rotation='vertical', size=5)
@@ -2714,7 +2707,7 @@ class Survey(object):
                     self.body['expression'][j['allele']]['value'] += value
                     self.body['expression'][d['allele']]['value'] += value
                     self.body['expression'][v['allele']]['value'] += value
-        self.body['expression'] = sorted(self.body['expression'].values(), key=lambda x: x['start'])
+        self.body['expression'] = sorted(self.body['expression'].values(), key=lambda x: x['start'], reverse=True)
 
     def _add_sample_to_slice(self, slice, breakdown):
         if breakdown['type'] == 'vj':
