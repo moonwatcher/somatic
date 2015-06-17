@@ -71,7 +71,7 @@
         }
     }, 
     "constant": {
-        "buffer size": 32, 
+        "buffer size": 128, 
         "fasta line length": 80
     }, 
     "cache": {
@@ -629,6 +629,21 @@
                     "instruction": {
                         "help": "view sample alignment", 
                         "name": "view"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "profile", 
+                        "library", 
+                        "gapped", 
+                        "valid", 
+                        "limit", 
+                        "skip", 
+                        "id"
+                    ], 
+                    "instruction": {
+                        "help": "analyze samples", 
+                        "name": "analyze"
                     }
                 }, 
                 {

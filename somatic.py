@@ -1708,6 +1708,8 @@ class Sample(object):
         self.head['in frame'] = False
         self.head['productive'] = False
         self.head['palindromic'] = False
+        self.head['p count'] = 0
+        self.head['n count'] = 0
         self.body['primary'] = {}
 
         if 'framed by' in self.body:
@@ -2005,6 +2007,8 @@ class Sample(object):
             junction['palindrome'] = ''.join(junction['palindrome'])
             p = junction['palindrome'].count('P')
             n = junction['palindrome'].count('N')
+            self.head['p count'] += p
+            self.head['n count'] += n
             if p > 0: self.head['palindromic'] = True
             if n > 0:
                 if p > 0:
@@ -4185,15 +4189,43 @@ class Pipeline(object):
         else:
             raise ValueError('comparison plots take up to 4 surveys')
 
+    def sample_analyze(self, query, limit, skip, profile):
+        def flush(buffer):
+            count = 0
+            if buffer:
+                try:
+                    # result = collection.insert_many([ sample.document for sample in buffer ])
+                    print(to_json(buffer))
+                    pass
+                except BulkWriteError as e:
+                    self.log.critical(e.details)
+                    raise SystemExit()
+                count = len(buffer)
+                buffer = []
+            return count
+
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        count = 0
+        buffer = []
+        for node in cursor:
+            sample = Sample(self, node)
+            sample.analyze()
+            buffer.append(sample)
+            if len(buffer) >= self.configuration['constant']['buffer size']:
+                count += flush(buffer)
+                self.log.info('%s so far', count)
+        cursor.close()
+        flush(buffer)
+
     def sample_populate(self, library, strain, drop):
         count = 0
         if not library:
             raise ValueError('must specify a library to populate')
         block = Block(self)
         collection = self.resolver.database['sample']
-        if drop:
-            self.resolver.library_drop(library)
-            
+        if drop: self.resolver.library_drop(library)
+
         while block.fill(library, strain):
             try:
                 result = collection.insert_many(block.document)
@@ -4479,6 +4511,13 @@ class Pipeline(object):
                 
         elif cmd.action == 'info':
             self.sample_info(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'analyze':
+            self.sample_analyze(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
