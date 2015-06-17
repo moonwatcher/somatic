@@ -328,7 +328,7 @@ legend.framealpha     : 0.75    # opacity of of legend frame
 ### FIGURE
 # See http://matplotlib.org/api/figure_api.html#matplotlib.figure.Figure
 figure.figsize   : 20, 20    # figure size in inches
-figure.dpi       : 800      # figure dots per inch
+figure.dpi       : 300      # figure dots per inch
 #figure.facecolor : 0.75    # figure facecolor; 0.75 is scalar gray
 #figure.edgecolor : white   # figure edgecolor
 #figure.autolayout : False  # When True, automatically adjust subplot

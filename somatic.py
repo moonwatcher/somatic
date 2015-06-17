@@ -2295,6 +2295,11 @@ class Histogram(object):
                 'position': [7,1],
                 'name': 'VJ J 5\' chew back',
             },
+            'expression': {
+                'position': [8,0],
+                'name': 'Expression',
+                'colspan': 4
+            },
         }
         space = [0,0]
         for plot in self.plots.values():
@@ -2305,7 +2310,10 @@ class Histogram(object):
         self.figure = pyplot.figure(figsize=(space[1] * 5, space[0] * 5))
         self.figure.suptitle(self.name, fontsize=16, fontweight='bold')
         for key,plot in self.plots.items():
-            plot['plot'] = pyplot.subplot2grid(space, plot['position'])
+            if 'colspan' in plot:
+                plot['plot'] = pyplot.subplot2grid(space, plot['position'], colspan=plot['colspan'])
+            else:
+                plot['plot'] = pyplot.subplot2grid(space, plot['position'])
 
     def draw(self, survey, edgecolor='#669803', facecolor='#DDE7AC', alpha=0.65):
         for kind in ['vdj', 'vj']:
@@ -2319,6 +2327,29 @@ class Histogram(object):
                 label = '{}\nmean {:.2f}\nsd {:.2f}\ncount {}'.format(survey.name, distribution['mean'], distribution['std'], survey.body[kind]['sample count'])
                 plot['plot'].bar(center, bins, label=label, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
                 plot['plot'].set_title(plot['name'], fontweight='bold')
+        self.draw_expression(survey)
+
+    def draw_expression(self, survey, edgecolor='#669803', facecolor='#DDE7AC', alpha=0.65):
+        plot = self.plots['expression']
+        width = 0.7
+        left = arange(len(survey.body['expression'])) + 1
+        height = [ math.log(1.0 + x['value'], 2) for x in survey.body['expression'] ]
+
+        color = []
+        for gene in survey.body['expression']:
+            if gene['region'] == 'JH':
+                color.append('#669803')
+            elif gene['region'] == 'DH':
+                color.append('#C0392b')
+            elif gene['region'] == 'VH':
+                color.append('#C64AC3')
+
+        # height = [ math.log(1.0 + x['value'], 10) for x in survey.body['expression'] ]
+        # height = [ x['value'] for x in survey.body['expression'] ]
+        plot['plot'].bar(left, height, width, label='expression', color=color)
+        plot['plot'].set_xticks(left)
+        plot['plot'].set_xticklabels([ x['name'] for x in survey.body['expression'] ], rotation='vertical', size=5)
+        plot['plot'].autoscale_view()
 
     def save(self, path):
         for key,plot in self.plots.items():
@@ -2645,6 +2676,39 @@ class Survey(object):
                 self.log.debug('cached survey loaded from %s', path)
             except KeyError:
                 self.log.warning('failed loading cached survey from %s', path)
+
+    def _load_expression(self):
+        self.body['expression'] = {}
+
+        for name,region in self.repertoire.items():
+            for gene in region:
+                self.body['expression'][gene['allele']] = {
+                    'name': gene['allele'],
+                    'start': gene['start'],
+                    'end': gene['end'],
+                    'region': name,
+                    'value': 0,
+                }
+
+        for j in self.repertoire['JH']:
+            for v in self.repertoire['VH']:
+                ji = self.lookup['allele']['JH']['lookup'][j['allele']]
+                vi = self.lookup['allele']['VH']['lookup'][v['allele']]
+                value = self.slice['allele']['correlation']['vj'][ji][vi]
+                self.body['expression'][j['allele']]['value'] += value
+                self.body['expression'][v['allele']]['value'] += value
+
+        for j in self.repertoire['JH']:
+            for d in self.repertoire['DH']:
+                for v in self.repertoire['VH']:
+                    ji = self.lookup['allele']['JH']['lookup'][j['allele']]
+                    di = self.lookup['allele']['DH']['lookup'][d['allele']]
+                    vi = self.lookup['allele']['VH']['lookup'][v['allele']]
+                    value = self.slice['allele']['correlation']['vdj'][ji][di][vi]
+                    self.body['expression'][j['allele']]['value'] += value
+                    self.body['expression'][d['allele']]['value'] += value
+                    self.body['expression'][v['allele']]['value'] += value
+        self.body['expression'] = sorted(self.body['expression'].values(), key=lambda x: x['start'])
 
     def _add_sample_to_slice(self, slice, breakdown):
         if breakdown['type'] == 'vj':
@@ -4094,15 +4158,16 @@ class Pipeline(object):
         plot_name = []
         surveys = []
         colors = [
-            ['#C0392b', '#D14A3C'],
             ['#669803', '#DDE7AC'],
-            ['#C64AC3', '#D75BD4'],
+            ['#C0392b', '#D14A3C'],
             ['#EEB63E', '#FFC74F'],
+            ['#C64AC3', '#D75BD4'],
         ]
         if len(names) > 0 and len(names) < 5:
             for name in names:
                 survey = self.resolver.survey_find(name)
                 if survey:
+                    survey._load_expression()
                     surveys.append(survey)
                     plot_name.append(survey.name)
 
@@ -4428,7 +4493,7 @@ class Pipeline(object):
                 cmd.instruction['skip'],
                 cmd.instruction['profile'],
                 cmd.instruction['name'])
-            # print(survey.json)
+            print(survey.json)
 
         elif cmd.action == 'plot':
             self.plot(cmd.instruction['names'])
