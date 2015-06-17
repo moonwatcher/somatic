@@ -2332,10 +2332,14 @@ class Histogram(object):
         self.count += 1
 
     def draw_expression(self, survey, edgecolor, facecolor, alpha):
+        count = survey.body['vj']['sample count'] + survey.body['vdj']['sample count']
         plot = self.plots['expression']
         width = 0.35
         left = arange(len(survey.body['expression'])) + (float(self.count) * width)
-        height = [ math.log(1.0 + x['value'], 2) for x in survey.body['expression'] ]
+        # height = array([ math.log(1.0 + x['value'], 2) for x in survey.body['expression'] ]) / survey.count
+        height = array([ x['value'] for x in survey.body['expression'] ]) / survey.count
+        height = array([ math.log(1.0 + (100 * x), 2) for x in height ])
+
 
         # color = []
         # for gene in survey.body['expression']:
@@ -2348,7 +2352,7 @@ class Histogram(object):
 
         # height = [ math.log(1.0 + x['value'], 10) for x in survey.body['expression'] ]
         # height = [ x['value'] for x in survey.body['expression'] ]
-        plot['plot'].bar(left, height, label='expression', alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
+        plot['plot'].bar(left, height, label=survey.name, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
         plot['plot'].set_xticks(left)
         plot['plot'].set_xticklabels([ x['name'] for x in survey.body['expression'] ], rotation='vertical', size=5)
         plot['plot'].autoscale_view()
