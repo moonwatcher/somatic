@@ -2073,111 +2073,88 @@
             "collection": "sample", 
             "index": [
                 {
-                    "key": [
-                        [
-                            "head.id", 
-                            1
-                        ]
-                    ], 
+                    "key": [[ "head.id", 1 ]], 
                     "name": "sample id", 
                     "unique": false
                 }, 
                 {
-                    "key": [
-                        [
-                            "head.valid", 
-                            1
-                        ]
-                    ], 
+                    "key": [[ "head.valid", 1 ]], 
                     "name": "sample valid", 
                     "unique": false
                 }, 
                 {
-                    "key": [
-                        [
-                            "head.gapped", 
-                            1
-                        ]
-                    ], 
+                    "key": [[ "head.gapped", 1 ]], 
                     "name": "sample gapped", 
                     "unique": false
                 }, 
                 {
-                    "key": [
-                        [
-                            "head.library", 
-                            1
-                        ]
-                    ], 
+                    "key": [[ "head.library", 1 ]], 
                     "name": "sample library", 
                     "unique": false
                 }, 
                 {
-                    "key": [
-                        [
-                            "head.id", 
-                            1
-                        ], 
-                        [
-                            "head.library", 
-                            1
-                        ]
-                    ], 
+                    "key": [[ "head.id", 1 ], [ "head.library", 1 ]], 
                     "name": "unique sample in library", 
                     "unique": true
                 }, 
                 {
-                    "key": [
-                        [
-                            "head.valid", 
-                            1
-                        ], 
-                        [
-                            "head.library", 
-                            1
-                        ]
-                    ], 
+                    "key": [[ "head.valid", 1 ], [ "head.library", 1 ]], 
                     "name": "valid sample with library", 
                     "unique": false
                 }, 
                 {
-                    "key": [
-                        [
-                            "head.library", 
-                            1
-                        ], 
-                        [
-                            "head.valid", 
-                            1
-                        ], 
-                        [
-                            "head.productive", 
-                            1
-                        ]
-                    ], 
+                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ]], 
                     "name": "valid productive sample with library", 
                     "unique": false
                 }, 
                 {
-                    "key": [
-                        [
-                            "head.library", 
-                            1
-                        ], 
-                        [
-                            "head.valid", 
-                            1
-                        ], 
-                        [
-                            "head.productive", 
-                            1
-                        ], 
-                        [
-                            "head.average phred", 
-                            1
-                        ]
-                    ], 
+                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ], [ "head.average phred", 1 ]], 
                     "name": "valid productive sample with phred and library", 
+                    "unique": false
+                }
+            ]
+        }, 
+        "sample_v2": {
+            "collection": "sample_v2", 
+            "index": [
+                {
+                    "key": [[ "head.id", 1 ]], 
+                    "name": "sample id v2", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.valid", 1 ]], 
+                    "name": "sample valid v2", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.gapped", 1 ]], 
+                    "name": "sample gapped v2", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.library", 1 ]], 
+                    "name": "sample library v2", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.id", 1 ], [ "head.library", 1 ]], 
+                    "name": "unique sample in library v2", 
+                    "unique": true
+                }, 
+                {
+                    "key": [[ "head.valid", 1 ], [ "head.library", 1 ]], 
+                    "name": "valid sample with library v2", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ]], 
+                    "name": "valid productive sample with library v2", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ], [ "head.average phred", 1 ]], 
+                    "name": "valid productive sample with phred and library v2", 
                     "unique": false
                 }
             ]

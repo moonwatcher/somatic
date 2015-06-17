@@ -4190,19 +4190,17 @@ class Pipeline(object):
             raise ValueError('comparison plots take up to 4 surveys')
 
     def sample_analyze(self, query, limit, skip, profile):
-        def flush(buffer):
-            count = 0
+        def flush(buffer, collection):
             if buffer:
                 try:
                     document = [ sample.document for sample in buffer ]
                     result = collection.insert_many(document)
-                    print(to_json(document))
                 except BulkWriteError as e:
                     self.log.critical(e.details)
                     raise SystemExit()
-                count = len(buffer)
-                buffer = []
-            return count
+                return len(buffer)
+            else:
+                return 0
 
         collection = self.resolver.database['sample_v2']
         q = self.build_query(query, profile, 'sample')
@@ -4214,10 +4212,11 @@ class Pipeline(object):
             sample.analyze()
             buffer.append(sample)
             if len(buffer) >= self.configuration['constant']['buffer size']:
-                count += flush(buffer)
+                count += flush(buffer, collection)
+                buffer = []
                 self.log.info('%s so far', count)
         cursor.close()
-        flush(buffer)
+        flush(buffer, collection)
 
     def sample_populate(self, library, strain, drop):
         count = 0
