@@ -4495,7 +4495,6 @@ class Pipeline(object):
                 cmd.instruction['skip'],
                 cmd.instruction['profile'],
                 cmd.instruction['name'])
-            print(survey.json)
 
         elif cmd.action == 'plot':
             self.plot(cmd.instruction['names'])
