@@ -2328,27 +2328,27 @@ class Histogram(object):
                 label = '{}\nmean {:.2f}\nsd {:.2f}\ncount {}'.format(survey.name, distribution['mean'], distribution['std'], survey.body[kind]['sample count'])
                 plot['plot'].bar(center, bins, label=label, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
                 plot['plot'].set_title(plot['name'], fontweight='bold')
-        self.draw_expression(survey)
+        self.draw_expression(survey, edgecolor, facecolor, alpha)
         self.count += 1
 
-    def draw_expression(self, survey, edgecolor='#669803', facecolor='#DDE7AC', alpha=0.65):
+    def draw_expression(self, survey, edgecolor, facecolor, alpha):
         plot = self.plots['expression']
         width = 0.35
         left = arange(len(survey.body['expression'])) + (float(self.count) * width)
         height = [ math.log(1.0 + x['value'], 2) for x in survey.body['expression'] ]
 
-        color = []
-        for gene in survey.body['expression']:
-            if gene['region'] == 'JH':
-                color.append('#669803')
-            elif gene['region'] == 'DH':
-                color.append('#C0392b')
-            elif gene['region'] == 'VH':
-                color.append('#C64AC3')
+        # color = []
+        # for gene in survey.body['expression']:
+        #     if gene['region'] == 'JH':
+        #         color.append('#669803')
+        #     elif gene['region'] == 'DH':
+        #         color.append('#C0392b')
+        #     elif gene['region'] == 'VH':
+        #         color.append('#C64AC3')
 
         # height = [ math.log(1.0 + x['value'], 10) for x in survey.body['expression'] ]
         # height = [ x['value'] for x in survey.body['expression'] ]
-        plot['plot'].bar(left, height, width, label='expression', color=color)
+        plot['plot'].bar(left, height, label='expression', alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
         plot['plot'].set_xticks(left)
         plot['plot'].set_xticklabels([ x['name'] for x in survey.body['expression'] ], rotation='vertical', size=5)
         plot['plot'].autoscale_view()
