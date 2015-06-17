@@ -2187,6 +2187,7 @@ class Histogram(object):
     def __init__(self, name):
         self.log = logging.getLogger('Histogram')
         self.name = name
+        self.count = 0
         self.plots = {
             'VDJ CDR3 length': {
                 'position': [0,0],
@@ -2328,11 +2329,12 @@ class Histogram(object):
                 plot['plot'].bar(center, bins, label=label, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
                 plot['plot'].set_title(plot['name'], fontweight='bold')
         self.draw_expression(survey)
+        self.count += 1
 
     def draw_expression(self, survey, edgecolor='#669803', facecolor='#DDE7AC', alpha=0.65):
         plot = self.plots['expression']
-        width = 0.7
-        left = arange(len(survey.body['expression'])) + 1
+        width = 0.35
+        left = arange(len(survey.body['expression'])) + (float(self.count) * width)
         height = [ math.log(1.0 + x['value'], 2) for x in survey.body['expression'] ]
 
         color = []
