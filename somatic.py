@@ -2057,7 +2057,7 @@ class Sample(object):
             position = jh['query start'] + offset
         elif tryptophan:
             for w in tryptophan:
-                self.make_comment('CDR3 framing tryptophan found at %s but not followed by glycine')
+                self.make_comment('CDR3 framing tryptophan found at %s but not followed by glycine', w)
         else:
             self.make_comment('no CDR3 framing tryptophan')
         return position

@@ -1414,25 +1414,6 @@
                 "productive": true
             }
         }, 
-        "productive36+": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
-                }
-            }, 
-            "sample": {
-                "average phred": {
-                    "$gt": 36
-                }, 
-                "productive": true
-            }
-        }, 
         "productive38+": {
             "diagram": {
                 "feature": [
@@ -1449,6 +1430,26 @@
                 "average phred": {
                     "$gt": 38
                 }, 
+                "productive": true
+            }
+        },
+        "productiveN033+": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 38
+                }, 
+                "n count": 0, 
                 "productive": true
             }
         }
@@ -2110,6 +2111,11 @@
                 {
                     "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ], [ "head.average phred", 1 ]], 
                     "name": "valid productive sample with phred and library", 
+                    "unique": false
+                },
+                {
+                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ], [ "head.average phred", 1 ], ["head.n count", 1]], 
+                    "name": "valid productive sample with phred and library and n count", 
                     "unique": false
                 }
             ]
