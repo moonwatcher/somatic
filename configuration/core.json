@@ -1452,6 +1452,28 @@
                 "n count": 0, 
                 "productive": true
             }
+        },
+        "productiveN1+33+": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 38
+                }, 
+                "n count": {
+                    "$gt": 1
+                }, 
+                "productive": true
+            }
         }
     }, 
     "reference": {
