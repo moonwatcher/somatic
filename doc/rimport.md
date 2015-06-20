@@ -28,8 +28,8 @@ setClass(
 )
 ```
 
-##V-J samples##
-Reads that have no discernible *DH* region but a productive *VH* and *JH* combinatio are analyzed separate in the **VJ** set. Reads with all *VH*, *DH* and *JH* regions are analyzed in the **VDJ** drt.
+###vdj and vj samples###
+Reads that have no discernible *DH* region but a productive *VH* and *JH* combinatio are analyzed separate in the **vj** set. Reads with all *VH*, *DH* and *JH* regions are analyzed in the **vdj** set. vj reads have just one, **V-J** junction while vdj reads have a **V-D** as well as a *D-J* junctions.  
 
 The *vj* slot is a data frame that has the following columns:
 
