@@ -1,4 +1,4 @@
-##Import Data to R##
+##Export Data to R##
 
 After samples have been populated and survey objects where calculated somatic can export one or more survey objects to a compressed R file. for instance 
 
