@@ -3457,7 +3457,7 @@ class Block(object):
             elif state == 1 and line[0:10] == 'Alignments':
                 state = 2
             elif state == 2:
-                match = configuration['expression']['gapped sequence'].search(line)
+                match = self.configuration['expression']['gapped sequence'].search(line)
                 if match:
                     g = match.groupdict()
                     if 'offset' not in record:
