@@ -2376,43 +2376,56 @@ class Survey(object):
         else:
             # constructing a new object
             if request:
-                self.node = {
-                    'head': {
-                        'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
-                        'strain': 'C57BL/6',
-                        'sample count': 0,
-                    },
-                    'body': {
-                        'query': json.dumps(request, sort_keys=True, ensure_ascii=False),
-                        'repertoire': {},
-                        'slice': {},
-                        'vdj': { 'feature': {}, 'sample count': 0 },
-                        'vj': { 'feature': {}, 'sample count': 0 },
-                    }
-                }
-                self.head['name'] = name if name is not None else self.id
-                for word in ['library', 'profile']:
-                    if word in request['query']:
-                       self.head[word] = request['query'][word]
-
-                self.body['repertoire'] = {
-                    'VH': self._fetch_region_repertoire({'head.region': 'VH', 'head.strain': self.strain}),
-                    'DH': self._fetch_region_repertoire({'head.region': 'DH', 'head.strain': self.strain}),
-                    'JH': self._fetch_region_repertoire({'head.region': 'JH', 'head.strain': self.strain}),
-                }
-
-                for feature in self.configuration['histogram']['vj'].keys():
-                    self.vj['feature'][feature] = []
-
-                for feature in self.configuration['histogram']['vdj'].keys():
-                    self.vdj['feature'][feature] = []
-
-                self.body['slice'] = {
-                    'family': self._initialize_slice('family'),
-                    'allele': self._initialize_slice('allele'),
-                }
+                self._bootstrap('C57BL/6')
             else:
                 raise ValueError('must specify a query to calculate survey')
+
+    def __str__(self):
+        buffer = []
+        buffer.append(self.id)
+        buffer.append('{:<9}'.format(self.count))
+        if self.id != self.name:
+            buffer.append(self.name)
+        return '\t'.join(buffer)
+
+    def _bootstrap(self, strain):
+        self.node = {
+            'head': {
+                'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
+                'strain': strain,
+                'sample count': 0,
+            },
+            'body': {
+                'query': json.dumps(request, sort_keys=True, ensure_ascii=False),
+                'repertoire': {},
+                'slice': {},
+                'vdj': { 'feature': {}, 'sample count': 0 },
+                'vj': { 'feature': {}, 'sample count': 0 },
+            }
+        }
+
+        self.head['name'] = name if name is not None else self.id
+
+        for word in ['library', 'profile']:
+            if word in request['query']:
+               self.head[word] = request['query'][word]
+
+        self.body['repertoire'] = {
+            'VH': self._fetch_region_repertoire({'head.region': 'VH', 'head.strain': strain}),
+            'DH': self._fetch_region_repertoire({'head.region': 'DH', 'head.strain': strain}),
+            'JH': self._fetch_region_repertoire({'head.region': 'JH', 'head.strain': strain}),
+        }
+
+        for feature in self.configuration['histogram']['vj'].keys():
+            self.vj['feature'][feature] = []
+
+        for feature in self.configuration['histogram']['vdj'].keys():
+            self.vdj['feature'][feature] = []
+
+        self.body['slice'] = {
+            'family': self._initialize_slice('family'),
+            'allele': self._initialize_slice('allele'),
+        }
 
     @property
     def configuration(self):
@@ -2485,9 +2498,9 @@ class Survey(object):
     @property
     def document(self):
         document = transform_to_document(self.node)
-        for k in [ 'vj', 'vdj' ]:
-            if k in document['body']:
-                del document['body'][k]
+        # for k in [ 'vj', 'vdj' ]:
+        #     if k in document['body']:
+        #         del document['body'][k]
         return document
 
     @property
@@ -2503,6 +2516,9 @@ class Survey(object):
         if 'query' in document['body']:
             document['body']['query'] = json.loads(document['body']['query'])
         return(to_json(document))
+
+    def info(self, profile):
+        print(self.json)
 
     @property
     def count(self):
@@ -2761,6 +2777,12 @@ class Survey(object):
                     node[artifact] = gene['body'][artifact]['sequence']['nucleotide']
             repertoire.append(node)
         repertoire = sorted(repertoire, key=lambda x: x['start'])
+
+        # index the genes after they were sorted by start site
+        # we will use this ordering in the matrices
+        for index,gene in enumerate(repertoire):
+            gene['index'] = index
+
         return repertoire
 
     def _initialize_slice(self, slice):
@@ -3212,6 +3234,62 @@ class Diagram(object):
             self._draw_track(buffer, track)
         buffer.seek(0)
         return buffer.read()
+
+
+class RS4(object):
+    def __init__(self, pipeline, node=None):
+        self.log = logging.getLogger('S4')
+        self.pipeline = pipeline
+        self.node = node
+
+        if self.node is not None:
+            # loading an existing object
+            for slice in self.slice.values():
+                if 'correlation' in slice:
+                    for k,v in slice['correlation'].items():
+                        binary = BytesIO(v)
+                        binary.seek(0)
+                        slice['correlation'][k] = load(binary)
+        else:
+            # constructing a new object
+            if request:
+                self.node = {
+                    'head': {
+                        'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
+                        'strain': 'C57BL/6',
+                        'sample count': 0,
+                    },
+                    'body': {
+                        'query': json.dumps(request, sort_keys=True, ensure_ascii=False),
+                        'repertoire': {},
+                        'slice': {},
+                        'vdj': { 'feature': {}, 'sample count': 0 },
+                        'vj': { 'feature': {}, 'sample count': 0 },
+                    }
+                }
+                self.head['name'] = name if name is not None else self.id
+                for word in ['library', 'profile']:
+                    if word in request['query']:
+                       self.head[word] = request['query'][word]
+
+                self.body['repertoire'] = {
+                    'VH': self._fetch_region_repertoire({'head.region': 'VH', 'head.strain': self.strain}),
+                    'DH': self._fetch_region_repertoire({'head.region': 'DH', 'head.strain': self.strain}),
+                    'JH': self._fetch_region_repertoire({'head.region': 'JH', 'head.strain': self.strain}),
+                }
+
+                for feature in self.configuration['histogram']['vj'].keys():
+                    self.vj['feature'][feature] = []
+
+                for feature in self.configuration['histogram']['vdj'].keys():
+                    self.vdj['feature'][feature] = []
+
+                self.body['slice'] = {
+                    'family': self._initialize_slice('family'),
+                    'allele': self._initialize_slice('allele'),
+                }
+            else:
+                raise ValueError('must specify a query to calculate survey')
 
 
 class Block(object):
@@ -4098,6 +4176,7 @@ class Pipeline(object):
                 cursor.close()
                 survey.done()
                 self.resolver.survey_save(survey)
+        print(to_json(survey))
         return survey
 
     def survey_r_export(self, names):
@@ -4105,7 +4184,46 @@ class Pipeline(object):
         from rpy2 import robjects
         # from rpy2.robjects.numpy2ri import numpy2ri
         # numpy2ri.activate()
-        
+
+        def add_survey(survey):
+            rsurvey = {}
+
+            rsurvey['vj'] = {}
+            for k,v in survey.vj['feature'].items():
+                name = k.replace(' ', '_').replace('-', '_')
+                rsurvey['vj'][name] = FloatVector(array(v, dtype="float64"))
+            rsurvey['vj'] = DataFrame(rsurvey['vj'])
+            r.assign('vjdf', rsurvey['vj'])
+
+            m = survey.slice['allele']['correlation']['vj']
+            rsurvey['vj correlation'] = robjects.r.matrix(FloatVector(m.T.ravel()), nrow=m.shape[0])
+            rsurvey['vj correlation'].rownames = StrVector(survey.lookup['allele']['JH']['label'])
+            rsurvey['vj correlation'].colnames = StrVector(survey.lookup['allele']['VH']['label'])
+            r.assign('vjc', rsurvey['vj correlation'])
+
+            rsurvey['vdj'] = {}
+            for k,v in survey.vdj['feature'].items():
+                name = k.replace(' ', '_').replace('-', '_')
+                rsurvey['vdj'][name] = FloatVector(array(v, dtype="float64"))
+            rsurvey['vdj'] = DataFrame(rsurvey['vdj'])
+            r.assign('vdjdf', rsurvey['vdj'])
+
+            rsurvey['vdj correlation'] = {}
+            for j in range(survey.slice['allele']['dimension']['JH']):
+                m = survey.slice['allele']['correlation']['vdj'][j]
+                name = survey.lookup['allele']['JH']['index'][j]
+                rsurvey['vdj correlation'][name] = robjects.r.matrix(FloatVector(m.T.ravel()), nrow=m.shape[0])
+                rsurvey['vdj correlation'][name].rownames = StrVector(survey.lookup['allele']['DH']['label'])
+                rsurvey['vdj correlation'][name].colnames = StrVector(survey.lookup['allele']['VH']['label'])
+            r.assign('vdjc', robjects.vectors.ListVector(rsurvey['vdj correlation']))
+
+            r('survey <- new("Survey", vj=vjdf, vdj=vdjdf, vj_correlation=vjc, vdj_correlation=vdjc)')
+            r('somatic <- c(somatic, {}=survey)'.format(survey.name))
+
+        # define a list of results
+        r('somatic <- list()')
+
+        # define the S4 class structure
         r(
             """
             setClass(
@@ -4114,47 +4232,39 @@ class Pipeline(object):
                     vj="data.frame",
                     vdj="data.frame",
                     vj_correlation="matrix",
-                    vdj_correlation="list"
+                    vdj_correlation="list",
+                    repertoire="data.frame"
                 )
             )
             """
         )
-        r('somatic <- list()')
+
         for name in names:
             survey = self.resolver.survey_find(name)
-            if survey:
-                rsurvey = {
-                    'vj': {},
-                    'vdj': {},
-                    'vdj correlation': {}
-                }
-                for k,v in survey.vj['feature'].items():
-                    rsurvey['vj'][k.replace(' ', '_').replace('-', '_')] = FloatVector(array(v, dtype="float64"))
+            if survey: add_survey(survey)
 
-                for k,v in survey.vdj['feature'].items():
-                    rsurvey['vdj'][k.replace(' ', '_').replace('-', '_')] = FloatVector(array(v, dtype="float64"))
-
-                rsurvey['vj'] = DataFrame(rsurvey['vj'])
-                rsurvey['vdj'] = DataFrame(rsurvey['vdj'])
-                r.assign('vjdf', rsurvey['vj'])
-                r.assign('vdjdf', rsurvey['vdj'])
-
-                m = survey.slice['allele']['correlation']['vj']
-                rsurvey['vj correlation'] = robjects.r.matrix(FloatVector(m.T.ravel()), nrow=m.shape[0])
-                rsurvey['vj correlation'].rownames = StrVector(survey.lookup['allele']['JH']['label'])
-                rsurvey['vj correlation'].colnames = StrVector(survey.lookup['allele']['VH']['label'])
-                r.assign('vjc', rsurvey['vj correlation'])
-
-                for j in range(survey.slice['allele']['dimension']['JH']):
-                    m = survey.slice['allele']['correlation']['vdj'][j]
-                    rsurvey['vdj correlation'][str(j)] = robjects.r.matrix(FloatVector(m.T.ravel()), nrow=m.shape[0])
-                    rsurvey['vdj correlation'][str(j)].rownames = StrVector(survey.lookup['allele']['DH']['label'])
-                    rsurvey['vdj correlation'][str(j)].colnames = StrVector(survey.lookup['allele']['VH']['label'])
-                r.assign('vdjc', robjects.vectors.ListVector(rsurvey['vdj correlation']))
-                
-                r('survey <- new("Survey", vj=vjdf, vdj=vdjdf, vj_correlation=vjc, vdj_correlation=vdjc)')
-                r('somatic <- c(somatic, {}=survey)'.format(survey.name))
         r('save(somatic, file="somatic.bz2", compress="bzip2")')
+    
+    def survey_info(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'survey')
+        request = { 'limit': limit, 'skip': skip, 'query': q }
+        cursor = self.resolver.make_cursor('survey', q, limit, skip)
+        for node in cursor:
+            survey = Survey(self, node)
+            survey.load()
+            survey.info(profile)
+        cursor.close()
+
+    def survey_list(self, query, limit, skip, profile):
+        print('{:<40}\t{:<9}\t{:<9}'.format('uuid', 'count', 'name'))
+        print('-'* ((40 + 9 + 15) + (3*4)))
+        q = self.build_query(query, profile, 'survey')
+        request = { 'limit': limit, 'skip': skip, 'query': q }
+        cursor = self.resolver.make_cursor('survey', q, limit, skip)
+        for node in cursor:
+            survey = Survey(self, node)
+            print(str(survey))
+        cursor.close()
 
     def plot(self, names):
         plot_name = []
@@ -4397,7 +4507,7 @@ class Pipeline(object):
         for gene in buffer: gene.rss_html()
         print("""</div></body></html>""")
 
-    def gene_to_fasta(self, query, profile, flanking, limit):
+    def gene_fasta(self, query, profile, flanking, limit):
         limit = limit if limit is not None else self.configuration['constant']['fasta line length']
         q = self.build_query(query, profile, 'gene')
         cursor = self.resolver.make_cursor('gene', q)
@@ -4537,6 +4647,20 @@ class Pipeline(object):
         elif cmd.action == 'survey-r':
             self.survey_r_export(cmd.instruction['names'])
                 
+        elif cmd.action == 'survey-info':
+            survey = self.survey_info(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'survey-list':
+            survey = self.survey_list(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+
         elif cmd.action == 'count':
             self.sample_count(
                 cmd.query,
@@ -4590,7 +4714,7 @@ class Pipeline(object):
                 cmd.instruction['profile'])
 
         elif cmd.action == 'gene-fasta':
-            self.gene_to_fasta(
+            self.gene_fasta(
                 cmd.query,
                 cmd.instruction['profile'],
                 cmd.instruction['flanking'],

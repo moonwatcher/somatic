@@ -755,6 +755,30 @@
                 }, 
                 {
                     "argument": [
+                        "names",
+                        "profile", 
+                        "limit", 
+                        "skip"
+                    ], 
+                    "instruction": {
+                        "help": "cached surveys", 
+                        "name": "survey-info"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "names",
+                        "profile", 
+                        "limit", 
+                        "skip"
+                    ], 
+                    "instruction": {
+                        "help": "list cached surveys", 
+                        "name": "survey-list"
+                    }
+                }, 
+                {
+                    "argument": [
                         "path"
                     ], 
                     "instruction": {
@@ -1294,7 +1318,8 @@
             "library": {}, 
             "sample": {
                 "valid": true
-            }
+            },
+            "survey":{}
         }, 
         "droppedproductive": {
             "diagram": {

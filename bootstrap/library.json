@@ -1110,5 +1110,425 @@
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
         }
+    }, 
+    {
+        "body": {
+            "barcode": "CGACT", 
+            "biological repetition": 1, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfiftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b01t01spfiftl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfiftl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "ACGAA", 
+            "biological repetition": 1, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t02spfiftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b01t02spfiftl.fastq.gz", 
+            "technical repetition": 2, 
+            "tissue": "immature fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t02spfiftl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "ATTGC", 
+            "biological repetition": 1, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfprebftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b01t01spfprebftl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "pre b fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfprebftl", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "CTTAG", 
+            "biological repetition": 1, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t02spfprebftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b01t02spfprebftl.fastq.gz", 
+            "technical repetition": 2, 
+            "tissue": "pre b fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t02spfprebftl", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "AGTCC", 
+            "biological repetition": 2, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t01spfiftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b02t01spfiftl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t01spfiftl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "ATCAC", 
+            "biological repetition": 2, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t02spfiftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b02t02spfiftl.fastq.gz", 
+            "technical repetition": 2, 
+            "tissue": "immature fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t02spfiftl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "AAGGA", 
+            "biological repetition": 2, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t01spfprebftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b02t01spfprebftl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "pre b fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t01spfprebftl", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "ACAGT", 
+            "biological repetition": 2, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t02spfprebftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b02t02spfprebftl.fastq.gz", 
+            "technical repetition": 2, 
+            "tissue": "pre b fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t02spfprebftl", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "GGTAC", 
+            "biological repetition": 3, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfiftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b03t01spfiftl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfiftl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "CTGTA", 
+            "biological repetition": 3, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t02spfiftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b03t02spfiftl.fastq.gz", 
+            "technical repetition": 2, 
+            "tissue": "immature fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t02spfiftl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "CATGA", 
+            "biological repetition": 3, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfprebftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b03t01spfprebftl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "pre b fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfprebftl", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "ACTCA", 
+            "biological repetition": 3, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t02spfprebftl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b03t02spfprebftl.fastq.gz", 
+            "technical repetition": 2, 
+            "tissue": "pre b fetal liver"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t02spfprebftl", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "CCTAT", 
+            "biological repetition": 1, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfiaspl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b01t01spfiaspl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature adult spleen"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfiaspl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature adult spleen"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "GGATG", 
+            "biological repetition": 2, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t01spfiaspl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b02t01spfiaspl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature adult spleen"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t01spfiaspl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature adult spleen"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "GTTCA", 
+            "biological repetition": 3, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfiaspl", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b03t01spfiaspl.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature adult spleen"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfiaspl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature adult spleen"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "ATGAG", 
+            "biological repetition": 1, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfprebabm", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b01t01spfprebabm.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "pre b adult bone marrow"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfprebabm", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b adult bone marrow"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "GAACA", 
+            "biological repetition": 1, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfiabm", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b01t01spfiabm.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature adult bone marrow"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b01t01spfiabm", 
+            "strain": "C57BL/6", 
+            "tissue": "immature adult bone marrow"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "ATAGG", 
+            "biological repetition": 2, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t01spfiabm", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b02t01spfiabm.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature adult bone marrow"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b02t01spfiabm", 
+            "strain": "C57BL/6", 
+            "tissue": "immature adult bone marrow"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "CGTGA", 
+            "biological repetition": 3, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfprebabm", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b03t01spfprebabm.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "pre b adult bone marrow"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfprebabm", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b adult bone marrow"
+        }
+    }, 
+    {
+        "body": {
+            "barcode": "GACAG", 
+            "biological repetition": 3, 
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfiabm", 
+            "path": "/volume/albireo/canal/thesis/library/000000000-A1Y58/A1Y58 l01n01 c57bl6b03t01spfiabm.fastq.gz", 
+            "technical repetition": 1, 
+            "tissue": "immature adult bone marrow"
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6b03t01spfiabm", 
+            "strain": "C57BL/6", 
+            "tissue": "immature adult bone marrow"
+        }
+    }, 
+    {
+        "body": {
+            "reference": [
+                "c57bl6b01t01spfiftl", 
+                "c57bl6b01t02spfiftl", 
+                "c57bl6b02t01spfiftl", 
+                "c57bl6b02t02spfiftl", 
+                "c57bl6b03t01spfiftl", 
+                "c57bl6b03t02spfiftl"
+            ]
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6spfiftl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "reference": [
+                "c57bl6b01t01spfprebftl", 
+                "c57bl6b01t02spfprebftl", 
+                "c57bl6b02t01spfprebftl", 
+                "c57bl6b02t02spfprebftl", 
+                "c57bl6b03t01spfprebftl", 
+                "c57bl6b03t02spfprebftl"
+            ]
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6spfprebftl", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b fetal liver"
+        }
+    }, 
+    {
+        "body": {
+            "reference": [
+                "c57bl6b01t01spfiaspl", 
+                "c57bl6b02t01spfiaspl", 
+                "c57bl6b03t01spfiaspl"
+            ]
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6spfiaspl", 
+            "strain": "C57BL/6", 
+            "tissue": "immature adult spleen"
+        }
+    }, 
+    {
+        "body": {
+            "reference": [
+                "c57bl6b01t01spfprebabm", 
+                "c57bl6b03t01spfprebabm"
+            ]
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6spfprebabm", 
+            "strain": "C57BL/6", 
+            "tissue": "pre b adult bone marrow"
+        }
+    }, 
+    {
+        "body": {
+            "reference": [
+                "c57bl6b01t01spfiabm", 
+                "c57bl6b02t01spfiabm", 
+                "c57bl6b03t01spfiabm"
+            ]
+        }, 
+        "head": {
+            "exposure": "specific pathogen free", 
+            "id": "c57bl6spfiabm", 
+            "strain": "C57BL/6", 
+            "tissue": "immature adult bone marrow"
+        }
     }
 ]
