@@ -2376,7 +2376,7 @@ class Survey(object):
         else:
             # constructing a new object
             if request:
-                self._bootstrap('C57BL/6', request)
+                self._bootstrap('C57BL/6', request, name)
             else:
                 raise ValueError('must specify a query to calculate survey')
 
@@ -2388,7 +2388,7 @@ class Survey(object):
             buffer.append(self.name)
         return '\t'.join(buffer)
 
-    def _bootstrap(self, strain, request):
+    def _bootstrap(self, strain, request, name):
         self.node = {
             'head': {
                 'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
