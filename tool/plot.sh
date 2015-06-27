@@ -13,6 +13,20 @@ somatic survey -p productive33+ -l 'c57bl6b1agf' --name 'gfb1a33'
 somatic survey -p productive33+ -l 'c57bl6gf' --name 'gf33'
 somatic survey -p productive33+ -l 'c57bl6spf' --name 'spf33'
 
+somatic survey -p productive33+ -l 'c57bl6spfiabm' --name 'spfiabm'
+somatic survey -p productive33+ -l 'c57bl6spfiaspl' --name 'spfiaspl'
+somatic survey -p productive33+ -l 'c57bl6spfiftl' --name 'spfiftl'
+somatic survey -p productive33+ -l 'c57bl6spfprebabm' --name 'spfprebabm'
+somatic survey -p productive33+ -l 'c57bl6spfprebftl' --name 'spfprebftl'
+
+# single
+somatic plot spfiabm
+somatic plot spfiaspl
+somatic plot spfiftl
+somatic plot spfprebabm
+somatic plot spfprebftl
+
+# comparisons
 somatic plot spfb1a33 gfb1a33
 somatic plot spffo33 gffo33
 somatic plot spfmz33 gfmz33
