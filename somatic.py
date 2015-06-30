@@ -4120,7 +4120,7 @@ class Pipeline(object):
                 cursor.close()
                 survey.done()
                 self.resolver.survey_save(survey)
-        print(to_json(survey))
+        # print(to_json(survey))
         return survey
 
     def survey_r_export(self, names):
