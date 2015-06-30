@@ -2498,9 +2498,9 @@ class Survey(object):
     @property
     def document(self):
         document = transform_to_document(self.node)
-        # for k in [ 'vj', 'vdj' ]:
-        #     if k in document['body']:
-        #         del document['body'][k]
+        for k in [ 'vj', 'vdj' ]:
+            if k in document['body']:
+                del document['body'][k]
         return document
 
     @property
@@ -3234,62 +3234,6 @@ class Diagram(object):
             self._draw_track(buffer, track)
         buffer.seek(0)
         return buffer.read()
-
-
-class RS4(object):
-    def __init__(self, pipeline, node=None):
-        self.log = logging.getLogger('S4')
-        self.pipeline = pipeline
-        self.node = node
-
-        if self.node is not None:
-            # loading an existing object
-            for slice in self.slice.values():
-                if 'correlation' in slice:
-                    for k,v in slice['correlation'].items():
-                        binary = BytesIO(v)
-                        binary.seek(0)
-                        slice['correlation'][k] = load(binary)
-        else:
-            # constructing a new object
-            if request:
-                self.node = {
-                    'head': {
-                        'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
-                        'strain': 'C57BL/6',
-                        'sample count': 0,
-                    },
-                    'body': {
-                        'query': json.dumps(request, sort_keys=True, ensure_ascii=False),
-                        'repertoire': {},
-                        'slice': {},
-                        'vdj': { 'feature': {}, 'sample count': 0 },
-                        'vj': { 'feature': {}, 'sample count': 0 },
-                    }
-                }
-                self.head['name'] = name if name is not None else self.id
-                for word in ['library', 'profile']:
-                    if word in request['query']:
-                       self.head[word] = request['query'][word]
-
-                self.body['repertoire'] = {
-                    'VH': self._fetch_region_repertoire({'head.region': 'VH', 'head.strain': self.strain}),
-                    'DH': self._fetch_region_repertoire({'head.region': 'DH', 'head.strain': self.strain}),
-                    'JH': self._fetch_region_repertoire({'head.region': 'JH', 'head.strain': self.strain}),
-                }
-
-                for feature in self.configuration['histogram']['vj'].keys():
-                    self.vj['feature'][feature] = []
-
-                for feature in self.configuration['histogram']['vdj'].keys():
-                    self.vdj['feature'][feature] = []
-
-                self.body['slice'] = {
-                    'family': self._initialize_slice('family'),
-                    'allele': self._initialize_slice('allele'),
-                }
-            else:
-                raise ValueError('must specify a query to calculate survey')
 
 
 class Block(object):
