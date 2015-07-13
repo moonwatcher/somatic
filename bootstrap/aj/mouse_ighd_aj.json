@@ -1,0 +1,27 @@
+[
+    {
+        "accession": "M35332", 
+        "accession end": 129, 
+        "accession start": 106, 
+        "accession strand": true, 
+        "allele": "DFL16.e*01", 
+        "confirmed": true, 
+        "family": "DFL16", 
+        "framed": true, 
+        "functionality": "F", 
+        "gene": "DFL16.e", 
+        "id": "DFL16.e*01-A/J", 
+        "identified": true, 
+        "imgt allele name": "IGHD1-1*02", 
+        "length": 23, 
+        "organism name": "mus musculus", 
+        "region": "DH", 
+        "sequence": {
+            "nucleotide": "TTTATTACTATGGTGGTAGCTAC", 
+            "read frame": 0, 
+            "strand": true
+        }, 
+        "strain": "A/J", 
+        "verified": true
+    }
+]

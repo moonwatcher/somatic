@@ -1,0 +1,98 @@
+[
+    {
+        "accession": "AC073553", 
+        "accession end": 133142, 
+        "accession start": 133089, 
+        "accession strand": true, 
+        "allele": "IGHJ1*01", 
+        "confirmed": true, 
+        "family": "IGHJ", 
+        "framed": true, 
+        "functionality": "F", 
+        "gene": "IGHJ1", 
+        "id": "IGHJ1*01-C57BL/6", 
+        "identified": true, 
+        "length": 53, 
+        "organism name": "mus musculus", 
+        "region": "JH", 
+        "sequence": {
+            "nucleotide": "CTACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG", 
+            "read frame": 1, 
+            "strand": true
+        }, 
+        "strain": "C57BL/6", 
+        "verified": true
+    }, 
+    {
+        "accession": "AC073553", 
+        "accession end": 133455, 
+        "accession start": 133407, 
+        "accession strand": true, 
+        "allele": "IGHJ2*01", 
+        "confirmed": true, 
+        "family": "IGHJ", 
+        "framed": true, 
+        "functionality": "F", 
+        "gene": "IGHJ2", 
+        "id": "IGHJ2*01-C57BL/6", 
+        "identified": true, 
+        "length": 48, 
+        "organism name": "mus musculus", 
+        "region": "JH", 
+        "sequence": {
+            "nucleotide": "ACTACTTTGACTACTGGGGCCAAGGCACCACTCTCACAGTCTCCTCAG", 
+            "read frame": 2, 
+            "strand": true
+        }, 
+        "strain": "C57BL/6", 
+        "verified": true
+    }, 
+    {
+        "accession": "AC073553", 
+        "accession end": 133838, 
+        "accession start": 133790, 
+        "accession strand": true, 
+        "allele": "IGHJ3*01", 
+        "confirmed": true, 
+        "family": "IGHJ", 
+        "framed": true, 
+        "functionality": "F", 
+        "gene": "IGHJ3", 
+        "id": "IGHJ3*01-C57BL/6", 
+        "identified": true, 
+        "length": 48, 
+        "organism name": "mus musculus", 
+        "region": "JH", 
+        "sequence": {
+            "nucleotide": "CCTGGTTTGCTTACTGGGGCCAAGGGACTCTGGTCACTGTCTCTGCAG", 
+            "read frame": 2, 
+            "strand": true
+        }, 
+        "strain": "C57BL/6", 
+        "verified": true
+    }, 
+    {
+        "accession": "AC073553", 
+        "accession end": 134409, 
+        "accession start": 134355, 
+        "accession strand": true, 
+        "allele": "IGHJ4*01", 
+        "confirmed": true, 
+        "family": "IGHJ", 
+        "framed": true, 
+        "functionality": "F", 
+        "gene": "IGHJ4", 
+        "id": "IGHJ4*01-C57BL/6", 
+        "identified": true, 
+        "length": 54, 
+        "organism name": "mus musculus", 
+        "region": "JH", 
+        "sequence": {
+            "nucleotide": "ATTACTATGCTATGGACTACTGGGGTCAAGGAACCTCAGTCACCGTCTCCTCAG", 
+            "read frame": 2, 
+            "strand": true
+        }, 
+        "strain": "C57BL/6", 
+        "verified": true
+    }
+]

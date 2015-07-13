@@ -1,0 +1,94 @@
+[
+    {
+        "accession": "X63166", 
+        "accession end": 61, 
+        "accession start": 9, 
+        "accession strand": true, 
+        "allele": "IGHJ1*01", 
+        "confirmed": true, 
+        "family": "IGHJ", 
+        "framed": true, 
+        "gene": "IGHJ1", 
+        "id": "IGHJ1*01-BALB/c", 
+        "identified": true, 
+        "length": 52, 
+        "organism name": "mus musculus", 
+        "region": "JH", 
+        "sequence": {
+            "nucleotide": "CTACTGGTACTTCGATGTCTGGGGCGCAGGGACCACGGTCACCGTCTCCTCA", 
+            "read frame": 1, 
+            "strand": true
+        }, 
+        "strain": "BALB/c", 
+        "verified": true
+    }, 
+    {
+        "accession": "X63166", 
+        "accession end": 374, 
+        "accession start": 329, 
+        "accession strand": true, 
+        "allele": "IGHJ2*01", 
+        "confirmed": true, 
+        "family": "IGHJ", 
+        "framed": true, 
+        "gene": "IGHJ2", 
+        "id": "IGHJ2*01-BALB/c", 
+        "identified": true, 
+        "length": 45, 
+        "organism name": "mus musculus", 
+        "region": "JH", 
+        "sequence": {
+            "nucleotide": "TACTTTGACTACTGGGGCCAAGGCACCACTCTCACAGTCTCCTCA", 
+            "read frame": 0, 
+            "strand": true
+        }, 
+        "strain": "BALB/c", 
+        "verified": true
+    }, 
+    {
+        "accession": "X63166", 
+        "accession end": 757, 
+        "accession start": 709, 
+        "accession strand": true, 
+        "allele": "IGHJ3*01", 
+        "confirmed": true, 
+        "family": "IGHJ", 
+        "framed": true, 
+        "gene": "IGHJ3", 
+        "id": "IGHJ3*01-BALB/c", 
+        "identified": true, 
+        "length": 48, 
+        "organism name": "mus musculus", 
+        "region": "JH", 
+        "sequence": {
+            "nucleotide": "GCCTGGTTTGCTTACTGGGGCCAAGGGACTCTGGTCACTGTCTCTGCA", 
+            "read frame": 0, 
+            "strand": true
+        }, 
+        "strain": "BALB/c", 
+        "verified": true
+    }, 
+    {
+        "accession": "X63166", 
+        "accession end": 1329, 
+        "accession start": 1276, 
+        "accession strand": true, 
+        "allele": "IGHJ4*01", 
+        "confirmed": true, 
+        "family": "IGHJ", 
+        "framed": true, 
+        "gene": "IGHJ4", 
+        "id": "IGHJ4*01-BALB/c", 
+        "identified": true, 
+        "length": 53, 
+        "organism name": "mus musculus", 
+        "region": "JH", 
+        "sequence": {
+            "nucleotide": "ATTACTATGCTATGGACTACTGGGGTCAAGGAACCTCAGTCACCGTCTCCTCA", 
+            "read frame": 2, 
+            "strand": true
+        }, 
+        "strain": "BALB/c", 
+        "verified": true
+    }
+]

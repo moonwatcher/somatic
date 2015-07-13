@@ -1244,6 +1244,17 @@ class Artifact(object):
             self.log.error('%s found %d times in %s', self.id, len(positions), self.accession)
             self.log.debug(str(positions))
 
+    def align_to_reference(self, start, end, strand):
+        self.log.info('gene %s aligned to %d:%d on the %s strand', self.id, start, end, 'plus' if strand else 'minus')
+        self.body['reference start'] = start
+        self.body['reference end'] = end
+        self.body['reference strand'] = strand
+        self.head['aligned'] = True
+
+    def assign_reference_alignment(self, hit):
+        self.align_to_reference(hit['target start'], hit['target end'], hit['query strand'])
+        gene.body['alignment'] = hit
+
 
 class Gene(Artifact):
     def __init__(self, pipeline, node=None):
@@ -4508,18 +4519,7 @@ class Pipeline(object):
             if 'summary' in query and query['summary']:
                 if len(query['summary']) == 1:
                     hit = query['summary'][0]
-                    self.log.info(
-                        'gene %s aligned to %d:%d on the %s strand',
-                        gene.id,
-                        hit['target start'],
-                        hit['target end'],
-                        'plus' if hit['query strand'] else 'minus'
-                    )
-                    gene.body['reference start'] = hit['target start']
-                    gene.body['reference end'] = hit['target end']
-                    gene.body['reference strand'] = hit['query strand']
-                    gene.body['alignment'] = hit
-                    gene.head['aligned'] = True
+                    gene.assign_reference_alignment(hit)
                     self.resolver.gene_save(gene)
                 else:
                     self.log.info('gene %s aligned to multiple locations', gene.id)
