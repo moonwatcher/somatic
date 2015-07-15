@@ -2,24 +2,23 @@
     "command": {
         "blat": {
             "arguments": [
-                "/Users/lg/code/somatic/bin/blat", 
-                "-noHead", 
-                "chr12.fa", 
+                "blat", 
+                null, 
                 "stdin", 
                 "stdout", 
+                "-noHead", 
                 "-minIdentity=98"
-            ], 
-            "cwd": "/Users/lg/code/somatic/db"
+            ]
         }, 
         "igblast": {
             "arguments": [
-                "/Users/lg/code/somatic/bin/igblastn", 
+                "igblastn", 
                 "-germline_db_V", 
-                "database/mouse_c57bl6_ighv", 
+                "database/mouse_ighv", 
                 "-germline_db_J", 
-                "database/mouse_c57bl6_ighj", 
+                "database/mouse_ighj", 
                 "-germline_db_D", 
-                "database/mouse_c57bl6_ighd", 
+                "database/mouse_ighd", 
                 "-num_alignments_V", 
                 "3", 
                 "-num_alignments_J", 
@@ -38,17 +37,17 @@
                 "-outfmt", 
                 "7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand"
             ], 
-            "cwd": "/Users/lg/code/somatic/db/igblast"
+            "cwd": null
         }, 
         "igblast.gapped": {
             "arguments": [
-                "/Users/lg/code/somatic/bin/igblastn", 
+                "igblastn", 
                 "-germline_db_V", 
-                "database/mouse_c57bl6_ighv", 
+                "database/mouse_ighv", 
                 "-germline_db_J", 
-                "database/mouse_c57bl6_ighj", 
+                "database/mouse_ighj", 
                 "-germline_db_D", 
-                "database/mouse_c57bl6_ighd", 
+                "database/mouse_ighd", 
                 "-num_alignments_V", 
                 "3", 
                 "-num_alignments_J", 
@@ -67,21 +66,12 @@
                 "-outfmt", 
                 "4"
             ], 
-            "cwd": "/Users/lg/code/somatic/db/igblast"
+            "cwd": null
         }
     }, 
     "constant": {
         "buffer size": 128, 
         "fasta line length": 80
-    }, 
-    "cache": {
-        "path": "/Users/lg/code/somatic/cache"
-    },
-    "database": {
-        "database": "somatic", 
-        "host": "albireo.bio.nyu.edu", 
-        "password": "fPWZq8nCVizzHloVDhs=", 
-        "username": "somatic"
     }, 
     "histogram": {
         "vdj": {
@@ -1500,9 +1490,6 @@
                 "productive": true
             }
         }
-    }, 
-    "reference": {
-        "mouse chromosome 12": "/Users/lg/code/somatic/db/chr12.fa"
     }, 
     "region": {
         "DH": {

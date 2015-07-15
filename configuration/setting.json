@@ -1,0 +1,21 @@
+{
+    "constant": {
+        "buffer size": 128, 
+        "fasta line length": 80,
+        "blat binary": "/Users/lg/code/somatic/bin/blat",
+        "igblastn binary": "/Users/lg/code/somatic/bin/igblastn",
+        "igblastn database": "/volume/albireo/canal/thesis/db/igblast"
+    },
+    "cache": {
+        "path": "/volume/albireo/canal/thesis/cache"
+    },
+    "database": {
+        "database": "somatic", 
+        "host": "albireo.bio.nyu.edu", 
+        "password": "fPWZq8nCVizzHloVDhs=", 
+        "username": "somatic"
+    },
+    "reference": {
+        "mouse chromosome 12": "/volume/albireo/canal/thesis/db/mus_musculus.grcm38.dna.chromosome.12.fa"
+    }
+}

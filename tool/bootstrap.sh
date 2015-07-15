@@ -3,10 +3,16 @@ VERBOSITY="debug"
 STRAIN="C57BL/6"
 BASE="/volume/albireo/canal/thesis"
 
-rm -rf $BASE/html
 rm -rf $BASE/db
 cp -r ../db $BASE/
+(
+    cd $BASE/db
+    curl -O "http://ftp.ensembl.org/pub/release-76/fasta/mus_musculus/dna/Mus_musculus.GRCm38.dna.chromosome.12.fa.gz"
+    gzcat Mus_musculus.GRCm38.dna.chromosome.12.fa.gz > mus_musculus.grcm38.dna.chromosome.12.fa
+    rm -f Mus_musculus.GRCm38.dna.chromosome.12.fa.gz
+)
 
+rm -rf $BASE/html
 mkdir $BASE/html
 mkdir -p $BASE/db/igblast/database
 mkdir -p $BASE/db/igblast/optional_file
@@ -31,13 +37,13 @@ somatic -v $VERBOSITY gene-align --strain "$STRAIN" -r JH -F 300
 somatic -v $VERBOSITY gene-rss --strain "$STRAIN" -r JH -F 60 --distance 9
 somatic -v $VERBOSITY gene-html --strain "$STRAIN" -r JH --title "IGHJ $STRAIN" > $BASE/html/jh.html
 
-somatic -v $VERBOSITY gene-fasta --strain "$STRAIN" -r JH -p aligned > $BASE/db/igblast/database/mouse_c57bl6_ighj
-somatic -v $VERBOSITY gene-fasta --strain "$STRAIN" -r VH -p aligned > $BASE/db/igblast/database/mouse_c57bl6_ighv
-somatic -v $VERBOSITY gene-fasta --strain "$STRAIN" -r DH -p aligned > $BASE/db/igblast/database/mouse_c57bl6_ighd
+somatic -v $VERBOSITY gene-fasta --strain "$STRAIN" -r JH -p aligned > $BASE/db/igblast/database/mouse_ighj
+somatic -v $VERBOSITY gene-fasta --strain "$STRAIN" -r VH -p aligned > $BASE/db/igblast/database/mouse_ighv
+somatic -v $VERBOSITY gene-fasta --strain "$STRAIN" -r DH -p aligned > $BASE/db/igblast/database/mouse_ighd
 
-makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_jh -in $BASE/db/igblast/database/mouse_c57bl6_ighj
-makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_vh -in $BASE/db/igblast/database/mouse_c57bl6_ighv
-makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_dh -in $BASE/db/igblast/database/mouse_c57bl6_ighd
+makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_jh -in $BASE/db/igblast/database/mouse_ighj
+makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_vh -in $BASE/db/igblast/database/mouse_ighv
+makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_dh -in $BASE/db/igblast/database/mouse_ighd
 
 somatic -v $VERBOSITY gene-igblast-aux -r VH --strain "$STRAIN" >  $BASE/db/igblast/optional_file/mouse_gl.aux
 somatic -v $VERBOSITY gene-igblast-aux -r DH --strain "$STRAIN" >> $BASE/db/igblast/optional_file/mouse_gl.aux

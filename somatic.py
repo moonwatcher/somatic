@@ -178,12 +178,33 @@ def complement(nucleotide):
     return ''.join([ complement[n] for n in nucleotide ][::-1])
 
 def load_configuration():
+    setting = None
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'configuration/setting.json')
+    with io.open(path, 'rb') as file:
+        setting = json.loads(file.read().decode('utf8'))
+
     configuration = None
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'configuration/core.json')
     with io.open(path, 'rb') as file:
-        content = StringIO(file.read().decode('utf8'))
-        configuration = json.loads(content.getvalue())
+        configuration = json.loads(file.read().decode('utf8'))
+        configuration['cache'] = setting['cache']
+        configuration['database'] = setting['database']
+        configuration['reference'] = setting['reference']
+        for k,v in setting['constant'].items():
+           configuration['constant'][k] = v
 
+    configuration['command']['blat']['arguments'][0] = configuration['constant']['blat binary']
+    configuration['command']['blat']['arguments'][1] = configuration['reference']['mouse chromosome 12']
+
+    configuration['command']['igblast']['arguments'][0] = configuration['constant']['igblastn binary']
+    configuration['command']['igblast']['cwd'] = configuration['constant']['igblastn database']
+
+    configuration['command']['igblast.gapped']['arguments'][0] = configuration['constant']['igblastn binary']
+    configuration['command']['igblast.gapped']['cwd'] = configuration['constant']['igblastn database']
+
+
+
+    print(to_json(configuration))
     if configuration is not None:
         configuration['interface']['prototype']['profile']['parameter']['choices'] = list(configuration['profile'].keys())
         configuration['interface']['prototype']['profile']['parameter']['help'] = '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
@@ -935,7 +956,6 @@ class Blat(object):
         command = self.configuration['command']['blat']
         process = Popen(
             args=command['arguments'],
-            cwd=command['cwd'],
             env=None,
             stdin=PIPE,
             stdout=PIPE,
@@ -2767,6 +2787,7 @@ class Survey(object):
     def save(self):
         path = os.path.join(self.configuration['cache']['path'], self.id)
         try:
+            self.pipeline.verify_directory(self.configuration['cache']['path'])
             with io.open(path, 'wb') as f:
                 pickle.dump(self.node, f)
             self.log.debug('saved cache to %s', path)
@@ -4080,6 +4101,10 @@ class Pipeline(object):
 
     def close(self):
         self.resolver.close()
+
+    def verify_directory(self, path):
+        if not os.path.exists(path):
+            os.makedirs(path)
 
     def motif_for(self, codons):
         def expand(motif, space=[ '' ]):
