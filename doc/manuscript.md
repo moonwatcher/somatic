@@ -1,5 +1,14 @@
 # Development of detailed high throughput analysis of V(D)J recombination
 
+
+## introduction
+## Materials and Methods
+## Sequence assignment
+## Statistical analysis
+## Shanon Entropy
+## Results
+
+
 ## numbers
 
 invalidate sample:
@@ -12,9 +21,6 @@ invalidate an igblast hit:
  * VH or JH hit aligns to a different strand than the framing hit
  
 valid and not productive: 2511675
-
-
-
 valid and productive: 5985117
 invalid: 1228858
 total: 9725650

@@ -20,12 +20,12 @@ somatic -v $VERBOSITY gene-html --strain "$STRAIN" -r VH --functionality F --tit
 somatic -v $VERBOSITY gene-html --strain "$STRAIN" -r VH --functionality O --title "IGHV $STRAIN Open Reading Frame" > ../html/vh_o.html
 somatic -v $VERBOSITY gene-html --strain "$STRAIN" -r VH --functionality P --title "IGHV $STRAIN Pseudo" > ../html/vh_p.html
 
-somatic -v $VERBOSITY gene-populate ../bootstrap/c57bl6/mouse_ighd.json
+somatic -v $VERBOSITY gene-populate ../bootstrap/c57bl6/mouse_ighd_c57bl6.json
 somatic -v $VERBOSITY gene-align --strain "$STRAIN" -r DH -F 300 
 somatic -v $VERBOSITY gene-rss --strain "$STRAIN" -r DH -F 60 --distance 9
 somatic -v $VERBOSITY gene-html --strain "$STRAIN" -r DH --title "IGHD $STRAIN" > ../html/dh.html
 
-somatic -v $VERBOSITY gene-populate ../bootstrap/c57bl6/mouse_ighj.json
+somatic -v $VERBOSITY gene-populate ../bootstrap/c57bl6/mouse_ighj_c57bl6.json
 somatic -v $VERBOSITY gene-align --strain "$STRAIN" -r JH -F 300 
 somatic -v $VERBOSITY gene-rss --strain "$STRAIN" -r JH -F 60 --distance 9
 somatic -v $VERBOSITY gene-html --strain "$STRAIN" -r JH --title "IGHJ $STRAIN" > ../html/jh.html

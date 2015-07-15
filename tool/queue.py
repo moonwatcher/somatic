@@ -38,7 +38,7 @@ def to_json(node):
 
 
 libraries = []
-with io.open('/Users/lg/code/somatic/bootstrap/library.json', 'r') as f:
+with io.open('../bootstrap/c57bl6/library_c57bl6.json', 'r') as f:
     document = json.loads(f.read())
     document = sorted(document, key=lambda x: 0 if 'id' not in x['head'] else x['head']['id'])
     document = sorted(document, key=lambda x: 0 if 'technical repetition' not in x['body'] else x['body']['technical repetition'])
@@ -48,38 +48,7 @@ with io.open('/Users/lg/code/somatic/bootstrap/library.json', 'r') as f:
 
     for library in document:
         if 'reference' not in library['body']:
-            if library['head']['tissue'] in [
-                'immature adult bone marrow',
-                'immature adult spleen',
-                'immature fetal liver',
-                'pre b adult bone marrow',
-                'pre b fetal liver'
-            ]:
-                libraries.append(library)
-
-
-def name_library(library):
-    buffer = []
-    buffer.append('c57bl6')
-    buffer.append('b{:0>2}t{:0>2}'.format(library['biological repetition'], library['technical repetition']))
-    if library['exposure'] == 'germ free':
-        buffer.append('gf')
-    else:
-        buffer.append('spf')
-        
-    if library['tissue'] == 'bone marrow pre b':
-        buffer.append('preb')
-
-    elif library['tissue'] == 'marginal zone spleen':
-        buffer.append('mz')
-
-    elif library['tissue'] == 'peritoneal cavity b1a':
-        buffer.append('b1a')
-        
-    elif library['tissue'] == 'follicular spleen':
-        buffer.append('fo')
-        
-    return ''.join(buffer)
+            libraries.append(library)
 
 def populate(library):
     buffer = [

@@ -28,7 +28,7 @@ from urllib.error import URLError, HTTPError
 from http.client import BadStatusLine
 
 document = None
-with io.open('/Users/lg/code/somatic/bootstrap/library.json', 'r') as f:
+with io.open('../bootstrap/c57bl6/library_c57bl6.json', 'r') as f:
     document = json.loads(f.read())
     document = sorted(document, key=lambda x: 0 if 'id' not in x['head'] else x['head']['id'])
     document = sorted(document, key=lambda x: 0 if 'technical repetition' not in x['body'] else x['body']['technical repetition'])

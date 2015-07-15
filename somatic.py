@@ -472,11 +472,11 @@ class Sequence(object):
             clone['quality'] = self.quality
         return Sequence(self.pipeline, clone)
 
-    def crop(self, start, end):
+    def crop(self, start, end=None):
         sequence = None
-        if start is not None and end is not None:
+        if start is not None:
             start = max(start, 0)
-            end = min(end, self.length)
+            end = self.length if end is None else min(end, self.length)
             if end > start:
                 cropped = {
                     'nucleotide': self.nucleotide[start:end],
@@ -1253,7 +1253,7 @@ class Artifact(object):
 
     def assign_reference_alignment(self, hit):
         self.align_to_reference(hit['target start'], hit['target end'], hit['query strand'])
-        gene.body['alignment'] = hit
+        self.body['alignment'] = hit
 
 
 class Gene(Artifact):
@@ -1273,6 +1273,13 @@ class Gene(Artifact):
             '5 spacer',
             '3 gap',
             '5 gap',
+            'preamble',
+            'fr1',
+            'cdr1',
+            'fr2',
+            'cdr2',
+            'fr3',
+            'cdr3'
         ]:
             if artifact in self.body and 'sequence' in self.body[artifact] and isinstance(self.body[artifact]['sequence'], dict):
                 self.body[artifact]['sequence'] = Sequence(self.pipeline, self.body[artifact]['sequence'])
@@ -1284,6 +1291,28 @@ class Gene(Artifact):
     @property
     def functionality(self):
         return self.head['functionality']
+
+    def validate_artifact(self):
+        for artifact in [
+            'preamble',
+            'fr1',
+            'cdr1',
+            'fr2',
+            'cdr2',
+            'fr3',
+            'cdr3'
+        ]:
+            if artifact in self.body:
+                start = self.body[artifact]['start']
+                end = None if 'end' not in self.body[artifact] else self.body[artifact]['end']
+                fragment = self.sequence.crop(start, end)
+                if fragment:
+                    self.body[artifact]['sequence'] = fragment
+                    if artifact != 'preamble' and fragment.read_frame != 0:
+                        self.log.info('artifact %s for %s is out of frame %s', artifact, self.id, fragment.read_frame)
+                else:
+                    del self.body[artifact]
+                    self.log.info('dropping empty %s for %s', artifact, self.id)
 
     def check_rss(self, flank, distance):
         for artifact in [
@@ -1311,32 +1340,85 @@ class Gene(Artifact):
             elif self.region == 'JH':
                 self._check_rss_5(flanking, 'JH', distance)
 
-    def rss_html(self):
-        print('<div class="section">')
-        print('<div class="genename">{} {}</div>'.format(self.id, self.functionality))
+    def html(self):
+        buffer = []
+        buffer.append('<div class="section">')
+        buffer.append('<div class="genename">{} {}</div>'.format(self.id, self.functionality))
+
+        self._codon_html(buffer)        
+        if self.region == 'VH':
+            self._nucleotide_html(buffer)
+            self._html_3(buffer, 'VH')
+
+        elif self.region == 'DH':
+            self._html_5(buffer, 'DH')
+            self._nucleotide_html(buffer)
+            self._html_3(buffer, 'DH')
+
+        elif self.region == 'JH':
+            self._html_5(buffer, 'JH')
+            self._nucleotide_html(buffer)
+        buffer.append('</div>')
+        print(''.join(buffer))
+
+    def _codon_html(self, buffer):
+        framed_artifact = True
+        for artifact in [
+            'fr1',
+            'cdr1',
+            'fr2',
+            'cdr2',
+            'fr3',
+            'cdr3'
+        ]:
+            if artifact in self.body and self.body[artifact]['sequence'].read_frame != 0:
+                framed_artifact = False
 
         if self.framed:
-            print('<div class="frame codon">{}</div>'.format(self.sequence.codon))
+            buffer.append('<div class="frame codon">')
+            if self.region == 'VH' and framed_artifact:
+                for artifact in [
+                    'preamble',
+                    'fr1',
+                    'cdr1',
+                    'fr2',
+                    'cdr2',
+                    'fr3',
+                    'cdr3'
+                ]:
+                    if artifact in self.body:
+                        buffer.append('<span class="{}">{}</span>'.format(artifact, self.body[artifact]['sequence'].codon))
+            else:
+                buffer.append(self.sequence.codon)
+            buffer.append('</div>')
         else:
             for frame in [0,1,2]:
                 if self.sequence.read_frame == frame:
-                    print('<div class="frame codon">{}</div>'.format(self.sequence.codon_at_frame(frame)))
+                    buffer.append('<div class="frame codon">')
+                    buffer.append(self.sequence.codon_at_frame(frame))
+                    buffer.append('</div>')
                 else:
-                    print('<div class="codon">{}</div>'.format(self.sequence.codon_at_frame(frame)))
+                    buffer.append('<div class="codon">')
+                    buffer.append(self.sequence.codon_at_frame(frame))
+                    buffer.append('</div>')
 
+    def _nucleotide_html(self, buffer):
+        buffer.append('<div class="gene">')
         if self.region == 'VH':
-            print('<div class="gene">{}</div>'.format(self.sequence.nucleotide))
-            self._rss_html_3('VH')
-
-        elif self.region == 'DH':
-            self._rss_html_5('DH')
-            print('<div class="gene">{}</div>'.format(self.sequence.nucleotide))
-            self._rss_html_3('DH')
-
-        elif self.region == 'JH':
-            self._rss_html_5('JH')
-            print('<div class="gene">{}</div>'.format(self.sequence.nucleotide))
-        print('</div>')
+            for artifact in [
+                'preamble',
+                'fr1',
+                'cdr1',
+                'fr2',
+                'cdr2',
+                'fr3',
+                'cdr3'
+            ]:
+                if artifact in self.body:
+                    buffer.append('<span class="{}">{}</span>'.format(artifact, self.body[artifact]['sequence'].nucleotide))
+        else:
+            buffer.append(self.sequence.nucleotide)
+        buffer.append('</div>')
 
     def _check_rss_3(self, flanking, region, distance):
         position = self._lookup_artifact(flanking, region, True, 0 , 'heptamer')
@@ -1509,31 +1591,31 @@ class Gene(Artifact):
             self.body[name] = artifact
             self.log.info('%s %s of length %dbp found for %s gene', name, artifact['sequence'].nucleotide, artifact['sequence'].length, self.id)
 
-    def _rss_html_3(self, region):
+    def _html_3(self, buffer, region):
         if ('3 heptamer' in self.body or '3 nonamer' in self.body) and '3 gap' in self.body:
-            print('<div class="gap">{}</div>'.format(self.body['3 gap']['sequence'].nucleotide))
+            buffer.append('<div class="gap">{}</div>'.format(self.body['3 gap']['sequence'].nucleotide))
 
         if '3 heptamer' in self.body:
-            print('<div class="heptamer {}">{}</div>'.format(self.body['3 heptamer']['source'], self.body['3 heptamer']['sequence'].nucleotide)) 
+            buffer.append('<div class="heptamer {}">{}</div>'.format(self.body['3 heptamer']['source'], self.body['3 heptamer']['sequence'].nucleotide)) 
 
         if '3 spacer' in self.body:
-            print('<div class="spacer {}">{}</div>'.format(self.body['3 spacer']['source'], self.body['3 spacer']['sequence'].nucleotide))
+            buffer.append('<div class="spacer {}">{}</div>'.format(self.body['3 spacer']['source'], self.body['3 spacer']['sequence'].nucleotide))
 
         if '3 nonamer' in self.body:
-            print('<div class="nonamer {}">{}</div>'.format(self.body['3 nonamer']['source'], self.body['3 nonamer']['sequence'].nucleotide))
+            buffer.append('<div class="nonamer {}">{}</div>'.format(self.body['3 nonamer']['source'], self.body['3 nonamer']['sequence'].nucleotide))
 
-    def _rss_html_5(self, region):
+    def _html_5(self, buffer, region):
         if '5 nonamer' in self.body:
-            print('<div class="nonamer {}">{}</div>'.format(self.body['5 nonamer']['source'], self.body['5 nonamer']['sequence'].nucleotide))
+            buffer.append('<div class="nonamer {}">{}</div>'.format(self.body['5 nonamer']['source'], self.body['5 nonamer']['sequence'].nucleotide))
 
         if '5 spacer' in self.body:
-            print('<div class="spacer {}">{}</div>'.format(self.body['5 spacer']['source'], self.body['5 spacer']['sequence'].nucleotide))
+            buffer.append('<div class="spacer {}">{}</div>'.format(self.body['5 spacer']['source'], self.body['5 spacer']['sequence'].nucleotide))
 
         if '5 heptamer' in self.body:
-            print('<div class="heptamer {}">{}</div>'.format(self.body['5 heptamer']['source'], self.body['5 heptamer']['sequence'].nucleotide)) 
+            buffer.append('<div class="heptamer {}">{}</div>'.format(self.body['5 heptamer']['source'], self.body['5 heptamer']['sequence'].nucleotide)) 
 
         if ('5 heptamer' in self.body or '5 nonamer' in self.body) and '5 gap' in self.body:
-            print('<div class="gap">{}</div>'.format(self.body['5 gap']['sequence'].nucleotide))
+            buffer.append('<div class="gap">{}</div>'.format(self.body['5 gap']['sequence'].nucleotide))
 
 
 class Sample(object):
@@ -3793,42 +3875,10 @@ class Resolver(object):
             ]:
                 if k in node:
                     document['head'][k] = node[k]
+
             gene = Gene(self.pipeline, document)
-
-            # if 'BN000872' in gene.body:
-            #     accession = self.pipeline.resolver.accession_fetch('BN000872')
-            #     BN000872 = gene.body['BN000872']
-
-            #     if '3 heptamer' in BN000872:
-            #         BN000872['3 heptamer']['source'] = 'BN000872'
-            #         BN000872['3 heptamer']['strand'] = True
-            #         BN000872['3 heptamer']['sequence'] = accession.sequence.crop(BN000872['3 heptamer']['start'], BN000872['3 heptamer']['end'])
-            #         BN000872['3 heptamer']['relative start'] = BN000872['3 heptamer']['start'] - BN000872['end']
-            #         BN000872['3 heptamer']['relative end'] = BN000872['3 heptamer']['end'] - BN000872['end']
-
-            #     if '3 nonamer' in BN000872:
-            #         BN000872['3 nonamer']['source'] = 'BN000872'
-            #         BN000872['3 nonamer']['strand'] = True
-            #         BN000872['3 nonamer']['sequence'] = accession.sequence.crop(BN000872['3 nonamer']['start'], BN000872['3 nonamer']['end'])
-            #         BN000872['3 nonamer']['relative start'] = BN000872['3 nonamer']['start'] - BN000872['end']
-            #         BN000872['3 nonamer']['relative end'] = BN000872['3 nonamer']['end'] - BN000872['end']
-
-            #     # gene sequence
-            #     if '3 heptamer' in BN000872:
-            #         gene.body['3 heptamer'] = BN000872['3 heptamer']
-
-            #     if '3 nonamer' in BN000872:
-            #         gene.body['3 nonamer'] = BN000872['3 nonamer']
-
-            #     gene.body['start'] = BN000872['start']
-            #     gene.body['end'] = BN000872['end']
-            #     gene.body['sequence'] = Sequence(self.pipeline, BN000872['sequence']) 
-            #     gene.body['length'] = BN000872['length']
-            #     gene.body['read frame'] = gene.body['sequence'].read_frame
-            #     del gene.body['BN000872']
-            gene.validate_in_accesion()
-
             gene.validate()
+            gene.validate_artifact()
             self.gene_save(gene)
 
     def accession_save(self, accession):
@@ -4337,11 +4387,9 @@ class Pipeline(object):
         cursor.close()
 
     def gene_populate(self, path):
-        # print(', '.join([ 'gene', 'imgt start', 'start', 'imgt end', 'end', 'heptamer', 'spacer', 'nonamer', 'spacer length', 'rss gap', 'end diff', 'start diff' ]))
         count = 0
         with io.open(path, 'rb') as file:
-            content = StringIO(file.read().decode('utf8'))
-            document = json.loads(content.getvalue())
+            document = json.loads(file.read().decode('utf8'))
             for node in document:
                 self.resolver.gene_store(node)
                 count += 1
@@ -4419,24 +4467,53 @@ class Pipeline(object):
                 .codon {
                     color: #5A7251;
                 }
+                .codon .cdr1,
+                .codon .cdr2,
+                .codon .cdr3 {
+                    color: #3A5231;
+                }
+                .codon .fr1,
+                .codon .fr2,
+                .codon .fr3 {
+                    color: #7A9271;
+                }
                 .frame {
                     font-weight: bold;
                 }
                 .nonamer {
-                    display: inline;
                     color: #FBAC21;
                 }
                 .spacer {
-                    display: inline;
                     color: #9ECA2B;
                 }
                 .heptamer {
-                    display: inline;
                     color: #82A5D6;
                 }
                 .gap {
-                    display: inline;
                     color: #F14329;
+                }
+                .nonamer,
+                .spacer,
+                .heptamer,
+                .gap,
+                .preamble,
+                .fr1,
+                .fr2,
+                .fr3,
+                .cdr1,
+                .cdr2,
+                .cdr3 {
+                    display: inline;
+                }
+                .gene .cdr1,
+                .gene .cdr2,
+                .gene .cdr3 {
+                    color: #333;
+                }
+                .gene .fr1,
+                .gene .fr2,
+                .gene .fr3 {
+                    color: #AAA;
                 }
                 .implied {}
                 .BN000872 {}
@@ -4459,7 +4536,7 @@ class Pipeline(object):
             </head>
             <body><div class="wrap">""")
 
-        for gene in buffer: gene.rss_html()
+        for gene in buffer: gene.html()
         print("""</div></body></html>""")
 
     def gene_fasta(self, query, profile, flanking, limit):
