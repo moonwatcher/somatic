@@ -2,7 +2,6 @@
 *.pyc
 *.pyo
 __pycache__/
-db/
 resource/
 bin/
 cache/
