@@ -202,9 +202,6 @@ def load_configuration():
     configuration['command']['igblast.gapped']['arguments'][0] = configuration['constant']['igblastn binary']
     configuration['command']['igblast.gapped']['cwd'] = configuration['constant']['igblastn database']
 
-
-
-    print(to_json(configuration))
     if configuration is not None:
         configuration['interface']['prototype']['profile']['parameter']['choices'] = list(configuration['profile'].keys())
         configuration['interface']['prototype']['profile']['parameter']['help'] = '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
