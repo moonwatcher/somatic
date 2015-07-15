@@ -3,14 +3,18 @@ VERBOSITY="debug"
 STRAIN="C57BL/6"
 BASE="/volume/albireo/canal/thesis"
 
-rm -rf $BASE/db
-cp -r ../db $BASE/
-(
-    cd $BASE/db
-    curl -O "http://ftp.ensembl.org/pub/release-76/fasta/mus_musculus/dna/Mus_musculus.GRCm38.dna.chromosome.12.fa.gz"
-    gzcat Mus_musculus.GRCm38.dna.chromosome.12.fa.gz > mus_musculus.grcm38.dna.chromosome.12.fa
-    rm -f Mus_musculus.GRCm38.dna.chromosome.12.fa.gz
-)
+[ -d "$BASE/db" ] || mkdir -p "$BASE/db"
+[ -d "$BASE/db/igblast" ] && rm -rf "$BASE/db/igblast"
+cp -r ../db/igblast "$BASE/db/"
+
+if [ ! -f "$BASE/db/mus_musculus.grcm38.dna.chromosome.12.fa" ]; then
+    (
+        cd $BASE/db
+        curl -O "http://ftp.ensembl.org/pub/release-76/fasta/mus_musculus/dna/Mus_musculus.GRCm38.dna.chromosome.12.fa.gz"
+        gzip -d -c Mus_musculus.GRCm38.dna.chromosome.12.fa.gz > mus_musculus.grcm38.dna.chromosome.12.fa
+        rm -f Mus_musculus.GRCm38.dna.chromosome.12.fa.gz
+    )
+fi
 
 rm -rf $BASE/html
 mkdir $BASE/html
