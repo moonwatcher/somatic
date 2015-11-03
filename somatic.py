@@ -990,8 +990,9 @@ class Artifact(object):
                 'body': { 'accession strand': True }
             }
             
-        if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
-            self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
+        if 'sequence' in self.body:
+            if isinstance(self.body['sequence'], dict):
+                self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
             self.body['sequence'] = Sequence(self.pipeline)
 
@@ -1225,14 +1226,14 @@ class Artifact(object):
                 if not self.sequence.nucleotide:
                     # if no sequence defined, assign sequence from the reference 
                     self.sequence.nucleotide = flanking['sequence'].nucleotide
-                    self.log.info('sequence assigned to artifact %s from reference %d:%d', self.id, self.accession_start, self.accession_end)
+                    self.log.info('sequence assigned to artifact %s from reference %d:%d', self.id, self.reference_start, self.reference_end)
                 else:
                     if flanking['sequence'].nucleotide != self.sequence.nucleotide:
-                        self.log.info('artifact sequence in %s does not match reference %d:%d', self.id, self.accession_start, self.accession_end)
+                        self.log.info('artifact sequence in %s does not match reference %d:%d', self.id, self.reference_start, self.reference_end)
                     else:
-                        self.log.debug('artifact sequence for %s matched to reference %d:%d', self.id, self.accession_start, self.accession_end)
+                        self.log.debug('artifact sequence for %s matched to reference %d:%d', self.id, self.reference_start, self.reference_end)
             else:
-                self.log.error('coordinates %d:%d invalid for reference', self.accession_start, self.accession_end)
+                self.log.error('coordinates %d:%d invalid for reference', self.reference_start, self.reference_end)
 
     def search_in_accession(self):
         accession = self.pipeline.resolver.accession_fetch(self.accession)
@@ -1281,7 +1282,7 @@ class Gene(Artifact):
             if k not in self.head:
                 self.head[k] = True
 
-        for artifact in [
+        for name in [
             '3 heptamer',
             '3 nonamer',
             '3 spacer',
@@ -1298,8 +1299,13 @@ class Gene(Artifact):
             'fr3',
             'cdr3'
         ]:
-            if artifact in self.body and 'sequence' in self.body[artifact] and isinstance(self.body[artifact]['sequence'], dict):
-                self.body[artifact]['sequence'] = Sequence(self.pipeline, self.body[artifact]['sequence'])
+            if name in self.body:
+                artifact = self.body[name]
+                if 'sequence' in artifact and isinstance(artifact['sequence'], dict):
+                    artifact['sequence'] = Sequence(self.pipeline, artifact['sequence'])
+
+                if 'start' in artifact and 'end' not in artifact and 'sequence' in artifact:
+                    artifact['end'] = artifact['start'] + artifact['sequence'].length
 
     @property
     def framed(self):
@@ -1310,6 +1316,36 @@ class Gene(Artifact):
         return self.head['functionality']
 
     def validate_artifact(self):
+        self.validate_artifact_in_gene()
+        self.validate_artifact_in_reference()
+
+    def validate_artifact_in_reference(self):
+        for name in [
+            '3 heptamer',
+            '3 nonamer',
+            '3 spacer',
+            '5 heptamer',
+            '5 nonamer',
+            '5 spacer',
+            '3 gap',
+            '5 gap',
+            'preamble',
+            'fr1',
+            'cdr1',
+            'fr2',
+            'cdr2',
+            'fr3',
+            'cdr3'
+        ]:
+            if name in self.body:
+                node = self.body[name]
+                if ('reference strand' in node and \
+                    'reference start' in node and \
+                    'reference end' in node):
+                    artifact = Artifact(self.pipeline, { 'head':{ 'aligned':True, 'id': '{} {}'.format(name, self.id) }, 'body':node })
+                    artifact.validate_in_reference()
+
+    def validate_artifact_in_gene(self):
         for artifact in [
             'preamble',
             'fr1',
@@ -1634,6 +1670,30 @@ class Gene(Artifact):
         if ('5 heptamer' in self.body or '5 nonamer' in self.body) and '5 gap' in self.body:
             buffer.append('<div class="gap">{}</div>'.format(self.body['5 gap']['sequence'].nucleotide))
 
+    def assign_reference_alignment(self, hit):
+        Artifact.assign_reference_alignment(self, hit)
+        for name in [
+            'preamble',
+            'fr1',
+            'cdr1',
+            'fr2',
+            'cdr2',
+            'fr3',
+            'cdr3'
+        ]:
+            if name in self.body:
+                artifact = self.body[name]
+                if artifact['sequence'].strand == self.sequence.strand:
+                    artifact['reference strand'] = self.reference_strand
+                else:
+                    artifact['reference strand'] = not self.reference_strand
+
+                if artifact['reference strand']:
+                    artifact['reference start'] = self.reference_start + artifact['start']
+                    artifact['reference end'] = self.reference_start + artifact['end']
+                else:
+                    artifact['reference start'] = self.reference_start + self.length - artifact['end']
+                    artifact['reference end'] = self.reference_start + self.length - artifact['start']
 
 class Sample(object):
     def __init__(self, pipeline, node=None, id=None, library=None):
@@ -1871,8 +1931,17 @@ class Sample(object):
                     hit['allele'] = gene.body['allele']
                     if hit['subject strand'] == gene.sequence.strand:
                         hit['subject'] = gene.sequence.crop(hit['subject start'], hit['subject end'])
+                        hit['reference strand'] = gene.reference_strand
                     else:
                         hit['subject'] = gene.sequence.reversed.crop(hit['subject start'], hit['subject end'])
+                        hit['reference strand'] = not gene.reference_strand
+
+                    if hit['reference strand']:
+                        hit['reference start'] = gene.reference_start + hit['subject start']
+                        hit['reference end'] = gene.reference_start + hit['subject end']
+                    else:
+                        hit['reference start'] = gene.reference_start + gene.length - hit['subject end']
+                        hit['reference end'] = gene.reference_start + gene.length - hit['subject start']
 
                     # only DH regions are allowed to align to the opposite strand
                     if hit['region'] != 'DH' and hit['subject strand'] != gene.sequence.strand:
@@ -3872,6 +3941,8 @@ class Resolver(object):
                 self.log.debug('existing gene found for %s', gene.id)
                 gene.node['_id'] = existing.node['_id']
                 
+            gene.validate()
+            gene.validate_artifact()
             self.database['gene'].save(gene.document)
             if gene.id in self.cache['gene']:
                 del self.cache['gene'][gene.id]
@@ -4329,9 +4400,11 @@ class Pipeline(object):
     def sample_analyze(self, query, limit, skip, profile):
         def flush(buffer, collection):
             if buffer:
+                bulk = pymongo.bulk.BulkOperationBuilder(collection)
+                for sample in buffer:
+                    bulk.find({'_id': sample.document['_id']}).upsert().replace_one(sample.document)
                 try:
-                    document = [ sample.document for sample in buffer ]
-                    result = collection.insert_many(document)
+                    bulk.execute()
                 except BulkWriteError as e:
                     self.log.critical(e.details)
                     raise SystemExit()
@@ -4339,7 +4412,7 @@ class Pipeline(object):
             else:
                 return 0
 
-        collection = self.resolver.database['sample_v2']
+        collection = self.resolver.database['analyzed_sample']
         q = self.build_query(query, profile, 'sample')
         cursor = self.resolver.make_cursor('sample', q, limit, skip)
         count = 0
@@ -4348,6 +4421,7 @@ class Pipeline(object):
             sample = Sample(self, node)
             sample.analyze()
             buffer.append(sample)
+            print(to_json(sample.document))
             if len(buffer) >= self.configuration['constant']['buffer size']:
                 count += flush(buffer, collection)
                 buffer = []
