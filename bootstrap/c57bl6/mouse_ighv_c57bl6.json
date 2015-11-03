@@ -3335,7 +3335,7 @@
     }, 
     {
         "accession": "BN000872", 
-        "accession end": 1738306, 
+        "accession end": 1738313, 
         "accession start": 1738025, 
         "accession strand": true, 
         "allele": "PG.15.75*01", 
@@ -3365,7 +3365,7 @@
         }, 
         "cdr3": {
             "sequence": {
-                "nucleotide": "C", 
+                "nucleotide": "CTCTATGA", 
                 "read frame": 1, 
                 "strand": true
             }, 
@@ -3417,11 +3417,11 @@
         "imgt allele name": "IGHV8-1*01", 
         "imgt family name": "IGHV8", 
         "imgt gene name": "IGHV8-1", 
-        "length": 281, 
+        "length": 288, 
         "organism name": "mus musculus", 
         "region": "VH", 
         "sequence": {
-            "nucleotide": "GTTTAGCTTCTAGAATCTGGAGGCTCTTTGATATAGCCTGGAGGATTCTTTAAACTCTCTTCTAAAGCTGCTGGATTCACCTTCAATGATTACTGGATGCACTGGTTTTGATAAGGCTCAGGGAATCGGCTAGAGTGGTTAGCAGATATAAAATATGTGAAAAGTGTAAAAAACCATGCAGAGTCTGTGAAGGGAAGATTTGCCACTACAGAGACAATTCTAAAAACTTATTTTATCTACAAATGAACAGTCTGAGAAATGAGGACATTGCCCCTTATTAC", 
+            "nucleotide": "GTTTAGCTTCTAGAATCTGGAGGCTCTTTGATATAGCCTGGAGGATTCTTTAAACTCTCTTCTAAAGCTGCTGGATTCACCTTCAATGATTACTGGATGCACTGGTTTTGATAAGGCTCAGGGAATCGGCTAGAGTGGTTAGCAGATATAAAATATGTGAAAAGTGTAAAAAACCATGCAGAGTCTGTGAAGGGAAGATTTGCCACTACAGAGACAATTCTAAAAACTTATTTTATCTACAAATGAACAGTCTGAGAAATGAGGACATTGCCCCTTATTACTCTATGA", 
             "read frame": 2, 
             "strand": true
         }, 
@@ -23745,7 +23745,7 @@
     }, 
     {
         "accession": "BN000872", 
-        "accession end": 1943571, 
+        "accession end": 1943579, 
         "accession start": 1943265, 
         "accession strand": true, 
         "allele": "PG.12.60*01", 
@@ -23775,7 +23775,7 @@
         }, 
         "cdr3": {
             "sequence": {
-                "nucleotide": "TCCAGG", 
+                "nucleotide": "TCCAGGGAAAACCA", 
                 "read frame": 0, 
                 "strand": true
             }, 
@@ -23827,7 +23827,7 @@
         "imgt allele name": "IGHV12-2*01", 
         "imgt family name": "IGHV12", 
         "imgt gene name": "IGHV12-2", 
-        "length": 306, 
+        "length": 314, 
         "organism name": "mus musculus", 
         "preamble": {
             "accession end": 1943271, 
@@ -23843,7 +23843,7 @@
         }, 
         "region": "VH", 
         "sequence": {
-            "nucleotide": "ATTCTGTCCCAGATTCAGCTTAAGGAATCAGGACCTGCTGTCATCAAGCCATCATAGTCACTGTCTCTCACCTGCACAGTCTCTGGATTCTCCATCACTAGTAGTGGTTTTTGCTGGCACTGGATATGCCAGCCCCCAGGAAAGGGGTTAGAGTGGATGGGGCGCATATGTTATGAAGGTTCCATATACTATAGTCCATCCCTCAAAAGTCCCAGCACCATCTCCAGAGACATATCACTGAATAAATTCTTTATCCAGCTGAGCTCTGTAACTGATGAGGACACAGCCATGTACTACTATTCCAGG", 
+            "nucleotide": "ATTCTGTCCCAGATTCAGCTTAAGGAATCAGGACCTGCTGTCATCAAGCCATCATAGTCACTGTCTCTCACCTGCACAGTCTCTGGATTCTCCATCACTAGTAGTGGTTTTTGCTGGCACTGGATATGCCAGCCCCCAGGAAAGGGGTTAGAGTGGATGGGGCGCATATGTTATGAAGGTTCCATATACTATAGTCCATCCCTCAAAAGTCCCAGCACCATCTCCAGAGACATATCACTGAATAAATTCTTTATCCAGCTGAGCTCTGTAACTGATGAGGACACAGCCATGTACTACTATTCCAGGGAAAACCA", 
             "read frame": 0, 
             "strand": true
         }, 
