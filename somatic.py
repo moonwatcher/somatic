@@ -1553,6 +1553,7 @@ class Gene(Artifact):
 
                     self.log.info('aligning %s gene with %s by %dbp', self.id, name, offset)
                     self.body['length'] = self.accession_end - self.accession_start
+                    self.sequence.nucleotide = None
                 else:
                     self.log.info('not aligning %s gene with %s because distance is %dbp which is further than %dbp', self.id, name, offset, distance)
 
