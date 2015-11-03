@@ -5,6 +5,7 @@
             "accession start": 2106764, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -19,6 +20,7 @@
             "accession start": 2106794, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -140,6 +142,7 @@
             "accession start": 2037309, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -154,6 +157,7 @@
             "accession start": 2037339, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -275,6 +279,7 @@
             "accession start": 1874673, 
             "accession strand": true, 
             "length": 8, 
+            "reference strand": false, 
             "relative end": 8, 
             "relative start": 0, 
             "sequence": {
@@ -289,6 +294,7 @@
             "accession start": 1874703, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -410,6 +416,7 @@
             "accession start": 1817495, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -424,6 +431,7 @@
             "accession start": 1817525, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -545,6 +553,7 @@
             "accession start": 1808460, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -559,6 +568,7 @@
             "accession start": 1808490, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -680,6 +690,7 @@
             "accession start": 1782958, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -694,6 +705,7 @@
             "accession start": 1782988, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -815,6 +827,7 @@
             "accession start": 1756925, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -829,6 +842,7 @@
             "accession start": 1756955, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -950,6 +964,7 @@
             "accession start": 1748735, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -964,6 +979,7 @@
             "accession start": 1748765, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -1085,6 +1101,7 @@
             "accession start": 1803509, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -1099,6 +1116,7 @@
             "accession start": 1803543, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 43, 
             "relative start": 34, 
             "sequence": {
@@ -1220,6 +1238,7 @@
             "accession start": 1713348, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -1234,6 +1253,7 @@
             "accession start": 1713378, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -1355,6 +1375,7 @@
             "accession start": 1608819, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -1369,6 +1390,7 @@
             "accession start": 1608848, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -1585,6 +1607,7 @@
             "accession start": 503929, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -1599,6 +1622,7 @@
             "accession start": 503959, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -1720,6 +1744,7 @@
             "accession start": 423133, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -1734,6 +1759,7 @@
             "accession start": 423163, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -2378,6 +2404,7 @@
             "accession start": 1047051, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -2392,6 +2419,7 @@
             "accession start": 1047081, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -2513,6 +2541,7 @@
             "accession start": 1003518, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -2527,6 +2556,7 @@
             "accession start": 1003548, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -2648,6 +2678,7 @@
             "accession start": 905301, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -2662,6 +2693,7 @@
             "accession start": 905331, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -2783,6 +2815,7 @@
             "accession start": 812946, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -2797,6 +2830,7 @@
             "accession start": 812976, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -2906,6 +2940,7 @@
             "accession start": 777016, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -2920,6 +2955,7 @@
             "accession start": 777046, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -3041,6 +3077,7 @@
             "accession start": 666661, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -3055,6 +3092,7 @@
             "accession start": 666691, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -3164,6 +3202,7 @@
             "accession start": 602739, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -3178,6 +3217,7 @@
             "accession start": 602769, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -3600,6 +3640,7 @@
             "accession start": 2369027, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -3614,6 +3655,7 @@
             "accession start": 2369057, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -3839,6 +3881,7 @@
             "accession start": 2335041, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -3853,6 +3896,7 @@
             "accession start": 2335071, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -4078,6 +4122,7 @@
             "accession start": 2308899, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -4092,6 +4137,7 @@
             "accession start": 2308929, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -4317,6 +4363,7 @@
             "accession start": 2244503, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -4331,6 +4378,7 @@
             "accession start": 2244533, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -4452,6 +4500,7 @@
             "accession start": 2232623, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -4466,6 +4515,7 @@
             "accession start": 2232653, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -4682,6 +4732,7 @@
             "accession start": 2498329, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -4696,6 +4747,7 @@
             "accession start": 2498359, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -4817,6 +4869,7 @@
             "accession start": 2492752, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -4831,6 +4884,7 @@
             "accession start": 2492782, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -4952,6 +5006,7 @@
             "accession start": 2212000, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -4966,6 +5021,7 @@
             "accession start": 2212030, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -5293,6 +5349,7 @@
             "accession start": 2473810, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -5307,6 +5364,7 @@
             "accession start": 2473840, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -5527,6 +5585,7 @@
             "accession start": 2445750, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -5541,6 +5600,7 @@
             "accession start": 2445780, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -5761,6 +5821,7 @@
             "accession start": 2409487, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -5775,6 +5836,7 @@
             "accession start": 2409517, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -6003,6 +6065,7 @@
             "accession start": 1751080, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -6017,6 +6080,7 @@
             "accession start": 1751110, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -6325,6 +6389,7 @@
             "accession start": 1602034, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -6339,6 +6404,7 @@
             "accession start": 1602064, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -6460,6 +6526,7 @@
             "accession start": 1440428, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -6474,6 +6541,7 @@
             "accession start": 1440458, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -6583,6 +6651,7 @@
             "accession start": 1424536, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -6597,6 +6666,7 @@
             "accession start": 1424566, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -6718,6 +6788,7 @@
             "accession start": 1413755, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -6732,6 +6803,7 @@
             "accession start": 1413785, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -6853,6 +6925,7 @@
             "accession start": 1405236, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -6867,6 +6940,7 @@
             "accession start": 1405265, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -6988,6 +7062,7 @@
             "accession start": 1399140, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -7002,6 +7077,7 @@
             "accession start": 1399169, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -7123,6 +7199,7 @@
             "accession start": 1394359, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -7137,6 +7214,7 @@
             "accession start": 1394389, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -7258,6 +7336,7 @@
             "accession start": 1388476, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -7272,6 +7351,7 @@
             "accession start": 1388506, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -7393,6 +7473,7 @@
             "accession start": 1366933, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -7407,6 +7488,7 @@
             "accession start": 1366963, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -7528,6 +7610,7 @@
             "accession start": 1362432, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -7542,6 +7625,7 @@
             "accession start": 1362461, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -7663,6 +7747,7 @@
             "accession start": 1347308, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -7677,6 +7762,7 @@
             "accession start": 1347338, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -7798,6 +7884,7 @@
             "accession start": 1583973, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -7812,6 +7899,7 @@
             "accession start": 1584002, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -7933,6 +8021,7 @@
             "accession start": 1334835, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -7947,6 +8036,7 @@
             "accession start": 1334864, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -8068,6 +8158,7 @@
             "accession start": 1330672, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -8082,6 +8173,7 @@
             "accession start": 1330702, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -8203,6 +8295,7 @@
             "accession start": 1324807, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -8217,6 +8310,7 @@
             "accession start": 1324837, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -8338,6 +8432,7 @@
             "accession start": 1306630, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -8352,6 +8447,7 @@
             "accession start": 1306660, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -8473,6 +8569,7 @@
             "accession start": 1298179, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 36, 
             "relative start": 27, 
             "sequence": {
@@ -8594,6 +8691,7 @@
             "accession start": 1289671, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -8608,6 +8706,7 @@
             "accession start": 1289701, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -8729,6 +8828,7 @@
             "accession start": 1282708, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -8743,6 +8843,7 @@
             "accession start": 1282738, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -8864,6 +8965,7 @@
             "accession start": 1266464, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -8878,6 +8980,7 @@
             "accession start": 1266494, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -8999,6 +9102,7 @@
             "accession start": 1261659, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -9013,6 +9117,7 @@
             "accession start": 1261688, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -9134,6 +9239,7 @@
             "accession start": 1258759, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -9148,6 +9254,7 @@
             "accession start": 1258789, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -9269,6 +9376,7 @@
             "accession start": 1557779, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -9283,6 +9391,7 @@
             "accession start": 1557809, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -9404,6 +9513,7 @@
             "accession start": 1253981, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -9418,6 +9528,7 @@
             "accession start": 1254008, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 36, 
             "relative start": 27, 
             "sequence": {
@@ -9539,6 +9650,7 @@
             "accession start": 1241816, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -9553,6 +9665,7 @@
             "accession start": 1241846, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -9674,6 +9787,7 @@
             "accession start": 1235857, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -9688,6 +9802,7 @@
             "accession start": 1235886, 
             "accession strand": true, 
             "length": 10, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 29, 
             "sequence": {
@@ -9809,6 +9924,7 @@
             "accession start": 1227429, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -9823,6 +9939,7 @@
             "accession start": 1227458, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -9944,6 +10061,7 @@
             "accession start": 1219890, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -9958,6 +10076,7 @@
             "accession start": 1219919, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -10079,6 +10198,7 @@
             "accession start": 1195774, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -10093,6 +10213,7 @@
             "accession start": 1195804, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -10214,6 +10335,7 @@
             "accession start": 1191189, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -10228,6 +10350,7 @@
             "accession start": 1191218, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -10349,6 +10472,7 @@
             "accession start": 1174839, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -10363,6 +10487,7 @@
             "accession start": 1174868, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -10484,6 +10609,7 @@
             "accession start": 1161066, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -10498,6 +10624,7 @@
             "accession start": 1161095, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -10619,6 +10746,7 @@
             "accession start": 1156478, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -10633,6 +10761,7 @@
             "accession start": 1156508, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -10754,6 +10883,7 @@
             "accession start": 1532613, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -10768,6 +10898,7 @@
             "accession start": 1532643, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -10889,6 +11020,7 @@
             "accession start": 1146136, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -10903,6 +11035,7 @@
             "accession start": 1146166, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -11024,6 +11157,7 @@
             "accession start": 1138706, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -11038,6 +11172,7 @@
             "accession start": 1138736, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -11159,6 +11294,7 @@
             "accession start": 1133964, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -11173,6 +11309,7 @@
             "accession start": 1133994, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -11294,6 +11431,7 @@
             "accession start": 1125127, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -11308,6 +11446,7 @@
             "accession start": 1125157, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -11429,6 +11568,7 @@
             "accession start": 1107697, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -11443,6 +11583,7 @@
             "accession start": 1107727, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -11564,6 +11705,7 @@
             "accession start": 1101022, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -11578,6 +11720,7 @@
             "accession start": 1101052, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -11699,6 +11842,7 @@
             "accession start": 1093384, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -11713,6 +11857,7 @@
             "accession start": 1093414, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 37, 
             "relative start": 30, 
             "sequence": {
@@ -11834,6 +11979,7 @@
             "accession start": 1079969, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -11848,6 +11994,7 @@
             "accession start": 1079999, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -11969,6 +12116,7 @@
             "accession start": 1032850, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -11983,6 +12131,7 @@
             "accession start": 1032880, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -12104,6 +12253,7 @@
             "accession start": 1015854, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -12118,6 +12268,7 @@
             "accession start": 1015884, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -12239,6 +12390,7 @@
             "accession start": 951330, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -12253,6 +12405,7 @@
             "accession start": 951360, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -12374,6 +12527,7 @@
             "accession start": 939709, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -12388,6 +12542,7 @@
             "accession start": 939739, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -12509,6 +12664,7 @@
             "accession start": 925591, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -12523,6 +12679,7 @@
             "accession start": 925621, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -12644,6 +12801,7 @@
             "accession start": 912675, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -12658,6 +12816,7 @@
             "accession start": 912705, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -12779,6 +12938,7 @@
             "accession start": 877403, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -12793,6 +12953,7 @@
             "accession start": 877433, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -12902,6 +13063,7 @@
             "accession start": 862983, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -12916,6 +13078,7 @@
             "accession start": 863013, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -13037,6 +13200,7 @@
             "accession start": 828276, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -13051,6 +13215,7 @@
             "accession start": 828306, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -13172,6 +13337,7 @@
             "accession start": 802654, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -13186,6 +13352,7 @@
             "accession start": 802684, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -13307,6 +13474,7 @@
             "accession start": 758912, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -13321,6 +13489,7 @@
             "accession start": 758942, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -13442,6 +13611,7 @@
             "accession start": 735996, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -13456,6 +13626,7 @@
             "accession start": 736026, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -13577,6 +13748,7 @@
             "accession start": 1515499, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -13591,6 +13763,7 @@
             "accession start": 1515529, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -13712,6 +13885,7 @@
             "accession start": 1487539, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -13726,6 +13900,7 @@
             "accession start": 1487569, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -13847,6 +14022,7 @@
             "accession start": 726547, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -13861,6 +14037,7 @@
             "accession start": 726577, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -13982,6 +14159,7 @@
             "accession start": 711938, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -13996,6 +14174,7 @@
             "accession start": 711968, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -14117,6 +14296,7 @@
             "accession start": 699092, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -14131,6 +14311,7 @@
             "accession start": 699122, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -14252,6 +14433,7 @@
             "accession start": 684383, 
             "accession strand": true, 
             "length": 6, 
+            "reference strand": false, 
             "relative end": 6, 
             "relative start": 0, 
             "sequence": {
@@ -14266,6 +14448,7 @@
             "accession start": 684412, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -14387,6 +14570,7 @@
             "accession start": 624662, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -14401,6 +14585,7 @@
             "accession start": 624692, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -14522,6 +14707,7 @@
             "accession start": 610072, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -14536,6 +14722,7 @@
             "accession start": 610102, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -14654,6 +14841,7 @@
             "accession start": 575445, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -14668,6 +14856,7 @@
             "accession start": 575475, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -14789,6 +14978,7 @@
             "accession start": 563533, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -14803,6 +14993,7 @@
             "accession start": 563563, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -14924,6 +15115,7 @@
             "accession start": 539022, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -14938,6 +15130,7 @@
             "accession start": 539052, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -15059,6 +15252,7 @@
             "accession start": 477968, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -15073,6 +15267,7 @@
             "accession start": 477998, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -15194,6 +15389,7 @@
             "accession start": 467138, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -15208,6 +15404,7 @@
             "accession start": 467168, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -15436,6 +15633,7 @@
             "accession start": 447917, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -15450,6 +15648,7 @@
             "accession start": 447947, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -15571,6 +15770,7 @@
             "accession start": 379189, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -15585,6 +15785,7 @@
             "accession start": 379219, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -15706,6 +15907,7 @@
             "accession start": 328873, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -15720,6 +15922,7 @@
             "accession start": 328903, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -15841,6 +16044,7 @@
             "accession start": 313094, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -15855,6 +16059,7 @@
             "accession start": 313124, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -15976,6 +16181,7 @@
             "accession start": 281464, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -15990,6 +16196,7 @@
             "accession start": 281495, 
             "accession strand": true, 
             "length": 8, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 31, 
             "sequence": {
@@ -16111,6 +16318,7 @@
             "accession start": 269407, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -16125,6 +16333,7 @@
             "accession start": 269437, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -16246,6 +16455,7 @@
             "accession start": 238104, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -16260,6 +16470,7 @@
             "accession start": 238134, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -16381,6 +16592,7 @@
             "accession start": 224171, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -16395,6 +16607,7 @@
             "accession start": 224201, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -16516,6 +16729,7 @@
             "accession start": 1473229, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -16530,6 +16744,7 @@
             "accession start": 1473259, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -16651,6 +16866,7 @@
             "accession start": 1458865, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -16665,6 +16881,7 @@
             "accession start": 1458895, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -16786,6 +17003,7 @@
             "accession start": 210185, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -16800,6 +17018,7 @@
             "accession start": 210215, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -16921,6 +17140,7 @@
             "accession start": 203279, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -16935,6 +17155,7 @@
             "accession start": 203309, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -17056,6 +17277,7 @@
             "accession start": 183956, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -17070,6 +17292,7 @@
             "accession start": 183986, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -17191,6 +17414,7 @@
             "accession start": 159953, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -17205,6 +17429,7 @@
             "accession start": 159983, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -17326,6 +17551,7 @@
             "accession start": 152016, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -17340,6 +17566,7 @@
             "accession start": 152046, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -17461,6 +17688,7 @@
             "accession start": 119766, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -17475,6 +17703,7 @@
             "accession start": 119795, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -17596,6 +17825,7 @@
             "accession start": 108481, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -17610,6 +17840,7 @@
             "accession start": 108511, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -17719,6 +17950,7 @@
             "accession start": 91596, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -17733,6 +17965,7 @@
             "accession start": 91626, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -17854,6 +18087,7 @@
             "accession start": 72270, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -17868,6 +18102,7 @@
             "accession start": 72300, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -17989,6 +18224,7 @@
             "accession start": 62639, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -18003,6 +18239,7 @@
             "accession start": 62668, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -18124,6 +18361,7 @@
             "accession start": 1455258, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -18138,6 +18376,7 @@
             "accession start": 1455288, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -18730,6 +18969,7 @@
             "accession start": 1679397, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -18744,6 +18984,7 @@
             "accession start": 1679427, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -18865,6 +19106,7 @@
             "accession start": 1664635, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -18879,6 +19121,7 @@
             "accession start": 1664665, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -19000,6 +19243,7 @@
             "accession start": 1654513, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -19014,6 +19258,7 @@
             "accession start": 1654543, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -19135,6 +19380,7 @@
             "accession start": 1636319, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -19149,6 +19395,7 @@
             "accession start": 1636349, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -19270,6 +19517,7 @@
             "accession start": 1615483, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -19284,6 +19532,7 @@
             "accession start": 1615513, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -19512,6 +19761,7 @@
             "accession start": 2275011, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -19526,6 +19776,7 @@
             "accession start": 2275041, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -19647,6 +19898,7 @@
             "accession start": 2263835, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -19661,6 +19913,7 @@
             "accession start": 2263865, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -19877,6 +20130,7 @@
             "accession start": 2192053, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -19891,6 +20145,7 @@
             "accession start": 2192083, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -20119,6 +20374,7 @@
             "accession start": 2482989, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -20133,6 +20389,7 @@
             "accession start": 2483018, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -20254,6 +20511,7 @@
             "accession start": 2460072, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -20268,6 +20526,7 @@
             "accession start": 2460102, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -20480,6 +20739,7 @@
             "accession start": 2417965, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -20494,6 +20754,7 @@
             "accession start": 2417995, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -20718,6 +20979,7 @@
             "accession start": 2385774, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -20732,6 +20994,7 @@
             "accession start": 2385804, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -20853,6 +21116,7 @@
             "accession start": 2354482, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -20867,6 +21131,7 @@
             "accession start": 2354512, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -20988,6 +21253,7 @@
             "accession start": 2301298, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -21002,6 +21268,7 @@
             "accession start": 2301328, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -21123,6 +21390,7 @@
             "accession start": 2174741, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -21137,6 +21405,7 @@
             "accession start": 2174771, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -21258,6 +21527,7 @@
             "accession start": 2159124, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -21272,6 +21542,7 @@
             "accession start": 2159146, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 31, 
             "relative start": 22, 
             "sequence": {
@@ -21393,6 +21664,7 @@
             "accession start": 1917932, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -21407,6 +21679,7 @@
             "accession start": 1917962, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -21528,6 +21801,7 @@
             "accession start": 1848324, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -21542,6 +21816,7 @@
             "accession start": 1848354, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -21663,6 +21938,7 @@
             "accession start": 2139196, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -21677,6 +21953,7 @@
             "accession start": 2139225, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -21798,6 +22075,7 @@
             "accession start": 2076643, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -21812,6 +22090,7 @@
             "accession start": 2076672, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -21933,6 +22212,7 @@
             "accession start": 2011267, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -21947,6 +22227,7 @@
             "accession start": 2011296, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -22068,6 +22349,7 @@
             "accession start": 1894674, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -22082,6 +22364,7 @@
             "accession start": 1894703, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -22191,6 +22474,7 @@
             "accession start": 1977184, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -22205,6 +22489,7 @@
             "accession start": 1977213, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -22326,6 +22611,7 @@
             "accession start": 1962111, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -22340,6 +22626,7 @@
             "accession start": 1962140, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -22461,6 +22748,7 @@
             "accession start": 1930420, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -22475,6 +22763,7 @@
             "accession start": 1930449, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -22596,6 +22885,7 @@
             "accession start": 1771148, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -22610,6 +22900,7 @@
             "accession start": 1771177, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 38, 
             "relative start": 29, 
             "sequence": {
@@ -22731,6 +23022,7 @@
             "accession start": 1592104, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -22745,6 +23037,7 @@
             "accession start": 1592134, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -22866,6 +23159,7 @@
             "accession start": 1575106, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -22880,6 +23174,7 @@
             "accession start": 1575136, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -23001,6 +23296,7 @@
             "accession start": 1547668, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -23015,6 +23311,7 @@
             "accession start": 1547698, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -23136,6 +23433,7 @@
             "accession start": 2089233, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -23150,6 +23448,7 @@
             "accession start": 2089263, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -23271,6 +23570,7 @@
             "accession start": 2022871, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -23285,6 +23585,7 @@
             "accession start": 2022901, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -23406,6 +23707,7 @@
             "accession start": 1963853, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -23420,6 +23722,7 @@
             "accession start": 1963883, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -23648,6 +23951,7 @@
             "accession start": 1704589, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -23662,6 +23966,7 @@
             "accession start": 1704619, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -23890,6 +24195,7 @@
             "accession start": 1506530, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -23904,6 +24210,7 @@
             "accession start": 1506560, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -24025,6 +24332,7 @@
             "accession start": 2002284, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -24039,6 +24347,7 @@
             "accession start": 2002314, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -24160,6 +24469,7 @@
             "accession start": 2122867, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -24174,6 +24484,7 @@
             "accession start": 2122897, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
@@ -24295,6 +24606,7 @@
             "accession start": 2057968, 
             "accession strand": true, 
             "length": 7, 
+            "reference strand": false, 
             "relative end": 7, 
             "relative start": 0, 
             "sequence": {
@@ -24309,6 +24621,7 @@
             "accession start": 2057998, 
             "accession strand": true, 
             "length": 9, 
+            "reference strand": false, 
             "relative end": 39, 
             "relative start": 30, 
             "sequence": {
