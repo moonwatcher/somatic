@@ -5,6 +5,15 @@
         "accession start": 133089, 
         "accession strand": true, 
         "allele": "IGHJ1*01", 
+        "cdr3": {
+            "end": 19, 
+            "sequence": {
+                "nucleotide": "CTACTGGTACTTCGATGTC", 
+                "read frame": 1, 
+                "strand": true
+            }, 
+            "start": 0
+        }, 
         "confirmed": true, 
         "family": "IGHJ", 
         "framed": true, 
@@ -29,6 +38,15 @@
         "accession start": 133407, 
         "accession strand": true, 
         "allele": "IGHJ2*01", 
+        "cdr3": {
+            "end": 14, 
+            "sequence": {
+                "nucleotide": "ACTACTTTGACTAC", 
+                "read frame": 2, 
+                "strand": true
+            }, 
+            "start": 0
+        }, 
         "confirmed": true, 
         "family": "IGHJ", 
         "framed": true, 
@@ -53,6 +71,15 @@
         "accession start": 133790, 
         "accession strand": true, 
         "allele": "IGHJ3*01", 
+        "cdr3": {
+            "end": 14, 
+            "sequence": {
+                "nucleotide": "CCTGGTTTGCTTAC", 
+                "read frame": 2, 
+                "strand": true
+            }, 
+            "start": 0
+        }, 
         "confirmed": true, 
         "family": "IGHJ", 
         "framed": true, 
@@ -77,6 +104,15 @@
         "accession start": 134355, 
         "accession strand": true, 
         "allele": "IGHJ4*01", 
+        "cdr3": {
+            "end": 20, 
+            "sequence": {
+                "nucleotide": "ATTACTATGCTATGGACTAC", 
+                "read frame": 2, 
+                "strand": true
+            }, 
+            "start": 0
+        }, 
         "confirmed": true, 
         "family": "IGHJ", 
         "framed": true, 
