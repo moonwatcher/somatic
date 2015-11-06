@@ -600,7 +600,17 @@
                     "instruction": {
                         "description": "remove all samples for the provided library name", 
                         "help": "drop samples of a given library", 
-                        "name": "drop"
+                        "name": "drop-sample"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "library"
+                    ], 
+                    "instruction": {
+                        "description": "remove all analyzed samples for the provided library name", 
+                        "help": "drop analyzed samples of a given library", 
+                        "name": "drop-analyzed"
                     }
                 }, 
                 {
@@ -1368,6 +1378,10 @@
                     "picked": true, 
                     "valid": true
                 }
+            }, 
+            "library": {
+                "productive": false, 
+                "valid": true
             }, 
             "sample": {
                 "productive": false, 

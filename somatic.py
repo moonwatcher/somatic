@@ -1696,6 +1696,7 @@ class Gene(Artifact):
                     artifact['reference start'] = self.reference_start + self.length - artifact['end']
                     artifact['reference end'] = self.reference_start + self.length - artifact['start']
 
+
 class Sample(object):
     def __init__(self, pipeline, node=None, id=None, library=None):
         self.log = logging.getLogger('Sample')
@@ -1882,6 +1883,9 @@ class Sample(object):
         self.head['p count'] = 0
         self.head['n count'] = 0
         self.body['primary'] = {}
+
+        if 'comment' in self.body:
+            del self.body['comment']
 
         if 'framed by' in self.body:
             del self.body['framed by']
@@ -2205,9 +2209,9 @@ class Sample(object):
             self.head['premature'] = False
         return not self.head['premature']
 
-    def _identify_cdr3_start(self, vh):
+    def _search_for_cdr3_start(self, vh):
+        # Search for the first upstream Cycteine on the VH region
         position = None
-        # look for the first upstream Cycteine on the VH region
         offset = None
         for index, codon in enumerate(reversed(vh['query'].codon)):
             if codon == 'C':
@@ -2215,39 +2219,100 @@ class Sample(object):
                 break
         if offset is not None:
             position = vh['query start'] + offset
-        else:
-            self.make_comment('no CDR3 framing cycteine')
         return position
 
-    def _identify_cdr3_end(self, jh):
+    def _search_for_cdr3_end(self, jh):
+        # Search for the first downstream Tryptophan on the JH region followed by GG.
         position = None
-        # Look for the first downstream Tryptophan on the JH region followed by GG.
-        # What ever the third nucleotide is after the GG is, it is still a Glycine
         offset = None
-        tryptophan = []
         for index, codon in enumerate(jh['query'].codon):
             if codon == 'W':
-                # if we found a Tryptophan, keep a record of the search
                 w = jh['query'].read_frame + (index + 1) * 3
-                tryptophan.append(w)
                 if jh['query'].nucleotide[w:w + 2] == 'GG':
                     offset = w
                     break
         if offset is not None:
             position = jh['query start'] + offset
-        elif tryptophan:
-            for w in tryptophan:
-                self.make_comment('CDR3 framing tryptophan found at {} but not followed by glycine'.format(w))
-        else:
-            self.make_comment('no CDR3 framing tryptophan')
+        return position
+
+    def _locate_cdr3_start(self, vh):
+        position = None
+        gene = self.pipeline.resolver.gene_fetch(vh['subject id'])
+        if 'cdr3' in gene.body:
+            gene_cdr3 = gene.body['cdr3']
+            if gene_cdr3['reference strand']:
+                offset = gene_cdr3['reference start'] - vh['reference start']
+            else:
+                offset = vh['reference end'] - gene_cdr3['reference end']
+            position = vh['query start'] + offset
+            
+            # because the gene annotation considers the CDR3 to start after the Cycteine
+            position -= 3
+            
+            if position < 0 or position > self.sequence.length - 3:
+                self.make_comment('CDR3 start position out of range {}'.format(position))
+                position = None
+
+            acid = self.sequence.nucleotide[position:position+3]
+            if acid not in self.configuration['nucleic to amino'] or self.configuration['nucleic to amino'][acid] != 'C':
+                self.make_comment('framing Cycteine not conserved {}'.format(acid))
+        return position
+
+    def _locate_cdr3_end(self, jh):
+        position = None
+        gene = self.pipeline.resolver.gene_fetch(jh['subject id'])
+        if 'cdr3' in gene.body:
+            gene_cdr3 = gene.body['cdr3']
+            if gene_cdr3['reference strand']:
+                offset = gene_cdr3['reference end'] - jh['reference start']
+            else:
+                offset = jh['reference end'] - gene_cdr3['reference start']
+            position = jh['query start'] + offset
+
+            # because the gene annotation considers the CDR3 to end before the Tryptophan
+            position += 3
+
+            if position < 0 or position > self.sequence.length - 3:
+                self.make_comment('CDR3 end position out of range {}'.format(position))
+                position = None
+
+            acid = self.sequence.nucleotide[position-3:position]
+            if self.configuration['nucleic to amino'][acid] != 'W':
+                self.make_comment('framing Tryptophan not conserved {}'.format(acid))
         return position
 
     def _identify_cdr3(self):
         jh = None if 'JH' not in self.primary else self.primary['JH']
         vh = None if 'VH' not in self.primary else self.primary['VH']
         if vh is not None and jh is not None:
-            start = self._identify_cdr3_start(vh)
-            end = self._identify_cdr3_end(jh)
+            start = self._locate_cdr3_start(vh)
+            old_start = self._search_for_cdr3_start(vh)
+            if start != old_start:
+                print(
+                    'C S:{:3}:{}   L:{:3}:{}   {:4}   {}'.format(
+                        '' if old_start is None else old_start,
+                        '---' if old_start is None else self.sequence.nucleotide[old_start:old_start+3],
+                        '' if start is None else start,
+                        '---' if start is None else self.sequence.nucleotide[start:start+3],
+                        '' if old_start is None or start is None else start - old_start,
+                        self.id
+                    )
+                )
+
+            end = self._locate_cdr3_end(jh)
+            old_end = self._search_for_cdr3_end(jh)
+            if end != old_end:
+                print(
+                    'W S:{:3}:{}   L:{:3}:{}   {:4}   {}'.format(
+                        '' if old_end is None else old_end,
+                        '---' if old_end is None else self.sequence.nucleotide[old_end-3:old_end],
+                        '' if end is None else end,
+                        '---' if end is None else self.sequence.nucleotide[end-3:end],
+                        '' if old_end is None or end is None else end - old_end,
+                        self.id
+                    )
+                )
+
             if start and end:
                 cdr3 = {
                     'valid': True,
@@ -2258,17 +2323,20 @@ class Sample(object):
                     'query start': start,
                     'query end': end,
                     'query': self.sequence.crop(start, end),
-                    'charge': 0,
-                    'weight': 0,
                 }
-                for acid in cdr3['query'].codon:
-                    amino = self.configuration['iupac amino acid notation']
-                    if 'charge' in amino[acid]:
-                        cdr3['charge'] += amino[acid]['charge']
-                    if 'weight' in amino[acid]:
-                        cdr3['weight'] += amino[acid]['weight']
-                self.hit.append(cdr3)
-                self._pick_hit(cdr3)
+                if cdr3['query'] and cdr3['query'].codon:
+                    cdr3['charge'] = 0
+                    cdr3['weight'] = 0
+                    for acid in cdr3['query'].codon:
+                        amino = self.configuration['iupac amino acid notation']
+                        if 'charge' in amino[acid]:
+                            cdr3['charge'] += amino[acid]['charge']
+                        if 'weight' in amino[acid]:
+                            cdr3['weight'] += amino[acid]['weight']
+                    self.hit.append(cdr3)
+                    self._pick_hit(cdr3)
+                else:
+                    self.log.error('No codon in {}\n{}'.format(self.id, to_json(cdr3)))
 
     def _identify_chewback(self):
         for hit in self.hit:
@@ -2517,10 +2585,13 @@ class Histogram(object):
 
     def draw_expression(self, survey, edgecolor, facecolor, alpha):
         for region in ['VH', 'DH', 'JH']:
-            total = sum([ x['value'] for x in survey.body['expression'] if x['region'] == region ])
+            total = sum([ x['value'] for x in survey.body['expression'] if x['region'] == region and x['value']])
             for x in survey.body['expression']:
                 if x['region'] == region:
-                    x['value'] /= total
+                    if x['value'] :
+                        x['value'] /= total
+                    else:
+                        x['value'] = 0.0
 
         plot = self.plots['expression']
         width = 0.3
@@ -2913,17 +2984,22 @@ class Survey(object):
         if breakdown['type'] == 'vj':
             for j in range(len(breakdown['region']['JH'])):
                 for v in range(len(breakdown['region']['VH'])):
-                    ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                    vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                    self.slice[slice]['correlation']['vj'][ji][vi] += breakdown['portion']
+                    if (j in breakdown['region']['JH'] and \
+                        v in breakdown['region']['VH']):
+                        ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                        vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                        self.slice[slice]['correlation']['vj'][ji][vi] += breakdown['portion']
         else:
             for j in range(len(breakdown['region']['JH'])):
                 for d in range(len(breakdown['region']['DH'])):
                     for v in range(len(breakdown['region']['VH'])):
-                        ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                        di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
-                        vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                        self.slice[slice]['correlation']['vdj'][ji][di][vi] += breakdown['portion']
+                        if (j in breakdown['region']['JH'] and \
+                            d in breakdown['region']['DH'] and \
+                            v in breakdown['region']['VH']):
+                            ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                            di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
+                            vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                            self.slice[slice]['correlation']['vdj'][ji][di][vi] += breakdown['portion']
 
     def _fetch_region_repertoire(self, query):
         repertoire = []
@@ -3240,7 +3316,8 @@ class Diagram(object):
 
         if 'CDR3' in self.sample.primary:
             cdr3 = self.sample.primary['CDR3']
-            b.append('{} : {:.3} {}'.format(cdr3['region'], cdr3['charge'], cdr3['weight']))
+            if 'charge' in cdr3 and 'weight' in cdr3:
+                b.append('{} : {:.3} {}'.format(cdr3['region'], cdr3['charge'], cdr3['weight']))
 
         if self.sample.productive:
             b.append('productive')
@@ -3914,9 +3991,19 @@ class Resolver(object):
         else:
             return None
 
-    def library_drop(self, library):
+    def drop_sample(self, library):
         if library:
             collection = self.database['sample']
+            try:
+                result = collection.delete_many({ 'head.library': library })
+                if result:
+                    self.log.info('dropped %d samples from %s', result.deleted_count, library)
+            except BulkWriteError as e:
+                self.log.critical(e.details)
+
+    def drop_analyzed_sample(self, library):
+        if library:
+            collection = self.database['analyzed_sample']
             try:
                 result = collection.delete_many({ 'head.library': library })
                 if result:
@@ -4256,8 +4343,11 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'exposure' not in x else x['head']['exposure'])
         print(to_json(buffer))
 
-    def library_drop(self, library):
-        self.resolver.library_drop(library)
+    def drop_sample(self, library):
+        self.resolver.drop_sample(library)
+
+    def drop_analyzed_sample(self, library):
+        self.resolver.drop_analyzed_sample(library)
 
     def sample_survey(self, query, limit, skip, profile, name=None):
         survey = self.resolver.survey_find(name)
@@ -4268,7 +4358,7 @@ class Pipeline(object):
             survey = self.resolver.survey_fetch(id)
             if survey is None:
                 survey = Survey(self, None, request, name)
-                cursor = self.resolver.make_cursor('sample', q, limit, skip)
+                cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
                 self.log.debug('collecting samples for survey %s', survey.name)
                 for node in cursor:
                     survey.add_sample(Sample(self, node))
@@ -4382,11 +4472,11 @@ class Pipeline(object):
                     surveys.append(survey)
                     plot_name.append(survey.name)
 
-                    allele_heatmap = Heatmap(self, survey, 'allele')
-                    allele_heatmap.save('{}_allele.png'.format(survey.name))
+                    # allele_heatmap = Heatmap(self, survey, 'allele')
+                    # allele_heatmap.save('{}_allele.png'.format(survey.name))
 
-                    family_heatmap = Heatmap(self, survey, 'family')
-                    family_heatmap.save('{}_family.png'.format(survey.name))
+                    # family_heatmap = Heatmap(self, survey, 'family')
+                    # family_heatmap.save('{}_family.png'.format(survey.name))
 
                 else:
                     raise ValueError('could not locate survey {}'.format(name))
@@ -4422,7 +4512,7 @@ class Pipeline(object):
             sample = Sample(self, node)
             sample.analyze()
             buffer.append(sample)
-            print(to_json(sample.document))
+            # print(to_json(sample.document))
             if len(buffer) >= self.configuration['constant']['buffer size']:
                 count += flush(buffer, collection)
                 buffer = []
@@ -4436,7 +4526,9 @@ class Pipeline(object):
             raise ValueError('must specify a library to populate')
         block = Block(self)
         collection = self.resolver.database['sample']
-        if drop: self.resolver.library_drop(library)
+        if drop:
+            self.resolver.drop_sample(library)
+            self.resolver.drop_analyzed_sample(library)
 
         while block.fill(library, strain):
             try:
@@ -4449,11 +4541,11 @@ class Pipeline(object):
 
     def sample_count(self, query, profile):
         q = self.build_query(query, profile, 'library')
-        print(self.resolver.count('sample', q))
+        print(self.resolver.count('analyzed_sample', q))
 
     def sample_fasta(self, query, limit, skip, profile):
         q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fasta)
@@ -4461,7 +4553,7 @@ class Pipeline(object):
 
     def sample_fastq(self, query, limit, skip, profile):
         q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fastq)
@@ -4469,7 +4561,7 @@ class Pipeline(object):
 
     def sample_view(self, query, limit, skip, profile):
         q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
         for node in cursor:
             sample = Sample(self, node)
             sample.view(profile)
@@ -4477,7 +4569,7 @@ class Pipeline(object):
 
     def sample_info(self, query, limit, skip, profile):
         q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
         for node in cursor:
             sample = Sample(self, node)
             sample.info(profile)
@@ -4784,8 +4876,11 @@ class Pipeline(object):
                 cmd.query,
                 cmd.instruction['profile'])
             
-        elif cmd.action == 'drop':
-            self.library_drop(cmd.instruction['library'])
+        elif cmd.action == 'drop-sample':
+            self.drop_sample(cmd.instruction['library'])
+            
+        elif cmd.action == 'drop-analyzed':
+            self.drop_analyzed_sample(cmd.instruction['library'])
             
         elif cmd.action == 'fasta':
             self.sample_fasta(
@@ -4900,4 +4995,3 @@ def main():
 
 if __name__ == '__main__':
     main()
- 
