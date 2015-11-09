@@ -6394,8 +6394,8 @@
             }, 
             "start": 212
         }, 
-        "framed": false, 
-        "functionality": "P", 
+        "framed": true, 
+        "functionality": "F", 
         "gene": "J558.1.85", 
         "id": "J558.1.85*01-C57BL/6", 
         "identified": true, 
