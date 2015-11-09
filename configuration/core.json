@@ -1298,6 +1298,49 @@
             "gene": {}, 
             "sample": {}
         }, 
+        "valid": {
+            "accession": {}, 
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality", 
+                    "in frame", 
+                    "gapped", 
+                    "picked"
+                ], 
+                "track": {
+                    "valid": true
+                }
+            }, 
+            "gene": {}, 
+            "library": {}, 
+            "sample": {
+                "valid": true
+            },
+            "survey":{}
+        }, 
+        "picked": {
+            "accession": {}, 
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality", 
+                    "in frame"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "gene": {}, 
+            "library": {}, 
+            "sample": {
+                "valid": true
+            },
+            "survey":{}
+        }, 
         "default": {
             "accession": {}, 
             "diagram": {
@@ -2142,6 +2185,16 @@
                     "unique": false
                 }, 
                 {
+                    "key": [[ "head.conserved cdr3 c", 1 ]], 
+                    "name": "sample conserved cdr3 c", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.conserved cdr3 w", 1 ]], 
+                    "name": "sample conserved cdr3 w", 
+                    "unique": false
+                }, 
+                {
                     "key": [[ "head.id", 1 ], [ "head.library", 1 ]], 
                     "name": "unique sample in library", 
                     "unique": true
@@ -2189,6 +2242,16 @@
                 {
                     "key": [[ "head.library", 1 ]], 
                     "name": "analyzed sample library", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.conserved cdr3 c", 1 ]], 
+                    "name": "sample conserved cdr3 c", 
+                    "unique": false
+                }, 
+                {
+                    "key": [[ "head.conserved cdr3 w", 1 ]], 
+                    "name": "sample conserved cdr3 w", 
                     "unique": false
                 }, 
                 {

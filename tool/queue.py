@@ -21,7 +21,7 @@ import sys
 import json
 import io
 
-LOG = '/volume/albireo/canal/thesis/populate'
+LOG = '/volume/albireo/canal/thesis/log/populate'
 
 def to_json(node):
     def handler(o):
