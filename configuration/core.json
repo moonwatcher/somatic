@@ -590,7 +590,7 @@
                     "instruction": {
                         "description": "match each read in file to regions with igblast and store results in the library. takes data from stdin", 
                         "help": "populate samples for library", 
-                        "name": "populate"
+                        "name": "samplePopulate"
                     }
                 }, 
                 {
@@ -600,17 +600,7 @@
                     "instruction": {
                         "description": "remove all samples for the provided library name", 
                         "help": "drop samples of a given library", 
-                        "name": "drop-sample"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "library"
-                    ], 
-                    "instruction": {
-                        "description": "remove all analyzed samples for the provided library name", 
-                        "help": "drop analyzed samples of a given library", 
-                        "name": "drop-analyzed"
+                        "name": "sampleDrop"
                     }
                 }, 
                 {
@@ -628,7 +618,7 @@
                     ], 
                     "instruction": {
                         "help": "view sample alignment", 
-                        "name": "view"
+                        "name": "sampleView"
                     }
                 }, 
                 {
@@ -643,7 +633,7 @@
                     ], 
                     "instruction": {
                         "help": "analyze samples", 
-                        "name": "analyze"
+                        "name": "sampleAnalyze"
                     }
                 }, 
                 {
@@ -659,7 +649,7 @@
                     ], 
                     "instruction": {
                         "help": "count sample alignment", 
-                        "name": "count"
+                        "name": "sampleCount"
                     }
                 }, 
                 {
@@ -677,7 +667,7 @@
                     ], 
                     "instruction": {
                         "help": "print sample fasta stream", 
-                        "name": "fasta"
+                        "name": "sampleFasta"
                     }
                 }, 
                 {
@@ -695,7 +685,7 @@
                     ], 
                     "instruction": {
                         "help": "print sample fastq stream", 
-                        "name": "fastq"
+                        "name": "sampleFastq"
                     }
                 }, 
                 {
@@ -713,7 +703,17 @@
                     ], 
                     "instruction": {
                         "help": "view JSON sample record", 
-                        "name": "info"
+                        "name": "sampleInfo"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "library"
+                    ], 
+                    "instruction": {
+                        "description": "remove all analyzed samples for the provided library name", 
+                        "help": "drop analyzed samples of a given library", 
+                        "name": "analyzedSampleDrop"
                     }
                 }, 
                 {
@@ -741,7 +741,7 @@
                     ], 
                     "instruction": {
                         "help": "plot surveys", 
-                        "name": "plot"
+                        "name": "surveyPlot"
                     }
                 }, 
                 {
@@ -750,7 +750,7 @@
                     ], 
                     "instruction": {
                         "help": "export survey to an R object", 
-                        "name": "survey-r"
+                        "name": "surveyR"
                     }
                 }, 
                 {
@@ -762,7 +762,7 @@
                     ], 
                     "instruction": {
                         "help": "cached surveys", 
-                        "name": "survey-info"
+                        "name": "surveyInfo"
                     }
                 }, 
                 {
@@ -774,7 +774,7 @@
                     ], 
                     "instruction": {
                         "help": "list cached surveys", 
-                        "name": "survey-list"
+                        "name": "surveyList"
                     }
                 }, 
                 {
@@ -783,7 +783,7 @@
                     ], 
                     "instruction": {
                         "help": "load library definition from JSON file", 
-                        "name": "library-populate"
+                        "name": "libraryPopulate"
                     }
                 }, 
                 {
@@ -794,7 +794,7 @@
                     ], 
                     "instruction": {
                         "help": "view JSON library records", 
-                        "name": "library-info"
+                        "name": "libraryInfo"
                     }
                 }, 
                 {
@@ -803,7 +803,7 @@
                     ], 
                     "instruction": {
                         "help": "load gene sequences from JSON file", 
-                        "name": "gene-populate"
+                        "name": "genePopulate"
                     }
                 }, 
                 {
@@ -815,7 +815,7 @@
                     ], 
                     "instruction": {
                         "help": "view JSON gene records", 
-                        "name": "gene-info"
+                        "name": "geneInfo"
                     }
                 }, 
                 {
@@ -829,7 +829,7 @@
                     ], 
                     "instruction": {
                         "help": "print genes html diagram", 
-                        "name": "gene-html"
+                        "name": "geneHtml"
                     }
                 }, 
                 {
@@ -843,7 +843,7 @@
                     ], 
                     "instruction": {
                         "help": "verify gene RSS", 
-                        "name": "gene-rss"
+                        "name": "geneRss"
                     }
                 }, 
                 {
@@ -855,7 +855,7 @@
                     ], 
                     "instruction": {
                         "help": "count gene records", 
-                        "name": "gene-count"
+                        "name": "geneCount"
                     }
                 }, 
                 {
@@ -868,7 +868,7 @@
                     ], 
                     "instruction": {
                         "help": "align gene sequences to genome", 
-                        "name": "gene-align"
+                        "name": "geneAlign"
                     }
                 }, 
                 {
@@ -883,19 +883,7 @@
                     ], 
                     "instruction": {
                         "help": "dump gene sequences to fasta", 
-                        "name": "gene-fasta"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "format", 
-                        "profile", 
-                        "strain", 
-                        "id"
-                    ], 
-                    "instruction": {
-                        "help": "dump accession sequences to fasta", 
-                        "name": "accession-fasta"
+                        "name": "geneFasta"
                     }
                 }, 
                 {
@@ -907,7 +895,18 @@
                     ], 
                     "instruction": {
                         "help": "dump gene sequences to igblast auxiliary file", 
-                        "name": "gene-igblast-aux"
+                        "name": "geneIgblastAux"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "format", 
+                        "profile", 
+                        "strain", 
+                        "id"
+                    ], 
+                    "instruction": {
+                        "help": "dump accession sequences to fasta", "name": "accessionFasta"
                     }
                 }, 
                 {
@@ -1306,7 +1305,6 @@
                     "name", 
                     "functionality", 
                     "in frame", 
-                    "gapped", 
                     "picked"
                 ], 
                 "track": {
@@ -1347,10 +1345,7 @@
                 "feature": [
                     "region", 
                     "name", 
-                    "functionality", 
-                    "in frame", 
-                    "gapped", 
-                    "picked"
+                    "functionality"
                 ], 
                 "track": {
                     "picked": true, 
@@ -1364,39 +1359,6 @@
             },
             "survey":{}
         }, 
-        "droppedproductive": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "name", 
-                    "functionality", 
-                    "in frame"
-                ], 
-                "track": {
-                    "picked": false, 
-                    "valid": true
-                }
-            }, 
-            "sample": {
-                "productive": true
-            }
-        }, 
-        "gapped": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "valid": false
-                }
-            }, 
-            "sample": {
-                "gapped": true, 
-                "valid": true
-            }
-        }, 
         "invalid": {
             "diagram": {
                 "feature": [
@@ -1404,7 +1366,9 @@
                     "name", 
                     "functionality"
                 ], 
-                "track": {}
+                "track": {
+                    "gapped": false
+                }
             }, 
             "sample": {
                 "valid": false
@@ -1446,6 +1410,26 @@
             "sample": {
                 "average phred": {
                     "$gt": 33
+                }, 
+                "productive": false, 
+                "valid": true
+            }
+        }, 
+        "nonproductive38+": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 38
                 }, 
                 "productive": false, 
                 "valid": true

@@ -52,7 +52,7 @@ with io.open('../bootstrap/c57bl6/library_c57bl6.json', 'r') as f:
 
 def populate(library):
     buffer = [
-        'gzcat',
+        'cat',
         library['body']['path'],
         '|',
         'somatic',

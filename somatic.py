@@ -30,8 +30,8 @@ import pymongo
 import pickle
 
 from numpy import *
-import matplotlib
-import matplotlib.pyplot as pyplot
+#import matplotlib
+#import matplotlib.pyplot as pyplot
 
 from io import StringIO, BytesIO
 from datetime import timedelta, datetime
@@ -438,6 +438,272 @@ class CommandLineParser(object):
         return query
 
 
+class Blat(object):
+    def __init__(self, pipeline, instruction):
+        self.log = logging.getLogger('Blat')
+        self.pipeline = pipeline
+        self.instruction = instruction
+        self.target = StringIO()
+        self.fasta = []
+
+        for record in self.instruction['record'].values():
+            record['flanking'] = record['gene'].flanking_accession_query(instruction['flank'])
+            self.fasta.append(
+                to_fasta(
+                    record['flanking']['id'],
+                    record['flanking']['sequence'].nucleotide,
+                    None,
+                    self.configuration['constant']['fasta line length']
+                )
+            )
+        self.fasta = '\n'.join(self.fasta)
+
+        with io.open(self.instruction['target path'], 'r') as file:
+            for line in file:
+                line = line.strip()
+                if line[0] != '>':
+                    self.target.write(line.upper())
+        self.target.seek(0)
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
+    def orientation(self, query, hit):
+        # if the query is on the opposite strand from the target, reverse the query
+        orientation = { 'start': None, 'end': None, 'flanking': None }
+        if hit['query strand']:
+            orientation['flanking'] = query['flanking']['sequence']
+            orientation['end'] = query['flanking']['end']
+            orientation['start'] = query['flanking']['start']
+        else:
+            orientation['flanking'] = query['flanking']['sequence'].reversed
+            orientation['end'] = query['flanking']['flank length'] - query['flanking']['start']
+            orientation['start'] = query['flanking']['flank length'] - query['flanking']['end']
+        return orientation
+
+    def crop(self, query):
+        if 'hit' in query:
+            for hit in query['hit']:
+                orientation = self.orientation(query, hit['flanked'])
+                    
+                # extract both query and target sequence for the contiguous blocks
+                for block in hit['flanked']['block']:
+                    self.target.seek(block['target start'])
+                    block['target sequence'] = self.target.read(block['size'])
+                    block['query sequence'] = orientation['flanking'].nucleotide[block['query start']:block['query start'] + block['size']]
+                    
+                hit['objective'] = {
+                    'block': [],
+                    'score': 0,
+                    'identical': 0.0,
+                    'match': 0,
+                    'mismatch': 0,
+                    'block count': 0,
+                    'query start': orientation['start'],
+                    'query end': orientation['end'],
+                    'query strand': hit['flanked']['query strand'],
+                    'repeat match': hit['flanked']['repeat match'],
+                    'inserted base in query': 0,
+                    'inserted base in target': 0,
+                    'inserts in query': 0,
+                    'inserts in target': 0,
+                }
+
+                # project the contiguous blocks on the objective region
+                for block in hit['flanked']['block']:
+                    o = {
+                        'match': 0,
+                        'mismatch': 0,
+                        'query start': max(block['query start'], orientation['start']),
+                        'query end': min(block['query start'] + block['size'], orientation['end'])
+                    }
+                    if o['query end'] > o['query start']:
+                        o['size'] = o['query end'] - o['query start']
+                        o['query sequence'] = orientation['flanking'].nucleotide[o['query start']:o['query end']]
+                        o['target start'] = o['query start'] + block['target start'] - block['query start']
+                        o['target end'] = o['target start'] + o['size']
+
+                        self.target.seek(o['target start'])
+                        o['target sequence'] = self.target.read(o['size'])
+                        for i in range(o['size']):
+                            if o['target sequence'][i] == o['query sequence'][i]:
+                                o['match'] += 1
+                            else:
+                                o['mismatch'] += 1
+                        hit['objective']['match'] += o['match']
+                        hit['objective']['mismatch'] += o['mismatch']
+                        hit['objective']['block count'] += 1
+                        hit['objective']['block'].append(o)
+
+                if hit['objective']['block']:
+                    hit['objective']['target start'] = min([ b['target start'] for b in hit['objective']['block'] ])
+                    hit['objective']['target end'] = max([ b['target end'] for b in hit['objective']['block'] ])
+                    
+                    # infer the gaps
+                    for i in range(len(hit['objective']['block']) - 1):
+                        gap = hit['objective']['block'][i + 1]['query start'] - hit['objective']['block'][i]['query end']
+                        if gap:
+                            hit['objective']['inserts in query'] += 1
+                            hit['objective']['inserted base in query'] += gap
+
+                        gap = hit['objective']['block'][i + 1]['target start'] - hit['objective']['block'][i]['target end']
+                        if gap:
+                            hit['objective']['inserts in target'] += 1
+                            hit['objective']['inserted base in target'] += gap
+                    self.normalize_hit(hit['objective'], orientation)
+
+    def normalize_hit(self, hit, orientation):
+        # construct a consensus sequence for both query and target
+        position = { 'query': hit['query start'], 'target': hit['target start'] }
+        hit['query sequence'] = ''
+        hit['target sequence'] = ''
+
+        for block in hit['block']:
+            if block['query start'] > position['query']:
+                gap = block['query start'] - position['query']
+                hit['query sequence'] += orientation['flanking'].nucleotide[position['query']:block['query start']]
+                position['query'] += gap
+                hit['target sequence'] += '-' * gap
+                
+            if block['target start'] > position['target']:
+                self.target.seek(position['target'])
+                gap = block['target start'] - position['target']
+                hit['target sequence'] += self.target.read(gap)
+                position['target'] += gap
+                hit['query sequence'] += '-' * gap
+                
+            hit['query sequence'] += block['query sequence']
+            position['query'] += block['size']
+            
+            hit['target sequence'] += block['target sequence']
+            position['target'] += block['size']
+            
+        # check the result
+        hit['check'] = []
+        for i in range(len(hit['query sequence'])):
+            q = hit['query sequence'][i]
+            t = hit['target sequence'][i]
+            if q == '-' or t == '-' or q == t:
+                hit['check'].append('-')
+            else:
+                hit['check'].append('*')
+        hit['check'] = ''.join(hit['check'])
+
+        hit['query length'] = hit['query end'] - hit['query start']
+        hit['target length'] = hit['target end'] - hit['target start']
+        hit['score'] = hit['match'] + (hit['repeat match'] / 2) - hit['mismatch'] - hit['inserts in query'] - hit['inserts in target']
+        
+        millibad = 0
+        if hit['query length'] > 0 and hit['target length'] > 0:
+            diff = max(hit['query length'] - hit['target length'], 0)
+            total = hit['match'] + hit['repeat match'] + hit['mismatch']
+            if total != 0:
+                millibad = (1000 * (hit['mismatch'] + hit['inserts in query'] + round(3 * math.log(diff + 1)))) / total
+        hit['identical'] = 100.0 - millibad * 0.1
+        return hit
+
+    def parse_flanked_hit(self, query, flanked):
+        flanked['query strand'] = flanked['query strand'] == '+'
+        
+        for k in [
+            'block size',
+            'query block start',
+            'target block start',
+        ]:
+            if k in flanked:
+                flanked[k] = [ int(v) for v in flanked[k].split(',') if v ]
+            
+        for k in [
+            'block count',
+            'inserted base in query',
+            'inserted base in target',
+            'inserts in query',
+            'inserts in target',
+            'match',
+            'mismatch',
+            'n count',
+            'query end',
+            'query size',
+            'query start',
+            'repeat match',
+            'target end',
+            'target size',
+            'target start',
+        ]:
+            if k in flanked:
+                flanked[k] = int(flanked[k])
+            
+        flanked['block'] = []
+        orientation = self.orientation(query, flanked)
+        for i in range(flanked['block count']):
+            block = {
+                'size': flanked['block size'][i],
+                'query start': flanked['query block start'][i],
+                'target start': flanked['target block start'][i],
+            }
+            self.target.seek(block['target start'])
+            block['target sequence'] = self.target.read(block['size'])
+            block['query sequence'] = orientation['flanking'].nucleotide[block['query start']:block['query start'] + block['size']]
+            flanked['block'].append(block)
+
+        del flanked['block size']
+        del flanked['query block start']
+        del flanked['target block start']
+        del flanked['query name']
+
+        if 'hit' not in query: query['hit'] = []
+        query['hit'].append({'flanked': self.normalize_hit(flanked, orientation)})
+
+    def summarize(self, query):
+        if query is not None:
+            query['summary'] = []
+            for hit in query['hit']:
+                if ('objective' in hit and len(hit['objective']['block']) > 0 and
+                    hit['objective']['score'] == query['hit'][0]['objective']['score'] and
+                    abs(hit['flanked']['score'] - query['hit'][0]['flanked']['score']) < 0.5 and
+                    hit['objective']['identical'] == query['hit'][0]['objective']['identical'] and
+                    abs(hit['flanked']['identical'] - query['hit'][0]['flanked']['identical']) < 0.5):
+
+                    match = deepcopy(hit['objective'])
+                    match['flanked score'] = hit['flanked']['score']
+                    match['flanked identical'] = hit['flanked']['identical']
+                    match['flanked query size'] = hit['flanked']['query size']
+                    match['flanked target length'] = hit['flanked']['target length']
+                    query['summary'].append(match)
+
+            if not query['summary']:
+                del query['summary']
+
+    def search(self):
+        command = self.configuration['command']['blat']
+        process = Popen(
+            args=command['arguments'],
+            env=None,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=PIPE
+        )
+        output, error = process.communicate(input=self.fasta.encode('utf8'))
+        if output:
+            buffer = StringIO(output.decode('utf8'))
+            for line in buffer:
+                hit = parse_match(self.configuration['expression']['blat hit'].search(line.strip()))
+                if hit:
+                    query = self.instruction['record'][hit['query name']]
+                    self.parse_flanked_hit(query, hit)
+
+            # for every query sort the results by the objective score and than the flanked score
+            for query in self.instruction['record'].values():
+                if 'hit' in query:
+                    self.crop(query)
+                    query['hit'] = sorted(query['hit'], key=lambda x: x['flanked']['identical'], reverse=True)
+                    query['hit'] = sorted(query['hit'], key=lambda x: x['objective']['identical'], reverse=True)
+                    query['hit'] = sorted(query['hit'], key=lambda x: x['flanked']['score'], reverse=True)
+                    query['hit'] = sorted(query['hit'], key=lambda x: x['objective']['score'], reverse=True)
+                    self.summarize(query)
+
+
 class Sequence(object):
     def __init__(self, pipeline, node=None):
         self.log = logging.getLogger('Sequence')
@@ -707,272 +973,6 @@ class Accession(object):
 
     def to_fasta(self, limit):
         return to_fasta(self.id, self.sequence.nucleotide, self.description, limit)
-
-
-class Blat(object):
-    def __init__(self, pipeline, instruction):
-        self.log = logging.getLogger('Blat')
-        self.pipeline = pipeline
-        self.instruction = instruction
-        self.target = StringIO()
-        self.fasta = []
-
-        for record in self.instruction['record'].values():
-            record['flanking'] = record['gene'].flanking_accession_query(instruction['flank'])
-            self.fasta.append(
-                to_fasta(
-                    record['flanking']['id'],
-                    record['flanking']['sequence'].nucleotide,
-                    None,
-                    self.configuration['constant']['fasta line length']
-                )
-            )
-        self.fasta = '\n'.join(self.fasta)
-
-        with io.open(self.instruction['target path'], 'r') as file:
-            for line in file:
-                line = line.strip()
-                if line[0] != '>':
-                    self.target.write(line.upper())
-        self.target.seek(0)
-
-    @property
-    def configuration(self):
-        return self.pipeline.configuration
-
-    def orientation(self, query, hit):
-        # if the query is on the opposite strand from the target, reverse the query
-        orientation = { 'start': None, 'end': None, 'flanking': None }
-        if hit['query strand']:
-            orientation['flanking'] = query['flanking']['sequence']
-            orientation['end'] = query['flanking']['end']
-            orientation['start'] = query['flanking']['start']
-        else:
-            orientation['flanking'] = query['flanking']['sequence'].reversed
-            orientation['end'] = query['flanking']['flank length'] - query['flanking']['start']
-            orientation['start'] = query['flanking']['flank length'] - query['flanking']['end']
-        return orientation
-
-    def crop(self, query):
-        if 'hit' in query:
-            for hit in query['hit']:
-                orientation = self.orientation(query, hit['flanked'])
-                    
-                # extract both query and target sequence for the contiguous blocks
-                for block in hit['flanked']['block']:
-                    self.target.seek(block['target start'])
-                    block['target sequence'] = self.target.read(block['size'])
-                    block['query sequence'] = orientation['flanking'].nucleotide[block['query start']:block['query start'] + block['size']]
-                    
-                hit['objective'] = {
-                    'block': [],
-                    'score': 0,
-                    'identical': 0.0,
-                    'match': 0,
-                    'mismatch': 0,
-                    'block count': 0,
-                    'query start': orientation['start'],
-                    'query end': orientation['end'],
-                    'query strand': hit['flanked']['query strand'],
-                    'repeat match': hit['flanked']['repeat match'],
-                    'inserted base in query': 0,
-                    'inserted base in target': 0,
-                    'inserts in query': 0,
-                    'inserts in target': 0,
-                }
-
-                # project the contiguous blocks on the objective region
-                for block in hit['flanked']['block']:
-                    o = {
-                        'match': 0,
-                        'mismatch': 0,
-                        'query start': max(block['query start'], orientation['start']),
-                        'query end': min(block['query start'] + block['size'], orientation['end'])
-                    }
-                    if o['query end'] > o['query start']:
-                        o['size'] = o['query end'] - o['query start']
-                        o['query sequence'] = orientation['flanking'].nucleotide[o['query start']:o['query end']]
-                        o['target start'] = o['query start'] + block['target start'] - block['query start']
-                        o['target end'] = o['target start'] + o['size']
-
-                        self.target.seek(o['target start'])
-                        o['target sequence'] = self.target.read(o['size'])
-                        for i in range(o['size']):
-                            if o['target sequence'][i] == o['query sequence'][i]:
-                                o['match'] += 1
-                            else:
-                                o['mismatch'] += 1
-                        hit['objective']['match'] += o['match']
-                        hit['objective']['mismatch'] += o['mismatch']
-                        hit['objective']['block count'] += 1
-                        hit['objective']['block'].append(o)
-
-                if hit['objective']['block']:
-                    hit['objective']['target start'] = min([ b['target start'] for b in hit['objective']['block'] ])
-                    hit['objective']['target end'] = max([ b['target end'] for b in hit['objective']['block'] ])
-                    
-                    # infer the gaps
-                    for i in range(len(hit['objective']['block']) - 1):
-                        gap = hit['objective']['block'][i + 1]['query start'] - hit['objective']['block'][i]['query end']
-                        if gap:
-                            hit['objective']['inserts in query'] += 1
-                            hit['objective']['inserted base in query'] += gap
-
-                        gap = hit['objective']['block'][i + 1]['target start'] - hit['objective']['block'][i]['target end']
-                        if gap:
-                            hit['objective']['inserts in target'] += 1
-                            hit['objective']['inserted base in target'] += gap
-                    self.normalize_hit(hit['objective'], orientation)
-
-    def normalize_hit(self, hit, orientation):
-        # construct a consensus sequence for both query and target
-        position = { 'query': hit['query start'], 'target': hit['target start'] }
-        hit['query sequence'] = ''
-        hit['target sequence'] = ''
-
-        for block in hit['block']:
-            if block['query start'] > position['query']:
-                gap = block['query start'] - position['query']
-                hit['query sequence'] += orientation['flanking'].nucleotide[position['query']:block['query start']]
-                position['query'] += gap
-                hit['target sequence'] += '-' * gap
-                
-            if block['target start'] > position['target']:
-                self.target.seek(position['target'])
-                gap = block['target start'] - position['target']
-                hit['target sequence'] += self.target.read(gap)
-                position['target'] += gap
-                hit['query sequence'] += '-' * gap
-                
-            hit['query sequence'] += block['query sequence']
-            position['query'] += block['size']
-            
-            hit['target sequence'] += block['target sequence']
-            position['target'] += block['size']
-            
-        # check the result
-        hit['check'] = []
-        for i in range(len(hit['query sequence'])):
-            q = hit['query sequence'][i]
-            t = hit['target sequence'][i]
-            if q == '-' or t == '-' or q == t:
-                hit['check'].append('-')
-            else:
-                hit['check'].append('*')
-        hit['check'] = ''.join(hit['check'])
-
-        hit['query length'] = hit['query end'] - hit['query start']
-        hit['target length'] = hit['target end'] - hit['target start']
-        hit['score'] = hit['match'] + (hit['repeat match'] / 2) - hit['mismatch'] - hit['inserts in query'] - hit['inserts in target']
-        
-        millibad = 0
-        if hit['query length'] > 0 and hit['target length'] > 0:
-            diff = max(hit['query length'] - hit['target length'], 0)
-            total = hit['match'] + hit['repeat match'] + hit['mismatch']
-            if total != 0:
-                millibad = (1000 * (hit['mismatch'] + hit['inserts in query'] + round(3 * math.log(diff + 1)))) / total
-        hit['identical'] = 100.0 - millibad * 0.1
-        return hit
-
-    def parse_flanked_hit(self, query, flanked):
-        flanked['query strand'] = flanked['query strand'] == '+'
-        
-        for k in [
-            'block size',
-            'query block start',
-            'target block start',
-        ]:
-            if k in flanked:
-                flanked[k] = [ int(v) for v in flanked[k].split(',') if v ]
-            
-        for k in [
-            'block count',
-            'inserted base in query',
-            'inserted base in target',
-            'inserts in query',
-            'inserts in target',
-            'match',
-            'mismatch',
-            'n count',
-            'query end',
-            'query size',
-            'query start',
-            'repeat match',
-            'target end',
-            'target size',
-            'target start',
-        ]:
-            if k in flanked:
-                flanked[k] = int(flanked[k])
-            
-        flanked['block'] = []
-        orientation = self.orientation(query, flanked)
-        for i in range(flanked['block count']):
-            block = {
-                'size': flanked['block size'][i],
-                'query start': flanked['query block start'][i],
-                'target start': flanked['target block start'][i],
-            }
-            self.target.seek(block['target start'])
-            block['target sequence'] = self.target.read(block['size'])
-            block['query sequence'] = orientation['flanking'].nucleotide[block['query start']:block['query start'] + block['size']]
-            flanked['block'].append(block)
-
-        del flanked['block size']
-        del flanked['query block start']
-        del flanked['target block start']
-        del flanked['query name']
-
-        if 'hit' not in query: query['hit'] = []
-        query['hit'].append({'flanked': self.normalize_hit(flanked, orientation)})
-
-    def summarize(self, query):
-        if query is not None:
-            query['summary'] = []
-            for hit in query['hit']:
-                if ('objective' in hit and len(hit['objective']['block']) > 0 and
-                    hit['objective']['score'] == query['hit'][0]['objective']['score'] and
-                    abs(hit['flanked']['score'] - query['hit'][0]['flanked']['score']) < 0.5 and
-                    hit['objective']['identical'] == query['hit'][0]['objective']['identical'] and
-                    abs(hit['flanked']['identical'] - query['hit'][0]['flanked']['identical']) < 0.5):
-
-                    match = deepcopy(hit['objective'])
-                    match['flanked score'] = hit['flanked']['score']
-                    match['flanked identical'] = hit['flanked']['identical']
-                    match['flanked query size'] = hit['flanked']['query size']
-                    match['flanked target length'] = hit['flanked']['target length']
-                    query['summary'].append(match)
-
-            if not query['summary']:
-                del query['summary']
-
-    def search(self):
-        command = self.configuration['command']['blat']
-        process = Popen(
-            args=command['arguments'],
-            env=None,
-            stdin=PIPE,
-            stdout=PIPE,
-            stderr=PIPE
-        )
-        output, error = process.communicate(input=self.fasta.encode('utf8'))
-        if output:
-            buffer = StringIO(output.decode('utf8'))
-            for line in buffer:
-                hit = parse_match(self.configuration['expression']['blat hit'].search(line.strip()))
-                if hit:
-                    query = self.instruction['record'][hit['query name']]
-                    self.parse_flanked_hit(query, hit)
-
-            # for every query sort the results by the objective score and than the flanked score
-            for query in self.instruction['record'].values():
-                if 'hit' in query:
-                    self.crop(query)
-                    query['hit'] = sorted(query['hit'], key=lambda x: x['flanked']['identical'], reverse=True)
-                    query['hit'] = sorted(query['hit'], key=lambda x: x['objective']['identical'], reverse=True)
-                    query['hit'] = sorted(query['hit'], key=lambda x: x['flanked']['score'], reverse=True)
-                    query['hit'] = sorted(query['hit'], key=lambda x: x['objective']['score'], reverse=True)
-                    self.summarize(query)
 
 
 class Artifact(object):
@@ -1721,10 +1721,12 @@ class Sample(object):
         if not self.library:
             raise InvalidSampleError('sample must have a library')
             
-        if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
-            self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
-        else:
-            self.body['sequence'] = Sequence(self.pipeline)
+        for sequence in ['sequence', 'effective']:
+            if sequence in self.body:
+                if isinstance(self.body[sequence], dict):
+                    self.body[sequence] = Sequence(self.pipeline, self.body[sequence])
+                else:
+                    self.body[sequence] = Sequence(self.pipeline)
             
         for hit in self.hit:
             self._load_hit(hit)
@@ -1770,9 +1772,10 @@ class Sample(object):
         self._identify_v_j_junction()
         self._identify_v_d_junction()
         self._identify_d_j_junction()
-        self._check_for_stop_codon()
         self._identify_cdr3()
         self._identify_chewback()
+        self._identify_effective_region()
+        self._check_for_stop_codon()
         self._check_for_productivity()
         self._analyze_quality()
 
@@ -1793,8 +1796,12 @@ class Sample(object):
         self.head['JH length'] = None
         self.head['VH length'] = None
         self.head['average phred'] = None
+        self.head['effective query start'] = None
+        self.head['effective query end'] = None
+        self.head['effective query length'] = None
 
         self.body['primary'] = {}
+        self.body['effective'] = None
 
         if 'comment' in self.body:
             del self.body['comment']
@@ -2112,8 +2119,8 @@ class Sample(object):
             self._identify_junction(vh, jh, 'V-J')
 
     def _check_for_stop_codon(self):
-        if self.framed:
-            if '*' in self.sequence.codon:
+        if self.framed and self.effective.codon:
+            if '*' in self.effective.codon:
                 self.head['premature'] = True
             else:
                 self.head['premature'] = False
@@ -2237,7 +2244,23 @@ class Sample(object):
         for name, region in self.primary.items():
             self.head['{} length'.format(name)] = region['query'].length
             region['average phread'] = float(sum(region['query'].phred)) / float((region['query'].length))
-        self.head['average phred'] = float(sum(self.sequence.phred)) / float((self.sequence.length))
+        self.head['average phred'] = float(sum(self.effective.phred)) / float((self.effective.length))
+
+    def _identify_effective_region(self):
+        self.head['effective query start'] = self.sequence.length
+        self.head['effective query end'] = 0
+        for hit in self.hit:
+            if hit['valid'] and 'query start' in hit and 'query end' in hit:
+                self.head['effective query start'] = min(self.head['effective query start'], hit['query start'])
+                self.head['effective query end'] = max(self.head['effective query end'], hit['query end'])
+
+        self.head['effective query length'] = self.head['effective query end'] - self.head['effective query start']
+        if self.head['effective query length'] < 0:
+            self.head['effective query start'] = 0
+            self.head['effective query end'] = 0
+            self.head['effective query length'] = 0
+
+        self.body['effective'] = self.sequence.crop(self.head['effective query start'], self.head['effective query end'])
 
     def invalidate(self, message):
         self.head['valid'] = False
@@ -2327,6 +2350,10 @@ class Sample(object):
     @property
     def sequence(self):
         return self.body['sequence']
+
+    @property
+    def effective(self):
+        return self.body['effective']
 
     @property
     def valid(self):
@@ -2502,6 +2529,9 @@ class Histogram(object):
                 'colspan': 4
             },
         }
+
+        import matplotlib.pyplot as pyplot
+        
         space = [0,0]
         for plot in self.plots.values():
             space[0] = max(space[0], plot['position'][0])
@@ -3157,6 +3187,8 @@ class Diagram(object):
         self.log = logging.getLogger('Diagram')
         self.pipeline = pipeline
         self.sample = sample
+        self.sequence = self.sample.effective
+        self.offset = self.sample.head['effective query start']
         self.node = {
             'track offset': {},
             'width': {},
@@ -3195,7 +3227,7 @@ class Diagram(object):
                 self.pattern['width'] += max(feature['width'], len(feature['title']))
         self.pattern['width'] += (len(self.pattern['phrase']) - 1)
         self.pattern['phrase'] = ' '.join(self.pattern['phrase'])
-        self.width['sample read frame'] = self.sample.sequence.read_frame
+        self.width['sample read frame'] = self.sequence.read_frame
         self.width['table'] = self.pattern['width']
         self.width['table padding'] = 2
         self.width['diagram start'] = self.width['table'] + self.width['table padding']
@@ -3288,10 +3320,10 @@ class Diagram(object):
     def _draw_coordinates(self, buffer):
         buffer.write(' ' * self.width['diagram start'])
         if self.width['sample read frame'] > 0:
-            buffer.write('{: <{}}'.format(0, self.width['sample read frame']))
+            buffer.write('{: <{}}'.format(self.offset, self.width['sample read frame']))
             buffer.write(self.gap)
             
-        for index in range(self.width['sample read frame'], self.sample.sequence.length, 3):
+        for index in range(self.width['sample read frame'] + self.offset, self.sequence.length, 3):
             buffer.write('{: <3}'.format(index))
             buffer.write(self.gap)
         buffer.write('\n')
@@ -3299,20 +3331,20 @@ class Diagram(object):
     def _draw_nucleotide_sequence(self, buffer):
         buffer.write(' ' * self.width['diagram start'])
         if self.width['sample read frame'] > 0:
-            buffer.write(self.sample.sequence.nucleotide[0:self.width['sample read frame']])
+            buffer.write(self.sequence.nucleotide[0:self.width['sample read frame']])
             buffer.write(self.gap)
-        for index in range(self.width['sample read frame'], self.sample.sequence.length, 3):
-            buffer.write(self.sample.sequence.nucleotide[index:index + 3])
+        for index in range(self.width['sample read frame'], self.sequence.length, 3):
+            buffer.write(self.sequence.nucleotide[index:index + 3])
             buffer.write(self.gap)
         buffer.write('\n')
 
     def _draw_quality_sequence(self, buffer):
         buffer.write(' ' * self.width['diagram start'])
         if self.width['sample read frame'] > 0:
-            buffer.write(self.sample.sequence.quality[0:self.width['sample read frame']])
+            buffer.write(self.sequence.quality[0:self.width['sample read frame']])
             buffer.write(self.gap)
-        for index in range(self.width['sample read frame'], self.sample.sequence.length, 3):
-            buffer.write(self.sample.sequence.quality[index:index + 3])
+        for index in range(self.width['sample read frame'], self.sequence.length, 3):
+            buffer.write(self.sequence.quality[index:index + 3])
             buffer.write(self.gap)
         buffer.write('\n')
 
@@ -3322,7 +3354,7 @@ class Diagram(object):
             if self.width['sample read frame'] > 0:
                 buffer.write(' ' * self.width['sample read frame'])
                 buffer.write(self.gap)
-            for codon in self.sample.sequence.codon:
+            for codon in self.sequence.codon:
                 buffer.write('{: <3}'.format(codon))
                 buffer.write(self.gap)
             buffer.write('\n')
@@ -3412,13 +3444,14 @@ class Diagram(object):
 
     def _find_track_offset(self, track):
         result = 0
-        if track['query start'] > 0:
-            result = track['query start']
+        start = track['query start'] - self.offset
+        if start > 0:
+            result = start
             if self.sample.framed:
-                if self.width['sample read frame'] > 0 and track['query start'] >= self.width['sample read frame']:
-                    result += int((track['query start'] - self.width['sample read frame']) / 3) + 1
+                if self.width['sample read frame'] > 0 and start >= self.width['sample read frame']:
+                    result += int((start - self.width['sample read frame']) / 3) + 1
                 else:
-                    result += int(track['query start'] / 3)
+                    result += int(start / 3)
         return result
 
     def _draw_track(self, buffer, track):
@@ -3857,7 +3890,7 @@ class Resolver(object):
         else:
             return None
 
-    def drop_sample(self, library):
+    def sample_drop(self, library):
         if library:
             collection = self.database['sample']
             try:
@@ -3867,7 +3900,7 @@ class Resolver(object):
             except BulkWriteError as e:
                 self.log.critical(e.details)
 
-    def drop_analyzed_sample(self, library):
+    def analyzed_sample_drop(self, library):
         if library:
             collection = self.database['analyzed_sample']
             try:
@@ -4183,39 +4216,263 @@ class Pipeline(object):
         if query: self.log.debug('search query is:\n{}'.format(to_json(query)))
         return query
 
-    def rebuild(self, table):
-        self.resolver.rebuild(table)
+    def execute(self, cmd):
+        if cmd.action == 'samplePopulate':
+            self.sample_populate(
+                cmd.instruction['library'],
+                cmd.instruction['strain'],
+                cmd.instruction['drop'])
+                
+        elif cmd.action == 'sampleDrop':
+            self.sample_drop(cmd.instruction['library'])
+            
+        elif cmd.action == 'sampleView':
+            self.sample_view(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'sampleAnalyze':
+            self.sample_analyze(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'sampleCount':
+            self.sample_count(
+                cmd.query,
+                cmd.instruction['profile'])
+            
+        elif cmd.action == 'sampleFasta':
+            self.sample_fasta(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'sampleFastq':
+            self.sample_fastq(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'sampleInfo':
+            self.sample_info(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+                
+        elif cmd.action == 'analyzedSampelDrop':
+            self.analyzed_sample_drop(cmd.instruction['library'])
+            
 
-    def library_populate(self, path):
+        elif cmd.action == 'survey':
+            survey = self.survey_make(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'],
+                cmd.instruction['name'])
+
+        elif cmd.action == 'surveyPlot':
+            self.survey_plot(cmd.instruction['names'])
+                
+        elif cmd.action == 'surveyR':
+            self.survey_r(cmd.instruction['names'])
+                
+        elif cmd.action == 'surveyInfo':
+            survey = self.survey_info(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'surveyList':
+            survey = self.survey_list(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+
+
+        elif cmd.action == 'libraryPopulate':
+            for path in cmd.instruction['path']:
+                self.library_populate(path)
+                
+        elif cmd.action == 'libraryInfo':
+            self.library_info(
+                cmd.query,
+                cmd.instruction['profile'])
+
+
+        elif cmd.action == 'genePopulate':
+            for path in cmd.instruction['path']:
+                self.gene_populate(path)
+                
+        elif cmd.action == 'geneInfo':
+            self.gene_info(
+                cmd.query,
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'geneHtml':
+            self.gene_html(
+                cmd.query,
+                cmd.instruction['profile'],
+                cmd.instruction['title'])
+
+        elif cmd.action == 'geneRss':
+            self.gene_rss(
+                cmd.query, 
+                cmd.instruction['profile'],
+                cmd.instruction['flanking'],
+                cmd.instruction['distance'])
+
+        elif cmd.action == 'geneCount':
+            self.gene_count(
+                cmd.query,
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'geneAlign':
+            self.gene_align(
+                cmd.query, 
+                cmd.instruction['profile'],
+                cmd.instruction['flanking'])
+
+        elif cmd.action == 'geneFasta':
+            self.gene_fasta(
+                cmd.query,
+                cmd.instruction['profile'],
+                cmd.instruction['flanking'],
+                cmd.instruction['limit'])
+            
+        elif cmd.action == 'geneIgblastAux':
+            self.gene_igblast_auxiliary(
+                cmd.query, 
+                cmd.instruction['profile'])
+            
+        elif cmd.action == 'accessionFasta':
+            self.accession_fasta(cmd.query, cmd.instruction['profile'])
+            
+        elif cmd.action == 'rebuild':
+            self.rebuild(cmd.instruction['table'])
+
+        elif cmd.action == 'simulate':
+            self.simulate(
+                cmd.instruction['library'],
+                cmd.instruction['strain'],
+                cmd.instruction['json'],
+                cmd.instruction['alignment'],
+                cmd.instruction['profile'])
+                
+
+
+    def sample_populate(self, library, strain, drop):
         count = 0
-        with io.open(path, 'rb') as file:
-            content = StringIO(file.read().decode('utf8'))
-            document = json.loads(content.getvalue())
-            for node in document:
-                self.resolver.library_store(node)
-                count += 1
-        self.log.info('populated %d libraries', count)
+        if not library:
+            raise ValueError('must specify a library to populate')
+        block = Block(self)
+        collection = self.resolver.database['sample']
+        if drop:
+            self.resolver.sample_drop(library)
+            self.resolver.analyzed_sample_drop(library)
 
-    def library_to_json(self, query, profile):
-        q = self.build_query(query, profile, 'library')
-        cursor = self.resolver.make_cursor('library', q)
+        while block.fill(library, strain):
+            bulk = pymongo.bulk.BulkOperationBuilder(collection)
+            for sample in block.buffer:
+                document = sample.document
+                if '_id' in document:
+                    bulk.find({'_id': sample.document['_id']}).upsert().replace_one(sample.document)
+                else:
+                    bulk.insert(document)
+            try:
+                bulk.execute()
+            except BulkWriteError as e:
+                self.log.critical(e.details)
+                raise SystemExit()
+            count += block.size
+            self.log.info('%s so far', count)
+
+    def sample_drop(self, library):
+        self.resolver.sample_drop(library)
+
+    def sample_view(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
+        for node in cursor:
+            sample = Sample(self, node)
+            sample.view(profile)
+        cursor.close()
+
+    def sample_analyze(self, query, limit, skip, profile):
+        def flush(buffer, collection):
+            if buffer:
+                bulk = pymongo.bulk.BulkOperationBuilder(collection)
+                for sample in buffer:
+                    bulk.find({'_id': sample.document['_id']}).upsert().replace_one(sample.document)
+                try:
+                    bulk.execute()
+                except BulkWriteError as e:
+                    self.log.critical(e.details)
+                    raise SystemExit()
+                return len(buffer)
+            else:
+                return 0
+
+        collection = self.resolver.database['analyzed_sample']
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        count = 0
         buffer = []
         for node in cursor:
-            buffer.append(node)
+            sample = Sample(self, node)
+            sample.analyze()
+            buffer.append(sample)
+            # print(to_json(sample.document))
+            if len(buffer) >= self.configuration['constant']['buffer size']:
+                count += flush(buffer, collection)
+                buffer = []
+                self.log.info('%s so far', count)
         cursor.close()
-        buffer = sorted(buffer, key=lambda x: '' if 'technical' not in x else x['technical'])
-        buffer = sorted(buffer, key=lambda x: '' if 'biological' not in x else x['biological'])
-        buffer = sorted(buffer, key=lambda x: '' if 'tissue' not in x else x['head']['tissue'])
-        buffer = sorted(buffer, key=lambda x: '' if 'exposure' not in x else x['head']['exposure'])
-        print(to_json(buffer))
+        flush(buffer, collection)
 
-    def drop_sample(self, library):
-        self.resolver.drop_sample(library)
+    def sample_count(self, query, profile):
+        q = self.build_query(query, profile, 'library')
+        print(self.resolver.count('sample', q))
 
-    def drop_analyzed_sample(self, library):
-        self.resolver.drop_analyzed_sample(library)
+    def sample_fasta(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        for node in cursor:
+            sample = Sample(self, node)
+            print(sample.fasta)
+        cursor.close()
 
-    def sample_survey(self, query, limit, skip, profile, name=None):
+    def sample_fastq(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        for node in cursor:
+            sample = Sample(self, node)
+            print(sample.fastq)
+        cursor.close()
+
+    def sample_info(self, query, limit, skip, profile):
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
+        for node in cursor:
+            sample = Sample(self, node)
+            sample.info(profile)
+        cursor.close()
+
+
+    def analyzed_sample_drop(self, library):
+        self.resolver.analyzed_sample_drop(library)
+
+
+    def survey_make(self, query, limit, skip, profile, name=None):
         survey = self.resolver.survey_find(name)
         if survey is None:
             q = self.build_query(query, profile, 'sample')
@@ -4234,7 +4491,40 @@ class Pipeline(object):
         # print(to_json(survey))
         return survey
 
-    def survey_r_export(self, names):
+    def survey_plot(self, names):
+        plot_name = []
+        surveys = []
+        colors = [
+            ['#C0392b', '#D14A3C'],
+            ['#669803', '#DDE7AC'],
+            ['#EEB63E', '#FFC74F'],
+            ['#C64AC3', '#D75BD4'],
+        ]
+        if len(names) > 0 and len(names) < 5:
+            for name in names:
+                survey = self.resolver.survey_find(name)
+                if survey:
+                    survey._load_expression()
+                    surveys.append(survey)
+                    plot_name.append(survey.name)
+
+                    # allele_heatmap = Heatmap(self, survey, 'allele')
+                    # allele_heatmap.save('{}_allele.png'.format(survey.name))
+
+                    # family_heatmap = Heatmap(self, survey, 'family')
+                    # family_heatmap.save('{}_family.png'.format(survey.name))
+
+                else:
+                    raise ValueError('could not locate survey {}'.format(name))
+
+            histogram = Histogram(' vs '.join(plot_name))
+            for index,survey in enumerate(surveys):
+                histogram.draw(survey, colors[index][0], colors[index][1])
+            histogram.save('_'.join(plot_name))
+        else:
+            raise ValueError('comparison plots take up to 4 surveys')
+
+    def survey_r(self, names):
         from rpy2.robjects import numpy2ri, r, FloatVector, DataFrame, Matrix, ListVector, StrVector
         from rpy2 import robjects
         # from rpy2.robjects.numpy2ri import numpy2ri
@@ -4299,7 +4589,7 @@ class Pipeline(object):
             if survey: add_survey(survey)
 
         r('save(somatic, file="somatic.bz2", compress="bzip2")')
-    
+
     def survey_info(self, query, limit, skip, profile):
         q = self.build_query(query, profile, 'survey')
         request = { 'limit': limit, 'skip': skip, 'query': q }
@@ -4321,132 +4611,30 @@ class Pipeline(object):
             print(str(survey))
         cursor.close()
 
-    def plot(self, names):
-        plot_name = []
-        surveys = []
-        colors = [
-            ['#C0392b', '#D14A3C'],
-            ['#669803', '#DDE7AC'],
-            ['#EEB63E', '#FFC74F'],
-            ['#C64AC3', '#D75BD4'],
-        ]
-        if len(names) > 0 and len(names) < 5:
-            for name in names:
-                survey = self.resolver.survey_find(name)
-                if survey:
-                    survey._load_expression()
-                    surveys.append(survey)
-                    plot_name.append(survey.name)
 
-                    # allele_heatmap = Heatmap(self, survey, 'allele')
-                    # allele_heatmap.save('{}_allele.png'.format(survey.name))
-
-                    # family_heatmap = Heatmap(self, survey, 'family')
-                    # family_heatmap.save('{}_family.png'.format(survey.name))
-
-                else:
-                    raise ValueError('could not locate survey {}'.format(name))
-
-            histogram = Histogram(' vs '.join(plot_name))
-            for index,survey in enumerate(surveys):
-                histogram.draw(survey, colors[index][0], colors[index][1])
-            histogram.save('_'.join(plot_name))
-        else:
-            raise ValueError('comparison plots take up to 4 surveys')
-
-    def sample_analyze(self, query, limit, skip, profile):
-        def flush(buffer, collection):
-            if buffer:
-                bulk = pymongo.bulk.BulkOperationBuilder(collection)
-                for sample in buffer:
-                    bulk.find({'_id': sample.document['_id']}).upsert().replace_one(sample.document)
-                try:
-                    bulk.execute()
-                except BulkWriteError as e:
-                    self.log.critical(e.details)
-                    raise SystemExit()
-                return len(buffer)
-            else:
-                return 0
-
-        collection = self.resolver.database['analyzed_sample']
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+    def library_populate(self, path):
         count = 0
+        with io.open(path, 'rb') as file:
+            content = StringIO(file.read().decode('utf8'))
+            document = json.loads(content.getvalue())
+            for node in document:
+                self.resolver.library_store(node)
+                count += 1
+        self.log.info('populated %d libraries', count)
+
+    def library_info(self, query, profile):
+        q = self.build_query(query, profile, 'library')
+        cursor = self.resolver.make_cursor('library', q)
         buffer = []
         for node in cursor:
-            sample = Sample(self, node)
-            sample.analyze()
-            buffer.append(sample)
-            # print(to_json(sample.document))
-            if len(buffer) >= self.configuration['constant']['buffer size']:
-                count += flush(buffer, collection)
-                buffer = []
-                self.log.info('%s so far', count)
+            buffer.append(node)
         cursor.close()
-        flush(buffer, collection)
+        buffer = sorted(buffer, key=lambda x: '' if 'technical' not in x else x['technical'])
+        buffer = sorted(buffer, key=lambda x: '' if 'biological' not in x else x['biological'])
+        buffer = sorted(buffer, key=lambda x: '' if 'tissue' not in x else x['head']['tissue'])
+        buffer = sorted(buffer, key=lambda x: '' if 'exposure' not in x else x['head']['exposure'])
+        print(to_json(buffer))
 
-    def sample_populate(self, library, strain, drop):
-        count = 0
-        if not library:
-            raise ValueError('must specify a library to populate')
-        block = Block(self)
-        collection = self.resolver.database['sample']
-        if drop:
-            self.resolver.drop_sample(library)
-            self.resolver.drop_analyzed_sample(library)
-
-        while block.fill(library, strain):
-            bulk = pymongo.bulk.BulkOperationBuilder(collection)
-            for sample in block.buffer:
-                document = sample.document
-                if '_id' in document:
-                    bulk.find({'_id': sample.document['_id']}).upsert().replace_one(sample.document)
-                else:
-                    bulk.insert(document)
-            try:
-                bulk.execute()
-            except BulkWriteError as e:
-                self.log.critical(e.details)
-                raise SystemExit()
-            count += block.size
-            self.log.info('%s so far', count)
-
-    def sample_count(self, query, profile):
-        q = self.build_query(query, profile, 'library')
-        print(self.resolver.count('analyzed', q))
-
-    def sample_fasta(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('analyzed', q, limit, skip)
-        for node in cursor:
-            sample = Sample(self, node)
-            print(sample.fasta)
-        cursor.close()
-
-    def sample_fastq(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('analyzed', q, limit, skip)
-        for node in cursor:
-            sample = Sample(self, node)
-            print(sample.fastq)
-        cursor.close()
-
-    def sample_view(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
-        for node in cursor:
-            sample = Sample(self, node)
-            sample.view(profile)
-        cursor.close()
-
-    def sample_info(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
-        for node in cursor:
-            sample = Sample(self, node)
-            sample.info(profile)
-        cursor.close()
 
     def gene_populate(self, path):
         count = 0
@@ -4457,7 +4645,7 @@ class Pipeline(object):
                 count += 1
         self.log.info('populated %d genes', count)
 
-    def gene_to_json(self, query, profile):
+    def gene_info(self, query, profile):
         q = self.build_query(query, profile, 'gene')
         cursor = self.resolver.make_cursor('gene', q)
         buffer = []
@@ -4601,27 +4789,6 @@ class Pipeline(object):
         for gene in buffer: gene.html()
         print("""</div></body></html>""")
 
-    def gene_fasta(self, query, profile, flanking, limit):
-        limit = limit if limit is not None else self.configuration['constant']['fasta line length']
-        q = self.build_query(query, profile, 'gene')
-        cursor = self.resolver.make_cursor('gene', q)
-        buffer = []
-        for node in cursor:
-            buffer.append(node)
-        cursor.close()
-        buffer = sorted(buffer, key=lambda x: '' if 'allele' not in x else x['body']['allele'])
-        buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x else x['body']['gene'])
-        buffer = sorted(buffer, key=lambda x: '' if 'family' not in x else x['body']['family'])
-        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['body']['strain'])
-        for node in buffer:
-            gene = Gene(self, node)
-            print(gene.to_fasta(flanking, limit))
-        cursor.close()
-
-    def gene_count(self, query, profile):
-        q = self.build_query(query, profile, 'gene')
-        print(self.resolver.count('gene', q))
-
     def gene_rss(self, query, profile, flank=0, distance=0):
         # load the gene sequences
         q = self.build_query(query, profile, 'gene')
@@ -4631,6 +4798,10 @@ class Pipeline(object):
             gene.check_rss(flank, distance)
             self.resolver.gene_save(gene)
         cursor.close()
+
+    def gene_count(self, query, profile):
+        q = self.build_query(query, profile, 'gene')
+        print(self.resolver.count('gene', q))
 
     def gene_align(self, query, profile, flank=0):
         instruction = {
@@ -4665,7 +4836,24 @@ class Pipeline(object):
             else:
                 self.log.error('no satisfactory alignment found for gene %s',  gene.id)
 
-    def gene_to_auxiliary(self, query, profile):
+    def gene_fasta(self, query, profile, flanking, limit):
+        limit = limit if limit is not None else self.configuration['constant']['fasta line length']
+        q = self.build_query(query, profile, 'gene')
+        cursor = self.resolver.make_cursor('gene', q)
+        buffer = []
+        for node in cursor:
+            buffer.append(node)
+        cursor.close()
+        buffer = sorted(buffer, key=lambda x: '' if 'allele' not in x else x['body']['allele'])
+        buffer = sorted(buffer, key=lambda x: '' if 'gene' not in x else x['body']['gene'])
+        buffer = sorted(buffer, key=lambda x: '' if 'family' not in x else x['body']['family'])
+        buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['body']['strain'])
+        for node in buffer:
+            gene = Gene(self, node)
+            print(gene.to_fasta(flanking, limit))
+        cursor.close()
+
+    def gene_igblast_auxiliary(self, query, profile):
         q = self.build_query(query, profile, 'gene')
         cursor = self.resolver.make_cursor('gene', q)
         buffer = StringIO()
@@ -4681,7 +4869,8 @@ class Pipeline(object):
         buffer.seek(0)
         print(buffer.read())
 
-    def accession_to_fasta(self, query, profile):
+
+    def accession_fasta(self, query, profile):
         q = self.build_query(query, profile, 'accession')
         cursor = self.resolver.make_cursor('accession', q)
         for node in cursor:
@@ -4689,159 +4878,13 @@ class Pipeline(object):
             print(accession.fasta)
         cursor.close()
 
+    def rebuild(self, table):
+        self.resolver.rebuild(table)
+
     def simulate(self, library, strain, json, alignment, profile):
         block = Block(self)
         while block.fill(library, strain):
             block.simulate(json, alignment, profile)
-
-    def execute(self, cmd):
-        if cmd.action == 'view':
-            self.sample_view(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'info':
-            self.sample_info(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'analyze':
-            self.sample_analyze(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'survey':
-            survey = self.sample_survey(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'],
-                cmd.instruction['name'])
-
-        elif cmd.action == 'plot':
-            self.plot(cmd.instruction['names'])
-                
-        elif cmd.action == 'survey-r':
-            self.survey_r_export(cmd.instruction['names'])
-                
-        elif cmd.action == 'survey-info':
-            survey = self.survey_info(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-
-        elif cmd.action == 'survey-list':
-            survey = self.survey_list(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-
-        elif cmd.action == 'count':
-            self.sample_count(
-                cmd.query,
-                cmd.instruction['profile'])
-            
-        elif cmd.action == 'drop-sample':
-            self.drop_sample(cmd.instruction['library'])
-            
-        elif cmd.action == 'drop-analyzed':
-            self.drop_analyzed_sample(cmd.instruction['library'])
-            
-        elif cmd.action == 'fasta':
-            self.sample_fasta(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'fastq':
-            self.sample_fastq(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'populate':
-            self.sample_populate(
-                cmd.instruction['library'],
-                cmd.instruction['strain'],
-                cmd.instruction['drop'])
-                
-        elif cmd.action == 'simulate':
-            self.simulate(
-                cmd.instruction['library'],
-                cmd.instruction['strain'],
-                cmd.instruction['json'],
-                cmd.instruction['alignment'],
-                cmd.instruction['profile'])
-                
-        elif cmd.action == 'gene-info':
-            self.gene_to_json(
-                cmd.query,
-                cmd.instruction['profile'])
-
-        elif cmd.action == 'gene-html':
-            self.gene_html(
-                cmd.query,
-                cmd.instruction['profile'],
-                cmd.instruction['title'])
-
-        elif cmd.action == 'gene-count':
-            self.gene_count(
-                cmd.query,
-                cmd.instruction['profile'])
-
-        elif cmd.action == 'gene-fasta':
-            self.gene_fasta(
-                cmd.query,
-                cmd.instruction['profile'],
-                cmd.instruction['flanking'],
-                cmd.instruction['limit'])
-            
-        elif cmd.action == 'gene-align':
-            self.gene_align(
-                cmd.query, 
-                cmd.instruction['profile'],
-                cmd.instruction['flanking'])
-
-        elif cmd.action == 'gene-rss':
-            self.gene_rss(
-                cmd.query, 
-                cmd.instruction['profile'],
-                cmd.instruction['flanking'],
-                cmd.instruction['distance'])
-
-        elif cmd.action == 'gene-populate':
-            for path in cmd.instruction['path']:
-                self.gene_populate(path)
-                
-        elif cmd.action == 'gene-igblast-aux':
-            self.gene_to_auxiliary(
-                cmd.query, 
-                cmd.instruction['profile'])
-            
-        elif cmd.action == 'library-populate':
-            for path in cmd.instruction['path']:
-                self.library_populate(path)
-                
-        elif cmd.action == 'library-info':
-            self.library_to_json(
-                cmd.query,
-                cmd.instruction['profile'])
-
-        elif cmd.action == 'accession-fasta':
-            self.accession_to_fasta(cmd.query, cmd.instruction['profile'])
-            
-        elif cmd.action == 'rebuild':
-            self.rebuild(cmd.instruction['table'])
 
 
 def main():

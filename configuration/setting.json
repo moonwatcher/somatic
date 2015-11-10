@@ -1,6 +1,6 @@
 {
     "constant": {
-        "buffer size": 128, 
+        "buffer size": 256, 
         "fasta line length": 80,
         "blat binary": "/Users/lg/code/somatic/bin/blat",
         "igblastn binary": "/Users/lg/code/somatic/bin/igblastn",
