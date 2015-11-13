@@ -2,13 +2,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_mz_3.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b03t01gfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -25,7 +25,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6mzspf", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -34,13 +34,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_b1a_3.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -57,7 +57,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b1aspf", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -66,13 +66,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_preb_2.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -81,13 +81,13 @@
     {
         "body": {
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_fo_1_c.fastq", 
             "technical repetition": 3, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t03spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -96,13 +96,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_fo_3_c.fastq", 
             "technical repetition": 3, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b03t03gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -111,13 +111,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_mz_4.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b04t01spfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -126,13 +126,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_preb_4.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b04t01gfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -148,7 +148,7 @@
             ]
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6prebgf", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -157,13 +157,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_preb_2.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b02t01gfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -172,13 +172,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_mz_2.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -187,13 +187,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_fo_4_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b04t01spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -202,13 +202,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_fo_2_c.fastq", 
             "technical repetition": 3, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b02t03gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -217,13 +217,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_b1a_5.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b05t01spfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -249,7 +249,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6fospf", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -258,13 +258,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_mz_5.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b05t01gfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -273,13 +273,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_fo_5_d.fastq", 
             "technical repetition": 4, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b05t04spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -288,13 +288,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_fo_4_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b04t01gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -311,7 +311,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6prebspf", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -320,13 +320,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_fo_3_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b03t02gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -335,13 +335,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_fo_4_d.fastq", 
             "technical repetition": 4, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b04t04gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -350,13 +350,13 @@
     {
         "body": {
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_preb_1.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -365,13 +365,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_preb_3.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -380,13 +380,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_preb_4.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b04t01spfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -395,13 +395,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_preb_3.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b03t01gfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -410,13 +410,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_fo_4_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b04t02gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -432,7 +432,7 @@
             ]
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b1agf", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -441,13 +441,13 @@
     {
         "body": {
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_fo_1_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t02spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -456,13 +456,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_b1a_3.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b03t01gfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -500,7 +500,7 @@
             ]
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6gf", 
             "strain": "C57BL/6"
         }
@@ -508,13 +508,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_fo_5_c.fastq", 
             "technical repetition": 3, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b05t03gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -523,13 +523,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_b1a_4.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b04t01gfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -538,13 +538,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_fo_5_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b05t02spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -553,13 +553,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_preb_5.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b05t01gfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -568,13 +568,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_preb_5.fastq", 
             "technical repetition": 1, 
             "tissue": "bone marrow pre b"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b05t01spfpreb", 
             "strain": "C57BL/6", 
             "tissue": "bone marrow pre b"
@@ -583,13 +583,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_fo_2_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t02spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -605,7 +605,7 @@
             ]
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6mzgf", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -614,13 +614,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_fo_3_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b03t01gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -629,13 +629,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_fo_3_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -644,13 +644,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_fo_2_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b02t02gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -659,13 +659,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_fo_5_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b05t01spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -674,13 +674,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_b1a_2.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -689,13 +689,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_fo_5_c.fastq", 
             "technical repetition": 3, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b05t03spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -704,13 +704,13 @@
     {
         "body": {
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_fo_1_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -719,13 +719,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_mz_5.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b05t01spfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -734,13 +734,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_conv_fo_2_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -749,13 +749,13 @@
     {
         "body": {
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_b1a_1.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -764,13 +764,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_fo_5_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b05t02gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -779,13 +779,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_b1a_2.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b02t01gfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -794,13 +794,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_fo_3_d.fastq", 
             "technical repetition": 4, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b03t04gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -809,13 +809,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_gf_fo_4_c.fastq", 
             "technical repetition": 3, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b04t03gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -824,13 +824,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_fo_2_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b02t01gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -839,13 +839,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_b1a_4.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b04t01spfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -854,13 +854,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_fo_4_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b04t02spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -869,13 +869,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_fo_3_b.fastq", 
             "technical repetition": 2, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t02spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -884,13 +884,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_mz_3.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -899,13 +899,13 @@
     {
         "body": {
             "biological repetition": 4, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_mz_4.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b04t01gfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -946,7 +946,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6spf", 
             "strain": "C57BL/6"
         }
@@ -954,13 +954,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_fo_5_a.fastq", 
             "technical repetition": 1, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b05t01gffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -969,13 +969,13 @@
     {
         "body": {
             "biological repetition": 2, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_mz_2.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b02t01gfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -984,13 +984,13 @@
     {
         "body": {
             "biological repetition": 5, 
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "path": "/Users/lg/thesis/library/merged/A4N54_b6_gf_b1a_5.fastq", 
             "technical repetition": 1, 
             "tissue": "peritoneal cavity b1a"
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6b05t01gfb1a", 
             "strain": "C57BL/6", 
             "tissue": "peritoneal cavity b1a"
@@ -999,13 +999,13 @@
     {
         "body": {
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_fo_3_c.fastq", 
             "technical repetition": 3, 
             "tissue": "follicular spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t03spffo", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -1031,7 +1031,7 @@
             ]
         }, 
         "head": {
-            "exposure": "germ free", 
+            "exposure": "gf", 
             "id": "c57bl6fogf", 
             "strain": "C57BL/6", 
             "tissue": "follicular spleen"
@@ -1040,13 +1040,13 @@
     {
         "body": {
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "path": "/Users/lg/thesis/library/merged/A4G6U_b6_conv_mz_1.fastq", 
             "technical repetition": 1, 
             "tissue": "marginal zone spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfmz", 
             "strain": "C57BL/6", 
             "tissue": "marginal zone spleen"
@@ -1115,14 +1115,14 @@
         "body": {
             "barcode": "CGACT", 
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfiftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b01t01spfiftl.fastq", 
             "technical repetition": 1, 
             "tissue": "immature fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfiftl", 
             "strain": "C57BL/6", 
             "tissue": "immature fetal liver"
@@ -1132,14 +1132,14 @@
         "body": {
             "barcode": "ACGAA", 
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t02spfiftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b01t02spfiftl.fastq", 
             "technical repetition": 2, 
             "tissue": "immature fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t02spfiftl", 
             "strain": "C57BL/6", 
             "tissue": "immature fetal liver"
@@ -1149,14 +1149,14 @@
         "body": {
             "barcode": "ATTGC", 
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfprebftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b01t01spfprebftl.fastq", 
             "technical repetition": 1, 
             "tissue": "pre b fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfprebftl", 
             "strain": "C57BL/6", 
             "tissue": "pre b fetal liver"
@@ -1166,14 +1166,14 @@
         "body": {
             "barcode": "CTTAG", 
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t02spfprebftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b01t02spfprebftl.fastq", 
             "technical repetition": 2, 
             "tissue": "pre b fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t02spfprebftl", 
             "strain": "C57BL/6", 
             "tissue": "pre b fetal liver"
@@ -1183,14 +1183,14 @@
         "body": {
             "barcode": "AGTCC", 
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfiftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b02t01spfiftl.fastq", 
             "technical repetition": 1, 
             "tissue": "immature fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfiftl", 
             "strain": "C57BL/6", 
             "tissue": "immature fetal liver"
@@ -1200,14 +1200,14 @@
         "body": {
             "barcode": "ATCAC", 
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t02spfiftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b02t02spfiftl.fastq", 
             "technical repetition": 2, 
             "tissue": "immature fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t02spfiftl", 
             "strain": "C57BL/6", 
             "tissue": "immature fetal liver"
@@ -1217,14 +1217,14 @@
         "body": {
             "barcode": "AAGGA", 
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfprebftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b02t01spfprebftl.fastq", 
             "technical repetition": 1, 
             "tissue": "pre b fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfprebftl", 
             "strain": "C57BL/6", 
             "tissue": "pre b fetal liver"
@@ -1234,14 +1234,14 @@
         "body": {
             "barcode": "ACAGT", 
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t02spfprebftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b02t02spfprebftl.fastq", 
             "technical repetition": 2, 
             "tissue": "pre b fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t02spfprebftl", 
             "strain": "C57BL/6", 
             "tissue": "pre b fetal liver"
@@ -1251,14 +1251,14 @@
         "body": {
             "barcode": "GGTAC", 
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfiftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b03t01spfiftl.fastq", 
             "technical repetition": 1, 
             "tissue": "immature fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfiftl", 
             "strain": "C57BL/6", 
             "tissue": "immature fetal liver"
@@ -1268,14 +1268,14 @@
         "body": {
             "barcode": "CTGTA", 
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t02spfiftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b03t02spfiftl.fastq", 
             "technical repetition": 2, 
             "tissue": "immature fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t02spfiftl", 
             "strain": "C57BL/6", 
             "tissue": "immature fetal liver"
@@ -1285,14 +1285,14 @@
         "body": {
             "barcode": "CATGA", 
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfprebftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b03t01spfprebftl.fastq", 
             "technical repetition": 1, 
             "tissue": "pre b fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfprebftl", 
             "strain": "C57BL/6", 
             "tissue": "pre b fetal liver"
@@ -1302,14 +1302,14 @@
         "body": {
             "barcode": "ACTCA", 
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t02spfprebftl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b03t02spfprebftl.fastq", 
             "technical repetition": 2, 
             "tissue": "pre b fetal liver"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t02spfprebftl", 
             "strain": "C57BL/6", 
             "tissue": "pre b fetal liver"
@@ -1319,14 +1319,14 @@
         "body": {
             "barcode": "CCTAT", 
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfiaspl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b01t01spfiaspl.fastq", 
             "technical repetition": 1, 
             "tissue": "immature adult spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfiaspl", 
             "strain": "C57BL/6", 
             "tissue": "immature adult spleen"
@@ -1336,14 +1336,14 @@
         "body": {
             "barcode": "GGATG", 
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfiaspl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b02t01spfiaspl.fastq", 
             "technical repetition": 1, 
             "tissue": "immature adult spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfiaspl", 
             "strain": "C57BL/6", 
             "tissue": "immature adult spleen"
@@ -1353,14 +1353,14 @@
         "body": {
             "barcode": "GTTCA", 
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfiaspl", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b03t01spfiaspl.fastq", 
             "technical repetition": 1, 
             "tissue": "immature adult spleen"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfiaspl", 
             "strain": "C57BL/6", 
             "tissue": "immature adult spleen"
@@ -1370,14 +1370,14 @@
         "body": {
             "barcode": "ATGAG", 
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfprebabm", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b01t01spfprebabm.fastq", 
             "technical repetition": 1, 
             "tissue": "pre b adult bone marrow"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfprebabm", 
             "strain": "C57BL/6", 
             "tissue": "pre b adult bone marrow"
@@ -1387,14 +1387,14 @@
         "body": {
             "barcode": "GAACA", 
             "biological repetition": 1, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfiabm", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b01t01spfiabm.fastq", 
             "technical repetition": 1, 
             "tissue": "immature adult bone marrow"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b01t01spfiabm", 
             "strain": "C57BL/6", 
             "tissue": "immature adult bone marrow"
@@ -1404,14 +1404,14 @@
         "body": {
             "barcode": "ATAGG", 
             "biological repetition": 2, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfiabm", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b02t01spfiabm.fastq", 
             "technical repetition": 1, 
             "tissue": "immature adult bone marrow"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b02t01spfiabm", 
             "strain": "C57BL/6", 
             "tissue": "immature adult bone marrow"
@@ -1421,14 +1421,14 @@
         "body": {
             "barcode": "CGTGA", 
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfprebabm", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b03t01spfprebabm.fastq", 
             "technical repetition": 1, 
             "tissue": "pre b adult bone marrow"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfprebabm", 
             "strain": "C57BL/6", 
             "tissue": "pre b adult bone marrow"
@@ -1438,14 +1438,14 @@
         "body": {
             "barcode": "GACAG", 
             "biological repetition": 3, 
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfiabm", 
             "path": "/Users/lg/thesis/library/merged/A1Y58_c57bl6b03t01spfiabm.fastq", 
             "technical repetition": 1, 
             "tissue": "immature adult bone marrow"
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6b03t01spfiabm", 
             "strain": "C57BL/6", 
             "tissue": "immature adult bone marrow"
@@ -1463,7 +1463,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6spfiftl", 
             "strain": "C57BL/6", 
             "tissue": "immature fetal liver"
@@ -1481,7 +1481,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6spfprebftl", 
             "strain": "C57BL/6", 
             "tissue": "pre b fetal liver"
@@ -1496,7 +1496,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6spfiaspl", 
             "strain": "C57BL/6", 
             "tissue": "immature adult spleen"
@@ -1510,7 +1510,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6spfprebabm", 
             "strain": "C57BL/6", 
             "tissue": "pre b adult bone marrow"
@@ -1525,7 +1525,7 @@
             ]
         }, 
         "head": {
-            "exposure": "specific pathogen free", 
+            "exposure": "spf", 
             "id": "c57bl6spfiabm", 
             "strain": "C57BL/6", 
             "tissue": "immature adult bone marrow"

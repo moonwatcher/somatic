@@ -83,10 +83,10 @@
                 ]
             }, 
             "VDJ CDR3 length": {
-                "bins": 40, 
+                "bins": 100, 
                 "range": [
                     0, 
-                    120
+                    100
                 ]
             }, 
             "VDJ CDR3 weight": {
@@ -197,7 +197,7 @@
                 ]
             }, 
             "VJ CDR3 length": {
-                "bins": 40, 
+                "bins": 120, 
                 "range": [
                     0, 
                     120
@@ -295,7 +295,7 @@
                 "parameter": {
                     "action": "store_true", 
                     "dest": "drop", 
-                    "help": "drop library items"
+                    "help": "drop items"
                 }
             }, 
             "flanking": {
@@ -363,17 +363,6 @@
                     "metavar": "ID"
                 }
             }, 
-            "name": {
-                "flag": [
-                    "--name"
-                ], 
-                "parameter": {
-                    "required": true,
-                    "dest": "name", 
-                    "help": "uniqe name of the record", 
-                    "metavar": "NAME"
-                }
-            }, 
             "in frame": {
                 "flag": [
                     "-F", 
@@ -419,6 +408,27 @@
                     "dest": "limit", 
                     "help": "max results to return", 
                     "type": "int"
+                }
+            }, 
+            "name": {
+                "flag": [
+                    "--name"
+                ], 
+                "parameter": {
+                    "dest": "name", 
+                    "help": "uniqe name of the record", 
+                    "metavar": "NAME", 
+                    "required": true
+                }
+            }, 
+            "names": {
+                "flag": [
+                    "names"
+                ], 
+                "parameter": {
+                    "help": "survey name or uuid", 
+                    "metavar": "NAMES", 
+                    "nargs": "*"
                 }
             }, 
             "path": {
@@ -470,16 +480,6 @@
                     "dest": "profile", 
                     "help": "profile is one of default, productive, productive.dropped, psudo, premature, inframe, outframe", 
                     "metavar": "NAME"
-                }
-            }, 
-            "names": {
-                "flag": [
-                    "names"
-                ], 
-                "parameter": {
-                    "help": "survey name or uuid", 
-                    "metavar": "NAMES", 
-                    "nargs": "*"
                 }
             }, 
             "region": {
@@ -718,7 +718,7 @@
                 }, 
                 {
                     "argument": [
-                        "name",
+                        "name", 
                         "profile", 
                         "library", 
                         "id", 
@@ -755,7 +755,7 @@
                 }, 
                 {
                     "argument": [
-                        "names",
+                        "names", 
                         "profile", 
                         "limit", 
                         "skip"
@@ -767,7 +767,7 @@
                 }, 
                 {
                     "argument": [
-                        "names",
+                        "names", 
                         "profile", 
                         "limit", 
                         "skip"
@@ -795,6 +795,18 @@
                     "instruction": {
                         "help": "view JSON library records", 
                         "name": "libraryInfo"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "strain", 
+                        "profile", 
+                        "drop", 
+                        "id"
+                    ], 
+                    "instruction": {
+                        "help": "list library records", 
+                        "name": "libraryList"
                     }
                 }, 
                 {
@@ -906,7 +918,8 @@
                         "id"
                     ], 
                     "instruction": {
-                        "help": "dump accession sequences to fasta", "name": "accessionFasta"
+                        "help": "dump accession sequences to fasta", 
+                        "name": "accessionFasta"
                     }
                 }, 
                 {
@@ -1297,53 +1310,12 @@
             "gene": {}, 
             "sample": {}
         }, 
-        "valid": {
-            "accession": {}, 
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "name", 
-                    "functionality", 
-                    "in frame", 
-                    "picked"
-                ], 
-                "track": {
-                    "valid": true
-                }
-            }, 
-            "gene": {}, 
-            "library": {}, 
-            "sample": {
-                "valid": true
-            },
-            "survey":{}
-        }, 
-        "picked": {
-            "accession": {}, 
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "name", 
-                    "functionality", 
-                    "in frame"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
-                }
-            }, 
-            "gene": {}, 
-            "library": {}, 
-            "sample": {
-                "valid": true
-            },
-            "survey":{}
-        }, 
         "default": {
             "accession": {}, 
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1356,8 +1328,8 @@
             "library": {}, 
             "sample": {
                 "valid": true
-            },
-            "survey":{}
+            }, 
+            "survey": {}
         }, 
         "invalid": {
             "diagram": {
@@ -1374,10 +1346,11 @@
                 "valid": false
             }
         }, 
-        "nonproductive": {
+        "np": {
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1386,19 +1359,16 @@
                     "valid": true
                 }
             }, 
-            "library": {
-                "productive": false, 
-                "valid": true
-            }, 
             "sample": {
                 "productive": false, 
                 "valid": true
             }
         }, 
-        "nonproductive33+": {
+        "np33": {
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1415,10 +1385,11 @@
                 "valid": true
             }
         }, 
-        "nonproductive38+": {
+        "npn033": {
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1431,14 +1402,40 @@
                 "average phred": {
                     "$gt": 38
                 }, 
+                "n count": 0, 
                 "productive": false, 
                 "valid": true
             }
         }, 
-        "productive": {
+        "npn133": {
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 38
+                }, 
+                "n count": {
+                    "$gte": 1
+                }, 
+                "productive": false, 
+                "valid": true
+            }
+        }, 
+        "p": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1451,10 +1448,11 @@
                 "productive": true
             }
         }, 
-        "productive33+": {
+        "p33": {
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1470,10 +1468,12 @@
                 "productive": true
             }
         }, 
-        "productive38+": {
+        "picked": {
+            "accession": {}, 
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1482,17 +1482,18 @@
                     "valid": true
                 }
             }, 
+            "gene": {}, 
+            "library": {}, 
             "sample": {
-                "average phred": {
-                    "$gt": 38
-                }, 
-                "productive": true
-            }
-        },
-        "productiveN033+": {
+                "valid": true
+            }, 
+            "survey": {}
+        }, 
+        "pn033": {
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1508,11 +1509,12 @@
                 "n count": 0, 
                 "productive": true
             }
-        },
-        "productiveN1+33+": {
+        }, 
+        "pn133": {
             "diagram": {
                 "feature": [
                     "region", 
+                    "phred", 
                     "name", 
                     "functionality"
                 ], 
@@ -1530,6 +1532,28 @@
                 }, 
                 "productive": true
             }
+        }, 
+        "valid": {
+            "accession": {}, 
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "phred", 
+                    "name", 
+                    "functionality", 
+                    "in frame", 
+                    "picked"
+                ], 
+                "track": {
+                    "valid": true
+                }
+            }, 
+            "gene": {}, 
+            "library": {}, 
+            "sample": {
+                "valid": true
+            }, 
+            "survey": {}
         }
     }, 
     "region": {
@@ -2050,6 +2074,139 @@
                 }
             ]
         }, 
+        "analyzed_sample": {
+            "collection": "analyzed_sample", 
+            "index": [
+                {
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ]
+                    ], 
+                    "name": "analyzed sample id", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.valid", 
+                            1
+                        ]
+                    ], 
+                    "name": "analyzed sample valid", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.gapped", 
+                            1
+                        ]
+                    ], 
+                    "name": "analyzed sample gapped", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
+                    "name": "analyzed sample library", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.conserved cdr3 c", 
+                            1
+                        ]
+                    ], 
+                    "name": "sample conserved cdr3 c", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.conserved cdr3 w", 
+                            1
+                        ]
+                    ], 
+                    "name": "sample conserved cdr3 w", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ], 
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
+                    "name": "unique analyzed sample in library", 
+                    "unique": true
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
+                    "name": "valid analyzed sample with library", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ], 
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.productive", 
+                            1
+                        ]
+                    ], 
+                    "name": "valid productive analyzed sample with library", 
+                    "unique": false
+                }, 
+                {
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ], 
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.productive", 
+                            1
+                        ], 
+                        [
+                            "head.average phred", 
+                            1
+                        ]
+                    ], 
+                    "name": "valid productive analyzed sample with phred and library", 
+                    "unique": false
+                }
+            ]
+        }, 
         "gene": {
             "collection": "gene", 
             "index": [
@@ -2149,113 +2306,157 @@
             "collection": "sample", 
             "index": [
                 {
-                    "key": [[ "head.id", 1 ]], 
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ]
+                    ], 
                     "name": "sample id", 
                     "unique": false
                 }, 
                 {
-                    "key": [[ "head.valid", 1 ]], 
+                    "key": [
+                        [
+                            "head.valid", 
+                            1
+                        ]
+                    ], 
                     "name": "sample valid", 
                     "unique": false
                 }, 
                 {
-                    "key": [[ "head.gapped", 1 ]], 
+                    "key": [
+                        [
+                            "head.gapped", 
+                            1
+                        ]
+                    ], 
                     "name": "sample gapped", 
                     "unique": false
                 }, 
                 {
-                    "key": [[ "head.library", 1 ]], 
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
                     "name": "sample library", 
                     "unique": false
                 }, 
                 {
-                    "key": [[ "head.conserved cdr3 c", 1 ]], 
+                    "key": [
+                        [
+                            "head.conserved cdr3 c", 
+                            1
+                        ]
+                    ], 
                     "name": "sample conserved cdr3 c", 
                     "unique": false
                 }, 
                 {
-                    "key": [[ "head.conserved cdr3 w", 1 ]], 
+                    "key": [
+                        [
+                            "head.conserved cdr3 w", 
+                            1
+                        ]
+                    ], 
                     "name": "sample conserved cdr3 w", 
                     "unique": false
                 }, 
                 {
-                    "key": [[ "head.id", 1 ], [ "head.library", 1 ]], 
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ], 
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
                     "name": "unique sample in library", 
                     "unique": true
                 }, 
                 {
-                    "key": [[ "head.valid", 1 ], [ "head.library", 1 ]], 
+                    "key": [
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.library", 
+                            1
+                        ]
+                    ], 
                     "name": "valid sample with library", 
                     "unique": false
                 }, 
                 {
-                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ]], 
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ], 
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.productive", 
+                            1
+                        ]
+                    ], 
                     "name": "valid productive sample with library", 
                     "unique": false
                 }, 
                 {
-                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ], [ "head.average phred", 1 ]], 
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ], 
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.productive", 
+                            1
+                        ], 
+                        [
+                            "head.average phred", 
+                            1
+                        ]
+                    ], 
                     "name": "valid productive sample with phred and library", 
                     "unique": false
-                },
+                }, 
                 {
-                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ], [ "head.average phred", 1 ], ["head.n count", 1]], 
+                    "key": [
+                        [
+                            "head.library", 
+                            1
+                        ], 
+                        [
+                            "head.valid", 
+                            1
+                        ], 
+                        [
+                            "head.productive", 
+                            1
+                        ], 
+                        [
+                            "head.average phred", 
+                            1
+                        ], 
+                        [
+                            "head.n count", 
+                            1
+                        ]
+                    ], 
                     "name": "valid productive sample with phred and library and n count", 
-                    "unique": false
-                }
-            ]
-        }, 
-        "analyzed_sample": {
-            "collection": "analyzed_sample", 
-            "index": [
-                {
-                    "key": [[ "head.id", 1 ]], 
-                    "name": "analyzed sample id", 
-                    "unique": false
-                }, 
-                {
-                    "key": [[ "head.valid", 1 ]], 
-                    "name": "analyzed sample valid", 
-                    "unique": false
-                }, 
-                {
-                    "key": [[ "head.gapped", 1 ]], 
-                    "name": "analyzed sample gapped", 
-                    "unique": false
-                }, 
-                {
-                    "key": [[ "head.library", 1 ]], 
-                    "name": "analyzed sample library", 
-                    "unique": false
-                }, 
-                {
-                    "key": [[ "head.conserved cdr3 c", 1 ]], 
-                    "name": "sample conserved cdr3 c", 
-                    "unique": false
-                }, 
-                {
-                    "key": [[ "head.conserved cdr3 w", 1 ]], 
-                    "name": "sample conserved cdr3 w", 
-                    "unique": false
-                }, 
-                {
-                    "key": [[ "head.id", 1 ], [ "head.library", 1 ]], 
-                    "name": "unique analyzed sample in library", 
-                    "unique": true
-                }, 
-                {
-                    "key": [[ "head.valid", 1 ], [ "head.library", 1 ]], 
-                    "name": "valid analyzed sample with library", 
-                    "unique": false
-                }, 
-                {
-                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ]], 
-                    "name": "valid productive analyzed sample with library", 
-                    "unique": false
-                }, 
-                {
-                    "key": [[ "head.library", 1 ], [ "head.valid", 1 ], [ "head.productive", 1 ], [ "head.average phred", 1 ]], 
-                    "name": "valid productive analyzed sample with phred and library", 
                     "unique": false
                 }
             ]
@@ -2264,12 +2465,22 @@
             "collection": "survey", 
             "index": [
                 {
-                    "key": [ [ "head.id", 1 ] ], 
+                    "key": [
+                        [
+                            "head.id", 
+                            1
+                        ]
+                    ], 
                     "name": "survey id", 
                     "unique": true
-                },
+                }, 
                 {
-                    "key": [ [ "head.name", 1 ] ], 
+                    "key": [
+                        [
+                            "head.name", 
+                            1
+                        ]
+                    ], 
                     "name": "survey name", 
                     "unique": true
                 }

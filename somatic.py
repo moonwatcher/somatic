@@ -62,6 +62,10 @@ log_levels = {
     'critical': logging.CRITICAL
 }
 
+
+def to_simple_json(node):
+    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4)
+
 def parse_match(match):
     if match is not None:
         return dict(((k.replace('_', ' '),v) for k,v in match.groupdict().items() if k and v))
@@ -309,6 +313,12 @@ def load_configuration():
                     'title': 'strain',
                     'width': 'auto',
                     'value': 'strain',
+                },
+                'phred': {
+                    'format': lambda x: '' if x is None else '{:.3}'.format(x),
+                    'title': 'Q',
+                    'width': 'auto',
+                    'value': 'average phread',
                 },
                 'region': {
                     'format': lambda x: x,
@@ -1774,7 +1784,6 @@ class Sample(object):
         self._identify_d_j_junction()
         self._identify_cdr3()
         self._identify_chewback()
-        self._identify_effective_region()
         self._check_for_stop_codon()
         self._check_for_productivity()
         self._analyze_quality()
@@ -1796,18 +1805,17 @@ class Sample(object):
         self.head['JH length'] = None
         self.head['VH length'] = None
         self.head['average phred'] = None
-        self.head['effective query start'] = None
-        self.head['effective query end'] = None
-        self.head['effective query length'] = None
-
         self.body['primary'] = {}
-        self.body['effective'] = None
 
-        if 'comment' in self.body:
-            del self.body['comment']
-
-        if 'framed by' in self.body:
-            del self.body['framed by']
+        for term in [
+            'effective',
+            'comment',
+            'framed by',
+            'effective query start',
+            'effective query end'
+        ]:
+            if term in self.body:
+                del self.body[term]
 
         if 'hit' in self.body:
             self.body['hit'] = [ hit for hit in self.body['hit'] if hit['region'] in self.configuration['region'].keys()]
@@ -1829,6 +1837,13 @@ class Sample(object):
     def _add_hit(self, hit):
         self.hit.append(hit)
         self._load_hit(hit)
+        for term in [
+            'effective',
+            'effective query start',
+            'effective query end'
+        ]:
+            if term in self.body:
+                del self.body[term]
 
     def _load_hit(self, hit):
         if 'uuid' not in hit:
@@ -2119,11 +2134,9 @@ class Sample(object):
             self._identify_junction(vh, jh, 'V-J')
 
     def _check_for_stop_codon(self):
-        if self.framed and self.effective.codon:
+        if self.effective.codon and self.framed:
             if '*' in self.effective.codon:
                 self.head['premature'] = True
-            else:
-                self.head['premature'] = False
 
     def _identify_cdr3(self):
         def locate_cdr3_start(vh):
@@ -2244,23 +2257,8 @@ class Sample(object):
         for name, region in self.primary.items():
             self.head['{} length'.format(name)] = region['query'].length
             region['average phread'] = float(sum(region['query'].phred)) / float((region['query'].length))
+
         self.head['average phred'] = float(sum(self.effective.phred)) / float((self.effective.length))
-
-    def _identify_effective_region(self):
-        self.head['effective query start'] = self.sequence.length
-        self.head['effective query end'] = 0
-        for hit in self.hit:
-            if hit['valid'] and 'query start' in hit and 'query end' in hit:
-                self.head['effective query start'] = min(self.head['effective query start'], hit['query start'])
-                self.head['effective query end'] = max(self.head['effective query end'], hit['query end'])
-
-        self.head['effective query length'] = self.head['effective query end'] - self.head['effective query start']
-        if self.head['effective query length'] < 0:
-            self.head['effective query start'] = 0
-            self.head['effective query end'] = 0
-            self.head['effective query length'] = 0
-
-        self.body['effective'] = self.sequence.crop(self.head['effective query start'], self.head['effective query end'])
 
     def invalidate(self, message):
         self.head['valid'] = False
@@ -2353,6 +2351,22 @@ class Sample(object):
 
     @property
     def effective(self):
+        if 'effective' not in self.body:
+            start = self.sequence.length
+            end = 0
+            for hit in self.hit:
+                if hit['valid']:
+                    start = min(start, hit['query start'])
+                    end = max(end, hit['query end'])
+
+            if start > end:
+                self.body['effective'] = self.sequence
+                self.body['effective query start'] = 0
+                self.body['effective query end'] = self.sequence.length
+            else:
+                self.body['effective query start'] = start
+                self.body['effective query end'] = end
+                self.body['effective'] = self.sequence.crop(start, end)
         return self.body['effective']
 
     @property
@@ -2582,6 +2596,7 @@ class Histogram(object):
         plot['plot'].autoscale_view()
 
     def save(self, path):
+        import matplotlib.pyplot as pyplot
         for key,plot in self.plots.items():
             plot['plot'].legend()
         pyplot.savefig('{}.pdf'.format(path))
@@ -2962,22 +2977,17 @@ class Survey(object):
         if breakdown['type'] == 'vj':
             for j in range(len(breakdown['region']['JH'])):
                 for v in range(len(breakdown['region']['VH'])):
-                    if (j in breakdown['region']['JH'] and \
-                        v in breakdown['region']['VH']):
-                        ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                        vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                        self.slice[slice]['correlation']['vj'][ji][vi] += breakdown['portion']
+                    ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                    vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                    self.slice[slice]['correlation']['vj'][ji][vi] += breakdown['portion']
         else:
             for j in range(len(breakdown['region']['JH'])):
                 for d in range(len(breakdown['region']['DH'])):
                     for v in range(len(breakdown['region']['VH'])):
-                        if (j in breakdown['region']['JH'] and \
-                            d in breakdown['region']['DH'] and \
-                            v in breakdown['region']['VH']):
-                            ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                            di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
-                            vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                            self.slice[slice]['correlation']['vdj'][ji][di][vi] += breakdown['portion']
+                        ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
+                        di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
+                        vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
+                        self.slice[slice]['correlation']['vdj'][ji][di][vi] += breakdown['portion']
 
     def _fetch_region_repertoire(self, query):
         repertoire = []
@@ -3188,7 +3198,8 @@ class Diagram(object):
         self.pipeline = pipeline
         self.sample = sample
         self.sequence = self.sample.effective
-        self.offset = self.sample.head['effective query start']
+        self.offset = self.sample.body['effective query start']
+
         self.node = {
             'track offset': {},
             'width': {},
@@ -3220,7 +3231,7 @@ class Diagram(object):
                     feature['width'] = 0
                     for track in self.track:
                         if feature['value'] in track:
-                            feature['width'] = max(feature['width'], len(track[feature['value']]))
+                            feature['width'] = max(feature['width'], len(feature['format'](track[feature['value']])))
                 self.pattern['feature'].append(feature)
                 self.pattern['phrase'].append('{{: <{:}}}'.format(feature['width']))
                 self.pattern['title'].append(feature['title'])
@@ -3323,7 +3334,7 @@ class Diagram(object):
             buffer.write('{: <{}}'.format(self.offset, self.width['sample read frame']))
             buffer.write(self.gap)
             
-        for index in range(self.width['sample read frame'] + self.offset, self.sequence.length, 3):
+        for index in range(self.width['sample read frame'] + self.offset, self.sequence.length + self.offset, 3):
             buffer.write('{: <3}'.format(index))
             buffer.write(self.gap)
         buffer.write('\n')
@@ -3333,6 +3344,7 @@ class Diagram(object):
         if self.width['sample read frame'] > 0:
             buffer.write(self.sequence.nucleotide[0:self.width['sample read frame']])
             buffer.write(self.gap)
+
         for index in range(self.width['sample read frame'], self.sequence.length, 3):
             buffer.write(self.sequence.nucleotide[index:index + 3])
             buffer.write(self.gap)
@@ -3343,6 +3355,7 @@ class Diagram(object):
         if self.width['sample read frame'] > 0:
             buffer.write(self.sequence.quality[0:self.width['sample read frame']])
             buffer.write(self.gap)
+
         for index in range(self.width['sample read frame'], self.sequence.length, 3):
             buffer.write(self.sequence.quality[index:index + 3])
             buffer.write(self.gap)
@@ -3354,6 +3367,7 @@ class Diagram(object):
             if self.width['sample read frame'] > 0:
                 buffer.write(' ' * self.width['sample read frame'])
                 buffer.write(self.gap)
+
             for codon in self.sequence.codon:
                 buffer.write('{: <3}'.format(codon))
                 buffer.write(self.gap)
@@ -3707,6 +3721,20 @@ class Library(object):
         self.pipeline = pipeline
         self.node = node
 
+    def __str__(self):
+        return '| ' + ' | '.join(['{:<9}', '{:<3}', '{:<2}', '{:<2}', '{:<30}', '{:12}', '{:8}', '{:8}', '{:<25}', '{}']).format(
+            '' if 'strain' not in self.head else str(self.head['strain']), 
+            '' if 'exposure' not in self.head else str(self.head['exposure']), 
+            '' if 'biological repetition' not in self.body else str(self.body['biological repetition']), 
+            '' if 'technical repetition' not in self.body else str(self.body['technical repetition']), 
+            '' if 'tissue' not in self.head else str(self.head['tissue']),
+            str(self.count), 
+            '0' if self.count == 0 else '{:.4}'.format(self.valid_count/self.count * 100.0), 
+            '0' if self.valid_count == 0 else '{:.4}'.format(self.productive_count / self.valid_count * 100.0), 
+            self.id, 
+            '' if self.path is None else self.path
+        )
+
     @property
     def configuration(self):
         return self.pipeline.configuration
@@ -3728,11 +3756,60 @@ class Library(object):
         return None if 'strain' not in self.head else self.head['strain']
 
     @property
+    def path(self):
+        if 'path' in self.body:
+            return self.body['path']
+        else:
+            return None
+
+    @property
     def reference(self):
         if 'reference' in self.body:
             return self.body['reference']
         else:
             return None
+
+    @property
+    def count(self):
+        if 'count' in self.body:
+            return self.body['count']
+        else:
+            return None
+
+    @count.setter
+    def count(self, value):
+        if value is None and 'count' in self.body:
+            del self.body['count']
+        else:
+            self.body['count'] = value
+
+    @property
+    def valid_count(self):
+        if 'valid count' in self.body:
+            return self.body['valid count']
+        else:
+            return None
+
+    @valid_count.setter
+    def valid_count(self, value):
+        if value is None and 'valid count' in self.body:
+            del self.body['valid count']
+        else:
+            self.body['valid count'] = value
+
+    @property
+    def productive_count(self):
+        if 'count productive' in self.body:
+            return self.body['count productive']
+        else:
+            return None
+
+    @productive_count.setter
+    def productive_count(self, value):
+        if value is None and 'count productive' in self.body:
+            del self.body['count productive']
+        else:
+            self.body['count productive'] = value
 
     @property
     def document(self):
@@ -4308,6 +4385,11 @@ class Pipeline(object):
                 cmd.query,
                 cmd.instruction['profile'])
 
+        elif cmd.action == 'libraryList':
+            self.library_list(
+                cmd.query,
+                cmd.instruction['profile'],
+                cmd.instruction['drop'])
 
         elif cmd.action == 'genePopulate':
             for path in cmd.instruction['path']:
@@ -4367,7 +4449,6 @@ class Pipeline(object):
                 cmd.instruction['json'],
                 cmd.instruction['alignment'],
                 cmd.instruction['profile'])
-                
 
 
     def sample_populate(self, library, strain, drop):
@@ -4431,7 +4512,6 @@ class Pipeline(object):
             sample = Sample(self, node)
             sample.analyze()
             buffer.append(sample)
-            # print(to_json(sample.document))
             if len(buffer) >= self.configuration['constant']['buffer size']:
                 count += flush(buffer, collection)
                 buffer = []
@@ -4441,7 +4521,7 @@ class Pipeline(object):
 
     def sample_count(self, query, profile):
         q = self.build_query(query, profile, 'library')
-        print(self.resolver.count('sample', q))
+        print(self.resolver.count('analyzed_sample', q))
 
     def sample_fasta(self, query, limit, skip, profile):
         q = self.build_query(query, profile, 'sample')
@@ -4481,14 +4561,13 @@ class Pipeline(object):
             survey = self.resolver.survey_fetch(id)
             if survey is None:
                 survey = Survey(self, None, request, name)
-                cursor = self.resolver.make_cursor('sample', q, limit, skip)
+                cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
                 self.log.debug('collecting samples for survey %s', survey.name)
                 for node in cursor:
                     survey.add_sample(Sample(self, node))
                 cursor.close()
                 survey.done()
                 self.resolver.survey_save(survey)
-        # print(to_json(survey))
         return survey
 
     def survey_plot(self, names):
@@ -4520,7 +4599,7 @@ class Pipeline(object):
             histogram = Histogram(' vs '.join(plot_name))
             for index,survey in enumerate(surveys):
                 histogram.draw(survey, colors[index][0], colors[index][1])
-            histogram.save('_'.join(plot_name))
+            histogram.save('+'.join(plot_name))
         else:
             raise ValueError('comparison plots take up to 4 surveys')
 
@@ -4604,7 +4683,6 @@ class Pipeline(object):
         print('{:<40}\t{:<9}\t{:<9}'.format('uuid', 'count', 'name'))
         print('-'* ((40 + 9 + 15) + (3*4)))
         q = self.build_query(query, profile, 'survey')
-        request = { 'limit': limit, 'skip': skip, 'query': q }
         cursor = self.resolver.make_cursor('survey', q, limit, skip)
         for node in cursor:
             survey = Survey(self, node)
@@ -4635,6 +4713,64 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'exposure' not in x else x['head']['exposure'])
         print(to_json(buffer))
 
+    def library_update_count(self, library, profile, drop):
+        if library.count is None or drop:
+            library.count = self.resolver.count('sample', self.build_query({'library': library.id}, 'all', 'sample'))
+            library.productive_count = self.resolver.count('analyzed_sample', self.build_query({'library': library.id, 'valid': True, 'productive': True}, 'all', 'sample'))
+            library.valid_count = self.resolver.count('analyzed_sample', self.build_query({'library': library.id, 'valid': True}, 'all', 'sample'))
+            self.resolver.library_save(library)
+
+    def library_list(self, query, profile, drop):
+        title = ' | '.join (
+            ['{:<9}', '{:<3}', '{:<2}', '{:<2}', '{:<30}', '{:12}', '{:8}', '{:8}', '{:<25}', '{}']
+        ).format (
+            'Strain', 'Exp', 'B', 'T', 'Tissue', 'Count', 'Valid', 'Prod', 'ID', 'Path'
+        )
+        print('| ' + title)
+        separator = '-|-'.join (
+            ['{:-<9}', '{:-<3}', '{:-<2}', '{:-<2}', '{:-<30}', '{:-<12}', '{:-<8}', '{:-<8}', '{:-<25}', '{:-<4}']
+        ).format (
+            '', '', '', '', '', '', '', '', '', ''
+        )
+
+        print('| ' + separator)
+        # print('-'* len(title))
+        buffer = {}
+        order = []
+        q = self.build_query(query, profile, 'library')
+        cursor = self.resolver.make_cursor('library', q)
+        cursor.sort (
+            [
+                ('head.exposure', pymongo.DESCENDING),
+                ('head.tissue', pymongo.DESCENDING),
+                ('body.biological repetition', pymongo.ASCENDING),
+                ('body.technical repetition', pymongo.ASCENDING),
+            ]
+        )
+
+        for node in cursor:
+            library = Library(self, node)
+            if library.reference is None:
+                self.library_update_count(library, profile, drop)
+            buffer[library.id] = library
+            order.append(library)
+        cursor.close()
+
+        for library in buffer.values():
+            if library.reference is not None:
+                if library.count is None or drop:
+                    library.count = 0
+                    library.productive_count = 0
+                    library.valid_count = 0
+                    for reference in library.reference:
+                        if reference in buffer:
+                            library.count += buffer[reference].count
+                            library.productive_count += buffer[reference].productive_count
+                            library.valid_count += buffer[reference].valid_count
+                    self.resolver.library_save(library)
+
+        for library in order:
+            print(str(library))
 
     def gene_populate(self, path):
         count = 0
