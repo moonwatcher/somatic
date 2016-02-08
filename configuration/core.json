@@ -791,7 +791,7 @@
                 }, 
                 {
                     "argument": [
-                        "names", 
+                        "id", 
                         "profile", 
                         "limit", 
                         "skip"
@@ -811,6 +811,19 @@
                     "instruction": {
                         "help": "list cached surveys", 
                         "name": "surveyList"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "name", 
+                        "library", 
+                        "profile", 
+                        "limit", 
+                        "skip"
+                    ], 
+                    "instruction": {
+                        "help": "make a study", 
+                        "name": "study"
                     }
                 }, 
                 {
