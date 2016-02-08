@@ -4,6 +4,7 @@
 # Somatic V/D/J recombination analyzer
 # Author: Lior Galanti < lior.galanti@nyu.edu >
 # NYU Center for Genetics and System Biology 2015
+# { V } --> VDP5 --> VDN --> VDP3 --> { D } --> DJP5 --> DJN --> DJP3 --> { J }
 #
 # somatic is free software; you can redistribute it and/or modify it under the terms of
 # the GNU General Public License as published by the Free Software Foundation;
@@ -30,8 +31,6 @@ import pymongo
 import pickle
 
 from numpy import *
-#import matplotlib
-#import matplotlib.pyplot as pyplot
 
 from io import StringIO, BytesIO
 from datetime import timedelta, datetime
@@ -61,7 +60,6 @@ log_levels = {
     'error': logging.ERROR,
     'critical': logging.CRITICAL
 }
-
 
 def to_simple_json(node):
     return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4)
@@ -208,7 +206,6 @@ def load_configuration():
         configuration['interface']['prototype']['profile']['parameter']['help'] = '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
         configuration['expression'] = {
             'ncbi accession url': 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}',
-            'gapped sequence': re.compile('^\s+Query_[0-9]+\s+(?P<offset>[0-9]+)\s+(?P<sequence>[ATCGN-]+)\s+[0-9]+$'),
             'blat hit': re.compile(
                 r"""
                 (?P<match>[^\t]+)\t
@@ -235,27 +232,6 @@ def load_configuration():
                 """,
                 re.VERBOSE
             ),
-            'expand hit': re.compile(
-                r"""
-                (?P<region>VH|DH|JH),
-                (?P<subject_id>[^,]+),
-                (?P<query_start>[^,]+),
-                (?P<query_end>[^,]+),
-                (?P<subject_start>[^,]+),
-                (?P<subject_end>[^,]+),
-                (?P<gap_openings>[^,]+),
-                (?P<gaps>[^,]+),
-                (?P<mismatch>[^,]+),
-                (?P<identical>[^,]+),
-                (?P<bit_score>[^,]+),
-                (?P<evalue>[^,]+),
-                (?P<alignment_length>[^,]+),
-                (?P<subject_strand>[^,]),
-                (?P<query_strand>[^,])
-                """,
-                re.VERBOSE
-            ),
-            'igblast compressed hit': '{region},{subject id},{query start},{query end},{subject start},{subject end},{gap openings},{gaps},{mismatch},{identical},{bit score},{evalue},{alignment length},{subject strand},{query strand}',
             'igblast hit': re.compile(
                 r"""
                 (?P<region>[VDJ])\t
@@ -277,27 +253,6 @@ def load_configuration():
                 re.VERBOSE
             ),
             'igblast reversed query': '# Note that your query represents the minus strand of a V gene and has been converted to the plus strand.',
-            'imgt fasta header': re.compile(
-                r"""
-                ^>
-                (?P<accession>[^|]*)\|
-                (?P<allele_name>(?P<gene_name>(?P<subgroup>[^-]+)[^\*]+)\*[0-9]+)\|
-                (?P<organism_name>[^|_]*)(?:_(?P<strain>[^|]+))?\|
-                (?P<functionality>[\[\(]?(?:F|ORF|P)[\]\)]?)\|
-                (?P<region>V|D|J)-REGION\|
-                (?:(?P<start>[0-9]+)\.\.(?P<end>[0-9]+))?\s*\|
-                (?P<length>[0-9]+)\snt\|
-                (?P<read_frame>[123]|NR)\|
-                [^|]*\|
-                [^|]*\|
-                [^|]*\|
-                [^|]*\|
-                [^|]*\|
-                [^|]*\|
-                (?P<polarity>rev-compl)?\s*\|$
-                """,
-                re.VERBOSE
-            ),
             'nucleotide sequence': re.compile('^[ACGTRYKMSWBDHVN]+$', re.IGNORECASE)
         }
         configuration['diagram'] = {
@@ -359,7 +314,46 @@ def load_configuration():
             }
         }
 
+    # load a reverse complement table for ambiguity code
+    configuration['complement'] = {}
+    for k,v in configuration['iupac nucleic acid notation'].items():
+        configuration['complement'][k] = v['reverse']
+
+    # load collection of codons possibly encoding a stop codon
+    configuration['stop codon repertoire'] = possibly_stop_codon(configuration)
+
     return configuration
+
+def possibly_stop_codon(configuration):
+    def expand(motif, space=[ '' ]):
+        position = len(space[0])
+        if position < len(motif):
+            next = []
+            for option in motif[position]:
+                for element in space:
+                    next.append(element + option)
+            return expand(motif, next)
+        else:
+            return space
+    
+    seed = [ k for k,v in configuration['nucleic to amino'].items() if v == '*' ]
+    feature = {
+        'codon': dict([ (c, { 'motif': [] }) for c in seed ]),
+        'space': set()
+    }
+
+    for triplet, codon in feature['codon'].items():
+        for nucleotide in triplet:
+            motif = []
+            for k,n in configuration['iupac nucleic acid notation'].items():
+                if nucleotide in n['option']:
+                    motif.append(k)
+            codon['motif'].append(motif)
+
+        codon['possible'] = expand(codon['motif'])
+        feature['space'] |= set(codon['possible'])
+    return feature['space']
+
 
 class InvalidSampleError(Exception):
     def __init__(self, message):
@@ -852,6 +846,20 @@ class Sequence(object):
             return None
 
     @property
+    def classified(self):
+        classified = None
+        if self.codon:
+            classified = []
+            for codon in self.codon:
+                acid = self.configuration['iupac amino acid notation'][codon]
+                if 'class code' in acid:
+                    classified.append(acid['class code'])
+                else:
+                    classified.append('X')
+            classified = ''.join(classified)
+        return classified
+
+    @property
     def phred(self):
         if 'phred' not in self.node and self.quality:
             self.node['phred'] = [ (ord(c) - 33) for c in self.quality ]
@@ -1313,6 +1321,16 @@ class Gene(Artifact):
 
                 if 'start' in artifact and 'end' not in artifact and 'sequence' in artifact:
                     artifact['end'] = artifact['start'] + artifact['sequence'].length
+
+    @property
+    def row(self):
+        return '| ' + ' | '.join(['{:<13}', '{:<12}', '{:<1}', '{:<3}', '{:<12}']).format(
+            str(self.body['gene']), 
+            str(self.body['family']), 
+            str(self.body['functionality']), 
+            str(self.body['length']), 
+            str(self.body['reference start']), 
+        )
 
     @property
     def framed(self):
@@ -2292,6 +2310,13 @@ class Sample(object):
         print(self.json)
 
     @property
+    def cdr3_sequence(self):
+        if 'CDR3' in self.primary:
+            return self.primary['CDR3']
+        else:
+            return None
+
+    @property
     def configuration(self):
         return self.pipeline.configuration
 
@@ -2577,8 +2602,8 @@ class Histogram(object):
 
     def draw_expression(self, survey, edgecolor, facecolor, alpha):
         for region in ['VH', 'DH', 'JH']:
-            total = sum([ x['value'] for x in survey.body['expression'] if x['region'] == region and x['value']])
-            for x in survey.body['expression']:
+            total = sum([ x['value'] for x in survey.expression if x['region'] == region and x['value']])
+            for x in survey.expression:
                 if x['region'] == region:
                     if x['value'] :
                         x['value'] /= total
@@ -2587,12 +2612,12 @@ class Histogram(object):
 
         plot = self.plots['expression']
         width = 0.3
-        left = arange(len(survey.body['expression'])) + (float(self.count) * width)
-        height = array([ x['value'] for x in survey.body['expression'] ], dtype=float64)
+        left = arange(len(survey.expression)) + (float(self.count) * width)
+        height = array([ x['value'] for x in survey.expression ], dtype=float64)
         height = array([ math.log(1.0 + (100.0 * x), 2) for x in height ])
         plot['plot'].bar(left, height, label=survey.name, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
         plot['plot'].set_xticks(left)
-        plot['plot'].set_xticklabels([ x['name'] for x in survey.body['expression'] ], rotation='vertical', size=5)        
+        plot['plot'].set_xticklabels([ x['name'] for x in survey.expression ], rotation='vertical', size=5)        
         plot['plot'].autoscale_view()
 
     def save(self, path):
@@ -2670,6 +2695,145 @@ class Survey(object):
             'family': self._initialize_slice('family'),
             'allele': self._initialize_slice('allele'),
         }
+
+    @property
+    def expression(self):
+        if 'expression' not in self.body:
+            self.log.debug('loading expression on %s', self)
+            self.body['expression'] = {}
+
+            for name,region in self.repertoire.items():
+                for gene in region:
+                    self.body['expression'][gene['allele']] = {
+                        'name': gene['allele'],
+                        'functionality': gene['functionality'],
+                        'start': gene['start'],
+                        'end': gene['end'],
+                        'length': gene['end'] - gene['start'],
+                        'region': name,
+                        'value': 0,
+                    }
+
+            # load expression from VJ joints
+            for j in self.repertoire['JH']:
+                for v in self.repertoire['VH']:
+                    # find the index of the V and J genes
+                    ji = self.lookup['allele']['JH']['lookup'][j['allele']]
+                    vi = self.lookup['allele']['VH']['lookup'][v['allele']]
+
+                    # find the expression value
+                    value = self.slice['allele']['correlation']['vj'][ji][vi]
+
+                    # add the expression value to each of the genes
+                    self.body['expression'][j['allele']]['value'] += value
+                    self.body['expression'][v['allele']]['value'] += value
+
+            # load expression from VDJ joints
+            for j in self.repertoire['JH']:
+                for d in self.repertoire['DH']:
+                    for v in self.repertoire['VH']:
+                        # find the index of the V, D and J genes
+                        ji = self.lookup['allele']['JH']['lookup'][j['allele']]
+                        di = self.lookup['allele']['DH']['lookup'][d['allele']]
+                        vi = self.lookup['allele']['VH']['lookup'][v['allele']]
+
+                        # find the expression value
+                        value = self.slice['allele']['correlation']['vdj'][ji][di][vi]
+
+                        # add the expression value to each of the genes
+                        self.body['expression'][j['allele']]['value'] += value
+                        self.body['expression'][d['allele']]['value'] += value
+                        self.body['expression'][v['allele']]['value'] += value
+
+            # sort expression by start point
+            self.body['expression'] = sorted(self.body['expression'].values(), key=lambda x: x['start'])
+
+        return self.body['expression']
+
+    @property
+    def intensity(self):
+        def load_region_intensity(name, interval, genes):
+            genes = sorted(genes, key=lambda x: x['start'])
+            intensity = {
+                'max name length': max([len(gene['name']) for gene in genes]),
+                'gene count': len(genes),
+                'tile length': interval,
+                'reference start': genes[0]['start'],
+                'reference end': genes[-1]['end'],
+            }
+            intensity['length'] = intensity['reference end'] - intensity['reference start']
+            intensity['tile count'] = math.ceil(float(intensity['length']) / float(intensity['tile length']))
+            intensity['tiled length'] = intensity['tile count'] * intensity['tile length']
+            intensity['tiled start'] = intensity['reference start'] - math.floor(float(intensity['tiled length'] - intensity['length']) / 2.0)
+            intensity['tiled end'] = intensity['tiled start'] + intensity['tiled length']
+            intensity['tiles'] = [ { 'gene':[], 'intensity': 0.0 } for i in range(intensity['tile count']) ]
+
+            intensity['tiles'] = []
+            for index in range(intensity['tile count']):
+                intensity['tiles'].append(
+                    {
+                        'intensity': 0.0,
+                        'gene':[],
+                        'reference start': intensity['tiled start'] + intensity['tile length'] * index,
+                        'reference end': intensity['tiled end'] + intensity['tile length'] * (index + 1),
+                    }
+                )
+            for gene in genes:
+                tile = None
+                left = math.floor(float(gene['start'] - intensity['tiled start']) / float(intensity['tile length']))
+                right = math.floor(float(gene['end'] - intensity['tiled start']) / float(intensity['tile length']))
+                if left == right:
+                    tile = intensity['tiles'][left]
+                else:
+                    split = intensity['tiled start'] + ( right * intensity['tile length'] )
+                    left_part = float(split - gene['start']) / float(gene['length'])
+                    right_part = float(gene['end'] - split) / float(gene['length'])
+                    if left_part > right_part:
+                        tile = intensity['tiles'][left]
+                    else:
+                        tile = intensity['tiles'][right]
+                tile['intensity'] += gene['value']
+                tile['gene'].append(gene)
+            return intensity
+
+        if 'intensity' not in self.body:
+            self.log.debug('loading intensity on %s', self)
+            self.body['intensity'] = {}
+
+            VH = [ gene for gene in self.expression if gene['region'] == 'VH' ]
+            self.body['intensity']['VH'] = load_region_intensity('VH', 70000, VH)
+
+            DH = [ gene for gene in self.expression if gene['region'] == 'DH' ]
+            self.body['intensity']['DH'] = load_region_intensity('DH', 2500, DH)
+
+            JH = [ gene for gene in self.expression if gene['region'] == 'JH' ]
+            self.body['intensity']['JH'] = load_region_intensity('JH', 400, JH)
+        return self.body['intensity']
+
+    @property
+    def prevalence(self):
+        if 'prevalence' not in self.body:
+            self.log.debug('loading prevalence on %s', self)
+            self.body['prevalence'] = {}
+
+            # load expression from VJ joints
+            for j in self.repertoire['JH']:
+                self.body['prevalence'][j['allele']] = {}
+                for v in self.repertoire['VH']:
+
+                    # find the index of the V and J genes
+                    ji = self.lookup['allele']['JH']['lookup'][j['allele']]
+                    vi = self.lookup['allele']['VH']['lookup'][v['allele']]
+
+                    # find the expression value
+                    value = self.slice['allele']['correlation']['vj'][ji][vi]
+                    for d in self.repertoire['DH']:
+                        di = self.lookup['allele']['DH']['lookup'][d['allele']]
+                        value += self.slice['allele']['correlation']['vdj'][ji][di][vi]
+
+                    self.body['prevalence'][j['allele']][v['allele']] = value
+
+        return self.body['prevalence']
 
     @property
     def configuration(self):
@@ -2936,42 +3100,12 @@ class Survey(object):
                 self.body['vdj'] = node['body']['vdj']
                 self.body['vj'] = node['body']['vj']
                 self.log.debug('cached survey loaded from %s', path)
+                if 'expression' in self.body:
+                    del self.body['expression']
+                if 'intensity' in self.body:
+                    del self.body['intensity']
             except KeyError:
                 self.log.warning('failed loading cached survey from %s', path)
-
-    def _load_expression(self):
-        self.body['expression'] = {}
-
-        for name,region in self.repertoire.items():
-            for gene in region:
-                self.body['expression'][gene['allele']] = {
-                    'name': gene['allele'],
-                    'functionality': gene['functionality'],
-                    'start': gene['start'],
-                    'end': gene['end'],
-                    'region': name,
-                    'value': 0,
-                }
-
-        for j in self.repertoire['JH']:
-            for v in self.repertoire['VH']:
-                ji = self.lookup['allele']['JH']['lookup'][j['allele']]
-                vi = self.lookup['allele']['VH']['lookup'][v['allele']]
-                value = self.slice['allele']['correlation']['vj'][ji][vi]
-                self.body['expression'][j['allele']]['value'] += value
-                self.body['expression'][v['allele']]['value'] += value
-
-        for j in self.repertoire['JH']:
-            for d in self.repertoire['DH']:
-                for v in self.repertoire['VH']:
-                    ji = self.lookup['allele']['JH']['lookup'][j['allele']]
-                    di = self.lookup['allele']['DH']['lookup'][d['allele']]
-                    vi = self.lookup['allele']['VH']['lookup'][v['allele']]
-                    value = self.slice['allele']['correlation']['vdj'][ji][di][vi]
-                    self.body['expression'][j['allele']]['value'] += value
-                    self.body['expression'][d['allele']]['value'] += value
-                    self.body['expression'][v['allele']]['value'] += value
-        self.body['expression'] = sorted(self.body['expression'].values(), key=lambda x: x['start'], reverse=True)
 
     def _add_sample_to_slice(self, slice, breakdown):
         if breakdown['type'] == 'vj':
@@ -4212,17 +4346,7 @@ class Pipeline(object):
         self.log = logging.getLogger('Pipeline')
         self.configuration = configuration
         self.resolver = Resolver(self)
-        self._stop_codon_feature = None
         
-        # load a reverse complement table for ambiguity code
-        self.configuration['complement'] = {}
-        for k,v in self.configuration['iupac nucleic acid notation'].items():
-            self.configuration['complement'][k] = v['reverse']
-            
-        # load collection of codons possibly encoding a stop codon
-        stop = [ k for k,v in self.configuration['nucleic to amino'].items() if v == '*' ]
-        motif = self.motif_for(stop)
-        self.configuration['stop codon repertoire'] = motif['space']
         for k,v in self.configuration['rss'].items():
             heptamer = [ Sequence(self, {'nucleotide': s, 'strand': True, 'read frame': 0}) for s in v['heptamer'] ]
             nonamer = [ Sequence(self, {'nucleotide': s, 'strand': True, 'read frame': 0}) for s in v['nonamer'] ]
@@ -4237,32 +4361,6 @@ class Pipeline(object):
     def verify_directory(self, path):
         if not os.path.exists(path):
             os.makedirs(path)
-
-    def motif_for(self, codons):
-        def expand(motif, space=[ '' ]):
-            position = len(space[0])
-            if position < len(motif):
-                next = []
-                for option in motif[position]:
-                    for element in space:
-                        next.append(element + option)
-                return expand(motif, next)
-            else:
-                return space
-                
-        feature = { 'codon': {}, 'space': set() }
-        for c in codons:
-            feature['codon'][c] = { 'motif':[] }
-        for triplet,codon in feature['codon'].items():
-            for nucleotide in triplet:
-                motif = []
-                codon['motif'].append(motif)
-                for k,n in self.configuration['iupac nucleic acid notation'].items():
-                    if nucleotide in n['option']:
-                        motif.append(k)
-            codon['possible'] = expand(codon['motif'])
-            feature['space'] |= set(codon['possible'])
-        return feature
 
     def build_query(self, override, profile, kind):
         query = {}
@@ -4309,7 +4407,14 @@ class Pipeline(object):
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-                
+
+        elif cmd.action == 'sampleEntropy':
+            self.sample_entropy(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+
         elif cmd.action == 'sampleAnalyze':
             self.sample_analyze(
                 cmd.query,
@@ -4358,6 +4463,12 @@ class Pipeline(object):
         elif cmd.action == 'surveyPlot':
             self.survey_plot(cmd.instruction['names'])
                 
+        elif cmd.action == 'surveyDensity':
+            self.survey_density(cmd.instruction['names'])
+
+        elif cmd.action == 'surveyPrevalence':
+            self.survey_prevalence(cmd.instruction['names'])
+
         elif cmd.action == 'surveyR':
             self.survey_r(cmd.instruction['names'])
                 
@@ -4374,7 +4485,6 @@ class Pipeline(object):
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
-
 
         elif cmd.action == 'libraryPopulate':
             for path in cmd.instruction['path']:
@@ -4397,6 +4507,11 @@ class Pipeline(object):
                 
         elif cmd.action == 'geneInfo':
             self.gene_info(
+                cmd.query,
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'geneList':
+            self.gene_list(
                 cmd.query,
                 cmd.instruction['profile'])
 
@@ -4450,7 +4565,7 @@ class Pipeline(object):
                 cmd.instruction['alignment'],
                 cmd.instruction['profile'])
 
-
+    # sample
     def sample_populate(self, library, strain, drop):
         count = 0
         if not library:
@@ -4547,11 +4662,69 @@ class Pipeline(object):
             sample.info(profile)
         cursor.close()
 
+    def sample_entropy(self, query, limit, skip, profile):
+        def make_k_mer(distribution, k):
+            node = {
+                'frequency': {},
+                'normalized': {},
+                'histogram': []
+            }
+            for sample in distribution['sample'].values():
+                for position in range(len(sample['codon']) - k + 1):
+                    mer = sample['codon'][position:position + k]
+                    if mer not in node['frequency']:
+                        node['frequency'][mer] = 0
+                    node['frequency'][mer] += sample['count']
+            node['count'] = len(node['frequency'])
+            node['coverage'] = float(node['count']) / float(pow(20,k))
+            total = float(sum(list(node['frequency'].values())))
+            for key,value in node['frequency'].items():
+                node['normalized'][key] = float(value) / total
+            distribution['kmer'][str(k)] = node
+
+        q = self.build_query(query, profile, 'sample')
+        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
+        distribution = {
+            'ambiguous count': 0,
+            'sample count': 0,
+            'ambiguous': {},
+            'sample': {},
+            'kmer': {},
+        }
+
+        for node in cursor:
+            sample = Sample(self, node)
+            if sample.cdr3_sequence:
+                if sample.cdr3_sequence['query'].codon and len(sample.cdr3_sequence['query'].codon) > 2:
+                    nucleotide = sample.cdr3_sequence['query'].nucleotide[3:-3]
+                    codon = sample.cdr3_sequence['query'].codon[1:-1]
+                    if codon not in distribution['sample']:
+                        distribution['sample'][codon] = {
+                            'codon': codon,
+                            'count': 0,
+                            'nucleotide': {}
+                        }
+                    distribution['sample'][codon]['count'] += 1
+                    if nucleotide not in distribution['sample'][codon]['nucleotide']:
+                        distribution['sample'][codon]['nucleotide'][nucleotide] = 0
+                    distribution['sample'][codon]['nucleotide'][nucleotide] += 1
+        cursor.close()
+
+        for codon in list(distribution['sample'].keys()):
+            if 'X' in distribution['sample'][codon]['codon']:
+                distribution['ambiguous'][codon] = distribution['sample'][codon]
+                del distribution['sample'][codon]
+        distribution['sample count'] = len(distribution['sample'])
+        distribution['ambiguous count'] = len(distribution['ambiguous'])
+
+        make_k_mer(distribution, 1)
+        make_k_mer(distribution, 2)
+        print(to_simple_json(distribution))
 
     def analyzed_sample_drop(self, library):
         self.resolver.analyzed_sample_drop(library)
 
-
+    # survey
     def survey_make(self, query, limit, skip, profile, name=None):
         survey = self.resolver.survey_find(name)
         if survey is None:
@@ -4583,7 +4756,6 @@ class Pipeline(object):
             for name in names:
                 survey = self.resolver.survey_find(name)
                 if survey:
-                    survey._load_expression()
                     surveys.append(survey)
                     plot_name.append(survey.name)
 
@@ -4602,6 +4774,74 @@ class Pipeline(object):
             histogram.save('+'.join(plot_name))
         else:
             raise ValueError('comparison plots take up to 4 surveys')
+
+    def survey_density(self, names):
+        region_order = {'VH': 30, 'DH': 20, 'JH': 10}
+        name_order = {}
+        head = [ 'index', 'region', 'prod', 'start', 'end', 'expression', 'intensity', 'gene' ]
+        buffer = []
+        name_position = 10
+        for name in names:
+            name_order[name] = name_position
+            name_position += 10
+            survey = self.resolver.survey_find(name)
+            if survey:
+                for region, intensity in survey.intensity.items():
+                    total = float(sum([t['intensity'] for t in intensity['tiles']]))
+                    factor =  float(intensity['gene count']) / total
+                    for tile in intensity['tiles']:
+                        row = [
+                            region,
+                            name,
+                            tile['reference start'],
+                            tile['reference end'],
+                            tile['intensity'],
+                            float(tile['intensity'] * factor),
+                            ';'.join([gene['name'] for gene in tile['gene']])
+                        ]
+                        buffer.append(row)
+        buffer = sorted(buffer, key=lambda x: -region_order[x[0]])
+        buffer = sorted(buffer, key=lambda x: -name_order[x[1]])
+        buffer = sorted(buffer, key=lambda x: -x[2])
+        index = 0
+        current = buffer[0][2]
+        for row in buffer:
+            if row[2] != current:
+                index += 1
+                current = row[2]
+            row.insert(0, index)
+        buffer.insert(0,head)
+        print('\n'.join([', '.join([str(column) for column in row]) for row in buffer]))
+
+    def survey_prevalence(self, names):
+        allele = re.compile('\*01$')
+        buffer = []
+        for name in names:
+            survey = self.resolver.survey_find(name)
+            if survey:
+                for j, pivot in survey.prevalence.items():
+                    for v, value in pivot.items():
+                        if value > 0:
+                            buffer.append([name, allele.sub('', j), allele.sub('', v), value])
+        if buffer:
+            length = {
+                'name': max([len(row[0]) for row in buffer]),
+                'j': max([len(row[1]) for row in buffer]),
+                'v': max([len(row[2]) for row in buffer]),
+            }
+            total = sum([row[3] for row in buffer])
+            buffer = sorted(buffer, key=lambda x: x[2])
+            buffer = sorted(buffer, key=lambda x: x[1])
+            buffer = sorted(buffer, key=lambda x: x[0])
+            buffer = sorted(buffer, key=lambda x: -x[3])
+            for row in buffer:
+                row.append((row[3] / total) * 100.0)
+                row[3] = '{:.2f}'.format(row[3])
+                row[4] = '{:.4f}'.format(row[4])
+
+            pattern = '{{:<{}}} {{:<{}}} {{:<{}}} {{:<8}} {{:<8}}'.format(length['name'], length['j'], length['v'])
+            print('\n'.join([pattern.format(*row) for row in buffer]))
+            # print(to_simple_json(survey.prevalence))
 
     def survey_r(self, names):
         from rpy2.robjects import numpy2ri, r, FloatVector, DataFrame, Matrix, ListVector, StrVector
@@ -4689,7 +4929,7 @@ class Pipeline(object):
             print(str(survey))
         cursor.close()
 
-
+    # library
     def library_populate(self, path):
         count = 0
         with io.open(path, 'rb') as file:
@@ -4727,14 +4967,14 @@ class Pipeline(object):
             'Strain', 'Exp', 'B', 'T', 'Tissue', 'Count', 'Valid', 'Prod', 'ID', 'Path'
         )
         print('| ' + title)
+
         separator = '-|-'.join (
             ['{:-<9}', '{:-<3}', '{:-<2}', '{:-<2}', '{:-<30}', '{:-<12}', '{:-<8}', '{:-<8}', '{:-<25}', '{:-<4}']
         ).format (
             '', '', '', '', '', '', '', '', '', ''
         )
-
         print('| ' + separator)
-        # print('-'* len(title))
+
         buffer = {}
         order = []
         q = self.build_query(query, profile, 'library')
@@ -4772,6 +5012,7 @@ class Pipeline(object):
         for library in order:
             print(str(library))
 
+    # gene
     def gene_populate(self, path):
         count = 0
         with io.open(path, 'rb') as file:
@@ -4795,6 +5036,44 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'family' not in x else x['family'])
         buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
         print(to_json(buffer))
+
+    def gene_list(self, query, profile):
+        q = self.build_query(query, profile, 'gene')
+        cursor = self.resolver.make_cursor('gene', q)
+        cursor.sort ([('body.reference start', pymongo.DESCENDING)])
+        buffer = []
+        for node in cursor:
+            gene = Gene(self, node)
+            o = {
+                'gene': gene.body['gene'],
+                'functionality': gene.body['functionality'],
+                'length': gene.body['length'],
+                'family': gene.body['family'],
+                'reference start': gene.body['reference start'],
+                'gap': None,
+            }
+            buffer.append(o)
+        cursor.close()
+
+        for index, gene in enumerate(buffer):
+            if index > 0:
+                gene['gap'] = buffer[index - 1]['reference start'] - gene['reference start']
+
+        title = ' | '.join ( ['{:<13}', '{:<12}', '{:<1}', '{:<3}', '{:<12}', '{:<6}'] ).format ( 'gene', 'family', 'F', 'len', 'ref', 'gap' )
+        print('| ' + title)
+
+        separator = '-|-'.join (['{:-<13}', '{:-<12}', '{:-<1}', '{:-<3}', '{:-<12}', '{:-<6}']).format ('', '', '', '', '', '')
+        print('| ' + separator)
+
+        for gene in buffer:
+            print('| ' + ' | '.join(['{:<13}', '{:<12}', '{:<1}', '{:<3}', '{:<12}', '{:<6}']).format(
+                str(gene['gene']), 
+                str(gene['family']), 
+                str(gene['functionality']), 
+                str(gene['length']), 
+                str(gene['reference start']), 
+                '' if gene['gap'] is None else str(gene['gap']), 
+            ))
 
     def gene_html(self, query, profile, title):
         q = self.build_query(query, profile, 'gene')
@@ -5005,7 +5284,7 @@ class Pipeline(object):
         buffer.seek(0)
         print(buffer.read())
 
-
+    # accession
     def accession_fasta(self, query, profile):
         q = self.build_query(query, profile, 'accession')
         cursor = self.resolver.make_cursor('accession', q)

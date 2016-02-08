@@ -1,0 +1,35 @@
+[
+    {
+        "body": {
+            "path": "/Users/lg/Sites/secret/860ced9a-374a-4dba-9abe-c331504ff6d0/jasontestlib/LIB-01_S1.fastq", 
+            "tissue": "bone marrow pre b"
+        }, 
+        "head": {
+            "id": "jason_bmpreb_pilot1", 
+            "strain": "C57BL/6", 
+            "tissue": "bone marrow pre b"
+        }
+    },
+    {
+        "body": {
+            "path": "/Users/lg/Sites/secret/860ced9a-374a-4dba-9abe-c331504ff6d0/jasontestlib/LIB-02_S2.fastq", 
+            "tissue": "bone marrow pre b"
+        }, 
+        "head": {
+            "id": "jason_bmpreb_pilot2", 
+            "strain": "C57BL/6", 
+            "tissue": "bone marrow pre b"
+        }
+    },
+    {
+        "body": {
+            "path": "/Users/lg/Sites/secret/860ced9a-374a-4dba-9abe-c331504ff6d0/jasontestlib/LIB-03_S3.fastq", 
+            "tissue": "bone marrow pre b"
+        }, 
+        "head": {
+            "id": "jason_bmpreb_pilot3", 
+            "strain": "C57BL/6", 
+            "tissue": "bone marrow pre b"
+        }
+    }
+]
