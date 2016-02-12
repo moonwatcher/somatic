@@ -310,6 +310,17 @@
                     "type": "int"
                 }
             }, 
+            "ambiguous": {
+                "flag": [
+                    "--ambiguous"
+                ], 
+                "parameter": {
+                    "default": false, 
+                    "action": "store_true", 
+                    "dest": "ambiguous", 
+                    "help": "include samples with more than one possible observation"
+                }
+            }, 
             "format": {
                 "flag": [
                     "-f", 
@@ -407,6 +418,16 @@
                 "parameter": {
                     "dest": "limit", 
                     "help": "max results to return", 
+                    "type": "int"
+                }
+            }, 
+            "depth": {
+                "flag": [
+                    "--depth"
+                ], 
+                "parameter": {
+                    "dest": "depth", 
+                    "help": "depth", 
                     "type": "int"
                 }
             }, 
@@ -515,6 +536,15 @@
                 "parameter": {
                     "dest": "strain", 
                     "help": "strain"
+                }
+            }, 
+            "template": {
+                "flag": [
+                    "--template"
+                ], 
+                "parameter": {
+                    "dest": "template", 
+                    "help": "template"
                 }
             }, 
             "table": {
@@ -819,7 +849,10 @@
                         "library", 
                         "profile", 
                         "limit", 
-                        "skip"
+                        "skip",
+                        "template",
+                        "depth",
+                        "ambiguous"
                     ], 
                     "instruction": {
                         "help": "make a study", 
@@ -1387,6 +1420,317 @@
         "TTG": "L", 
         "TTT": "F"
     }, 
+    "study": {
+        "ID": {
+            "axis": [
+                "id"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "VDJ": {
+            "axis": [
+                "VH",
+                "DH",
+                "JH"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "EF": {
+            "axis": [
+                "effective codon",
+                "effective nucleotide"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "CV": {
+            "axis": [
+                "cdr3 codon",
+                "VH"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "CN": {
+            "axis": [
+                "cdr3 codon",
+                "cdr3 nucleotide"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "CNV": {
+            "axis": [
+                "cdr3 codon",
+                "cdr3 nucleotide",
+                "VH"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "CNVDJ": {
+            "axis": [
+                "cdr3 codon",
+                "cdr3 nucleotide",
+                "VH",
+                "DH",
+                "JH"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "CVDJ": {
+            "axis": [
+                "cdr3 codon",
+                "VH",
+                "DH",
+                "JH"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "NVDJ": {
+            "axis": [
+                "cdr3 nucleotide",
+                "VH",
+                "DH",
+                "JH"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "VJ": {
+            "axis": [
+                "VH",
+                "JH"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "D 5 chew",
+                "D 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-D length",
+                "V-D N count",
+                "V-D P count",
+                "D-J length",
+                "D-J N count",
+                "D-J P count",
+                "N count",
+                "P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        },
+        "VJnD": {
+            "axis": [
+                "VH",
+                "JH"
+            ],
+            "feature": [
+                "chew",
+                "V 3 chew",
+                "J 5 chew",
+                "CDR3 length",
+                "CDR3 charge",
+                "CDR3 weight",
+                "V-J length",
+                "V-J N count",
+                "V-J P count",
+                "effective min phred",
+                "effective low 4 phred",
+                "cdr3 min phred",
+                "cdr3 low 4 phred"
+            ]
+        }
+    },
     "profile": {
         "aligned": {
             "gene": {
@@ -1554,6 +1898,26 @@
                 }
             }, 
             "sample": {
+                "productive": true
+            }
+        }, 
+        "p33": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "phred", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "$gt": 33
+                }, 
                 "productive": true
             }
         }, 

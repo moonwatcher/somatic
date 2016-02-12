@@ -39,10 +39,7 @@ from subprocess import Popen, PIPE
 from bson.objectid import ObjectId
 from bson.binary import Binary
 from pymongo.errors import BulkWriteError
-from pymongo.son_manipulator import SONManipulator
 from pymongo import MongoClient, DESCENDING, ASCENDING
-from operator import itemgetter, attrgetter
-from PIL import ImageDraw, ImageFont, Image
 
 import xmltodict
 import urllib.request, urllib.parse, urllib.error
@@ -143,7 +140,9 @@ def transform_to_flat_document(node):
         return node.document
     elif isinstance(node, Sequence):
         return node.document
-    elif isinstance(node, Survey):
+    elif isinstance(node, Study):
+        return node.document
+    elif isinstance(node, Pivot):
         return node.document
     elif isinstance(node, numpy.ndarray):
         if node.dtype == numpy.float:
@@ -1756,6 +1755,7 @@ class Sample(object):
         self.node = node
         self.index = {}
         self._primary = None
+        self._observation = None
         
         if self.node is None:
             self.node = {
@@ -2341,6 +2341,152 @@ class Sample(object):
         return 'DH' in self.primary
 
     @property
+    def observable(self):
+        return 'CDR3' in self.primary and \
+            self.effective.codon and \
+            self.cdr3_sequence['query'].codon and \
+            len(self.cdr3_sequence['query'].codon) > 2
+
+    @property
+    def observation(self):
+        if self._observation is None:
+            if self.observable:
+                self._observation = []
+                breakdown = {
+                    'feature': {
+                        'id': self.trimmed_id,
+                        'CDR3 length': float(self.primary['CDR3']['query'].length),
+                        'CDR3 charge': float(self.primary['CDR3']['charge']),
+                        'CDR3 weight': float(self.primary['CDR3']['weight']),
+                    }
+                }
+
+                breakdown['feature']['cdr3 nucleotide'] = self.cdr3_sequence['query'].nucleotide
+                breakdown['feature']['cdr3 codon'] = self.cdr3_sequence['query'].codon
+                breakdown['feature']['effective nucleotide'] = self.effective.nucleotide
+                breakdown['feature']['effective codon'] = self.effective.codon
+
+                phred = sorted(self.effective.phred)
+                breakdown['feature']['effective min phred'] = float(phred[0])
+                breakdown['feature']['effective low 4 phred'] = numpy.mean(phred[0:4])
+
+                phred = sorted(self.cdr3_sequence['query'].phred)
+                breakdown['feature']['cdr3 min phred'] = float(phred[0])
+                breakdown['feature']['cdr3 low 4 phred'] = numpy.mean(phred[0:4])
+
+                if self.has_dh:
+                    breakdown['region'] = { 'VH': [], 'DH': [], 'JH': [] }
+                    for hit in self.hit:
+                        if hit['picked'] and hit['region'] in breakdown['region'].keys():
+                            breakdown['region'][hit['region']].append(hit)
+                    breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['DH']) * len(breakdown['region']['JH'])
+                    breakdown['feature']['weight'] = 1.0 / float(breakdown['combination'])
+
+                    for feature in [
+                        'chew',
+                        'V 3 chew',
+                        'D 5 chew',
+                        'D 3 chew',
+                        'J 5 chew',
+                        'CDR3 length',
+                        'CDR3 charge',
+                        'CDR3 weight',
+                        'V-D length',
+                        'V-D N count',
+                        'V-D P count',
+                        'D-J length',
+                        'D-J N count',
+                        'D-J P count',
+                        'N count',
+                        'P count',
+                    ]:
+                        if feature not in breakdown:
+                            breakdown['feature'][feature] = 0.0
+
+                    # chewback
+                    chew = [ v['3 chew'].length for v in breakdown['region']['VH'] if '3 chew' in v ]
+                    if chew: breakdown['feature']['V 3 chew'] = float(numpy.mean(chew))
+                    chew = [ j['5 chew'].length for j in breakdown['region']['JH'] if '5 chew' in j ]
+                    if chew: breakdown['feature']['J 5 chew'] = float(numpy.mean(chew))
+                    chew = [ d['3 chew'].length for d in breakdown['region']['DH'] if '3 chew' in d ]
+                    if chew: breakdown['feature']['D 3 chew'] = float(numpy.mean(chew))
+                    chew = [ d['5 chew'].length for d in breakdown['region']['DH'] if '5 chew' in d ]
+                    if chew: breakdown['feature']['D 5 chew'] = float(numpy.mean(chew))
+                    breakdown['feature']['chew'] = \
+                        breakdown['feature']['V 3 chew'] + \
+                        breakdown['feature']['J 5 chew'] + \
+                        breakdown['feature']['D 3 chew'] + \
+                        breakdown['feature']['D 5 chew']
+
+                    # junction
+                    if 'V-D' in self.primary:
+                        breakdown['feature']['V-D length'] = float(self.primary['V-D']['query'].length)
+                        breakdown['feature']['V-D N count'] = float(self.primary['V-D']['palindrome'].count('N'))
+                        breakdown['feature']['V-D P count'] = float(self.primary['V-D']['palindrome'].count('P'))
+                        breakdown['feature']['N count'] += breakdown['feature']['V-D N count']
+                        breakdown['feature']['P count'] += breakdown['feature']['V-D P count']
+                    if 'D-J' in self.primary:
+                        breakdown['feature']['D-J length'] = float(self.primary['D-J']['query'].length)
+                        breakdown['feature']['D-J N count'] = float(self.primary['D-J']['palindrome'].count('N'))
+                        breakdown['feature']['D-J P count'] = float(self.primary['D-J']['palindrome'].count('P'))
+                        breakdown['feature']['N count'] += breakdown['feature']['D-J N count']
+                        breakdown['feature']['P count'] += breakdown['feature']['D-J P count']
+
+                    for vh in breakdown['region']['VH']:
+                        for dh in breakdown['region']['DH']:
+                            for jh in breakdown['region']['JH']:
+                                observation = deepcopy(breakdown['feature'])
+                                observation['VH'] = vh['gene']
+                                observation['DH'] = dh['gene']
+                                observation['JH'] = jh['gene']
+                                self._observation.append(observation)
+                else:
+                    breakdown['region'] = { 'VH': [], 'JH': [] }
+                    for hit in self.hit:
+                        if hit['picked'] and hit['region'] in breakdown['region'].keys():
+                            breakdown['region'][hit['region']].append(hit)
+                    breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
+                    breakdown['feature']['weight'] = 1.0 / float(breakdown['combination'])
+
+                    for feature in [
+                        'chew',
+                        'V 3 chew',
+                        'J 5 chew',
+                        'CDR3 length',
+                        'CDR3 charge',
+                        'CDR3 weight',
+                        'V-J length',
+                        'V-J N count',
+                        'V-J P count',
+                    ]:
+                        if feature not in breakdown:
+                            breakdown['feature'][feature] = 0.0
+
+                    # chewback
+                    chew = [ float(j['5 chew'].length) for j in breakdown['region']['JH'] if '5 chew' in j ]
+                    if chew: breakdown['feature']['J 5 chew'] = float(numpy.mean(chew))
+                    chew = [ float(v['3 chew'].length) for v in breakdown['region']['VH'] if '3 chew' in v ]
+                    if chew: breakdown['feature']['V 3 chew'] = float(numpy.mean(chew))
+                    breakdown['feature']['chew'] = \
+                        breakdown['feature']['J 5 chew'] + \
+                        breakdown['feature']['V 3 chew']
+
+                    # junction
+                    if 'V-J' in self.primary:
+                        breakdown['feature']['V-J length'] = float(self.primary['V-J']['query'].length)
+                        breakdown['feature']['V-J N count'] = float(self.primary['V-J']['palindrome'].count('N'))
+                        breakdown['feature']['V-J P count'] = float(self.primary['V-J']['palindrome'].count('P'))
+
+                    for vh in breakdown['region']['VH']:
+                        for jh in breakdown['region']['JH']:
+                            observation = deepcopy(breakdown['feature'])
+                            observation['VH'] = vh['gene']
+                            observation['JH'] = jh['gene']
+                            self._observation.append(observation)
+
+        return self._observation
+
+    @property
     def cdr3_sequence(self):
         if 'CDR3' in self.primary:
             return self.primary['CDR3']
@@ -2388,6 +2534,10 @@ class Sample(object):
     @property
     def id(self):
         return self.head['id']
+
+    @property
+    def trimmed_id(self):
+        return self.head['id'].split()[0]
 
     @property
     def length(self):
@@ -3220,75 +3370,126 @@ class Survey(object):
         return node
 
 
-class Study(object):
-    def __init__(self, pipeline, node, query, name):
-        self.log = logging.getLogger('Study')
-        self.pipeline = pipeline
+class Pivot(object):
+    def __init__(self, study, node, name, rotate):
+        self.log = logging.getLogger('Pivot')
+        self.study = study
         self.node = node
-        self.template = {
-            'vdj': [
-                'weight',
-                'chew',
-                'V 3 chew',
-                'D 5 chew',
-                'D 3 chew',
-                'J 5 chew',
-                'CDR3 length',
-                'CDR3 charge',
-                'CDR3 weight',
-                'V-D length',
-                'V-D N count',
-                'V-D P count',
-                'D-J length',
-                'D-J N count',
-                'D-J P count',
-                'N count',
-                'P count',
-            ],
-            'vj': [
-                'weight',
-                'chew',
-                'V 3 chew',
-                'J 5 chew',
-                'CDR3 length',
-                'CDR3 charge',
-                'CDR3 weight',
-                'V-J length',
-                'V-J N count',
-                'V-J P count',
-            ]
-        }
+        if self.node is None:
+            self.node = {
+                'name': name,
+                'axis': None,
+                'rotate': None,
+                'pivot': None,
+                'count': 0,
+                'weight': [],
+                'residual': dict([(key, { 'value': [] }) for key in self.template ])
+            }
+            if rotate:
+                self.node['axis'] = rotate[0]
+                self.node['pivot'] = {}
+                if len(rotate) > 1:
+                    self.node['rotate'] = rotate[1:]
 
+    @property
+    def document(self):
+        return transform_to_flat_document(self.node)
+
+    @property
+    def template(self):
+        return self.study.template
+
+    @property
+    def axis(self):
+        return self.node['axis']
+
+    @property
+    def name(self):
+        return self.node['name']
+
+    @property
+    def rotate(self):
+        return self.node['rotate']
+
+    @property
+    def pivot(self):
+        return self.node['pivot']
+
+    @property
+    def count(self):
+        return self.node['count']
+
+    @count.setter
+    def count(self, value):
+        self.node['count'] = value
+
+    @property
+    def weight(self):
+        return self.node['weight']
+
+    @property
+    def residual(self):
+        return self.node['residual']
+
+    def add_observation(self, observation):
+        self.count += 1
+        self.weight.append(observation['weight'])
+        for key,value in self.residual.items():
+            value['value'].append(observation[key])
+
+        if self.axis is not None:
+            name = observation[self.axis]
+            if name not in self.pivot:
+                self.pivot[name] = Pivot(self.study, None, name, self.rotate)
+            pivot = self.pivot[name]
+            pivot.add_observation(observation)
+
+    def finalize(self):
+        self.node['weight'] = numpy.array(self.node['weight'])
+        for key,term in self.residual.items():
+            term['value'] = numpy.array(term['value'])
+            term['mean'] = numpy.average(term['value'], weights=self.weight)
+            term['std'] = math.sqrt(numpy.average(pow(term['value'] - term['mean'], 2), weights=self.weight))
+
+        if self.axis is not None:
+            for pivot in self.pivot.values():
+                pivot.finalize()
+
+    def collect_residual(self, depth, parent=[]):
+        buffer = []
+        if depth > 0:
+            for name, pivot in self.pivot.items():
+                buffer.extend(pivot.collect_residual(depth - 1, parent + [ name ]))
+        else:
+            buffer.append (
+                {
+                    'axis': parent,
+                    'weight': numpy.sum(self.weight),
+                    'mean': dict([(k, v['mean']) for k,v in self.residual.items()]),
+                    'std': dict([(k, v['std']) for k,v in self.residual.items()]),
+                }
+            )
+        return buffer
+
+
+class Study(object):
+    def __init__(self, node, query, name, rotate, template):
+        self.log = logging.getLogger('Study')
+        self.node = node
         if self.node is None:
             self.node = {
                 'head' :{
                     'id': hashlib.sha1(to_json(query).encode('utf8')).hexdigest(),
                     'name': name,
-                    'sample count': 0,
+                    'count': 0,
                 },
                 'body': {
                     'query': json.dumps(query, sort_keys=True, ensure_ascii=False),
-                    'repertoire': {
-                        'VH': {},
-                        'DH': {},
-                        'JH': {},
-                    },
-                    'distribution': {
-                        'vdj': {
-                            'sample count': 0,
-                            'pivot': {},
-                        },
-                        'vj': {
-                            'sample count': 0,
-                            'pivot': {},
-                        }
-                    },
+                    'rotate': rotate,
+                    'template': template,
                 }
             }
-
-    @property
-    def configuration(self):
-        return self.pipeline.configuration
+            self.body['pivot'] = Pivot(self, None, 'root', rotate)
 
     @property
     def head(self):
@@ -3310,458 +3511,80 @@ class Study(object):
     def document(self):
         return transform_to_flat_document(self.node)
 
-    @property
-    def query(self):
-        return json.loads(self.body['query'])
-
     def info(self):
         print(to_simple_json(self.document))
 
     @property
-    def repertoire(self):
-        return self.body['repertoire']
+    def template(self):
+        return self.body['template']
 
     @property
-    def distribution(self):
-        return self.body['distribution']
+    def rotate(self):
+        return self.body['rotate']
 
-    def add_vdj_feature(self, v, d, j, weight, feature):
-        # update repertoire
-        if v not in self.repertoire['VH']:
-            self.repertoire['VH'][v] = None
+    @property
+    def pivot(self):
+        return self.body['pivot']
 
-        if d not in self.repertoire['DH']:
-            self.repertoire['DH'][d] = None
+    @property
+    def count(self):
+        return self.head['count']
 
-        if j not in self.repertoire['JH']:
-            self.repertoire['JH'][j] = None
+    @count.setter
+    def count(self, value):
+        self.head['count'] = value
 
-        # update distribution
-        if v not in self.distribution['vdj']['pivot']:
-            self.distribution['vdj']['pivot'][v] = { 'pivot': {}, 'residual': {} }
-            for term in self.template['vdj']:
-                self.distribution['vdj']['pivot'][v]['residual'][term] = { 'value': [] }
-
-        if d not in self.distribution['vdj']['pivot'][v]['pivot']:
-            self.distribution['vdj']['pivot'][v]['pivot'][d] = { 'pivot': {}, 'residual': {} }
-            for term in self.template['vdj']:
-                self.distribution['vdj']['pivot'][v]['pivot'][d]['residual'][term] = { 'value': [] }
-
-        if j not in self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot']:
-            self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot'][j] = {}
-            for term in self.template['vdj']:
-                self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot'][j][term] = { 'value': [] }
-
-        cell = self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot'][j]
-        cell['weight']['value'].append(weight)
-        for key,value in feature.items():
-            cell[key]['value'].append(value)
-
-    def add_vdj_sample(self, sample):
-        self.distribution['vdj']['sample count'] += 1
-        breakdown = {
-            'weight': None,
-            'combination': None,
-            'region': { 'VH': [], 'DH': [], 'JH': [] },
-            'feature': {}
-        }
-
-        for term in self.template['vdj']:
-            if term != 'weight':
-                breakdown['feature'][term] = 0.0
-
-        for hit in sample.hit:
-            if hit['picked'] and hit['region'] in breakdown['region'].keys():
-                breakdown['region'][hit['region']].append(hit)
-        breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
-        breakdown['weight'] = 1.0 / float(breakdown['combination'])
-
-        breakdown['feature']['CDR3 length'] = float(sample.primary['CDR3']['query'].length)
-        breakdown['feature']['CDR3 charge'] = float(sample.primary['CDR3']['charge'])
-        breakdown['feature']['CDR3 weight'] = float(sample.primary['CDR3']['weight'])
-
-        chew = [ v['3 chew'].length for v in breakdown['region']['VH'] if '3 chew' in v ]
-        if chew: breakdown['feature']['V 3 chew'] = float(numpy.mean(chew))
-
-        chew = [ j['5 chew'].length for j in breakdown['region']['JH'] if '5 chew' in j ]
-        if chew: breakdown['feature']['J 5 chew'] = float(numpy.mean(chew))
-        
-        chew = [ d['3 chew'].length for d in breakdown['region']['DH'] if '3 chew' in d ]
-        if chew: breakdown['feature']['D 3 chew'] = float(numpy.mean(chew))
-        
-        chew = [ d['5 chew'].length for d in breakdown['region']['DH'] if '5 chew' in d ]
-        if chew: breakdown['feature']['D 5 chew'] = float(numpy.mean(chew))
-        
-        breakdown['feature']['chew'] = \
-            breakdown['feature']['V 3 chew'] + \
-            breakdown['feature']['J 5 chew'] + \
-            breakdown['feature']['D 3 chew'] + \
-            breakdown['feature']['D 5 chew']
-
-        if 'V-D' in sample.primary:
-            breakdown['feature']['V-D length'] = float(sample.primary['V-D']['query'].length)
-            breakdown['feature']['V-D N count'] = float(sample.primary['V-D']['palindrome'].count('N'))
-            breakdown['feature']['V-D P count'] = float(sample.primary['V-D']['palindrome'].count('P'))
-            breakdown['feature']['N count'] += breakdown['feature']['V-D N count']
-            breakdown['feature']['P count'] += breakdown['feature']['V-D P count']
-
-        if 'D-J' in sample.primary:
-            breakdown['feature']['D-J length'] = float(sample.primary['D-J']['query'].length)
-            breakdown['feature']['D-J N count'] = float(sample.primary['D-J']['palindrome'].count('N'))
-            breakdown['feature']['D-J P count'] = float(sample.primary['D-J']['palindrome'].count('P'))
-            breakdown['feature']['N count'] += breakdown['feature']['D-J N count']
-            breakdown['feature']['P count'] += breakdown['feature']['D-J P count']
-
-        for vh in breakdown['region']['VH']:
-            for dh in breakdown['region']['DH']:
-                for jh in breakdown['region']['JH']:
-                    self.add_vdj_feature(vh['gene'], dh['gene'], jh['gene'], breakdown['weight'], breakdown['feature'])
-
-    def add_vj_feature(self, v, j, weight, feature):
-        # update repertoire
-        if v not in self.repertoire['VH']:
-            self.repertoire['VH'][v] = None
-
-        if j not in self.repertoire['JH']:
-            self.repertoire['JH'][j] = None
-
-        # update distribution
-        if v not in self.distribution['vj']['pivot']:
-            self.distribution['vj']['pivot'][v] = { 'pivot': {}, 'residual': {} }
-            for term in self.template['vj']:
-                self.distribution['vj']['pivot'][v]['residual'][term] = { 'value': [] }
-
-        if j not in self.distribution['vj']['pivot'][v]['pivot']:
-            self.distribution['vj']['pivot'][v]['pivot'][j] = {}
-            for term in self.template['vj']:
-                self.distribution['vj']['pivot'][v]['pivot'][j][term] = { 'value': [] }
-
-        cell = self.distribution['vj']['pivot'][v]['pivot'][j]
-        cell['weight']['value'].append(weight)
-        for key,value in feature.items():
-            cell[key]['value'].append(value)
-
-    def add_vj_sample(self, sample):
-        self.distribution['vj']['sample count'] += 1
-        breakdown = {
-            'weight': None,
-            'combination': None,
-            'region': { 'VH': [], 'JH': [] },
-            'feature': {}
-        }
-
-        for term in self.template['vj']:
-            if term != 'weight':
-                breakdown['feature'][term] = 0.0
-
-        for hit in sample.hit:
-            if hit['picked'] and hit['region'] in breakdown['region'].keys():
-                breakdown['region'][hit['region']].append(hit)
-        breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
-        breakdown['weight'] = 1.0 / float(breakdown['combination'])
-
-        breakdown['feature']['CDR3 length'] = float(sample.primary['CDR3']['query'].length)
-        breakdown['feature']['CDR3 charge'] = float(sample.primary['CDR3']['charge'])
-        breakdown['feature']['CDR3 weight'] = float(sample.primary['CDR3']['weight'])
-
-        chew = [ float(j['5 chew'].length) for j in breakdown['region']['JH'] if '5 chew' in j ]
-        if chew: breakdown['feature']['J 5 chew'] = float(numpy.mean(chew))
-        chew = [ float(v['3 chew'].length) for v in breakdown['region']['VH'] if '3 chew' in v ]
-        if chew: breakdown['feature']['V 3 chew'] = float(numpy.mean(chew))
-        breakdown['feature']['chew'] = breakdown['feature']['J 5 chew'] + breakdown['feature']['V 3 chew']
-
-        if 'V-J' in sample.primary:
-            breakdown['feature']['V-J length'] = float(sample.primary['V-J']['query'].length)
-            breakdown['feature']['V-J N count'] = float(sample.primary['V-J']['palindrome'].count('N'))
-            breakdown['feature']['V-J P count'] = float(sample.primary['V-J']['palindrome'].count('P'))
-
-        for vh in breakdown['region']['VH']:
-            for jh in breakdown['region']['JH']:
-                self.add_vj_feature(vh['gene'], jh['gene'], breakdown['weight'], breakdown['feature'])
-
-    def add_sample(self, sample):
-        if 'CDR3' in sample.primary:
-            self.head['sample count'] += 1
-            if 'DH' in sample.primary:
-                self.add_vdj_sample(sample)
+    def add_sample(self, sample, ambiguous=False):
+        taken = True
+        if sample.observable:
+            if ambiguous or len(sample.observation) == 1:
+                for observation in sample.observation:
+                    for axis in self.rotate:
+                        if axis not in observation:
+                            self.log.debug('sample %s is missing axis %s', sample.id, axis)
+                            taken = False
+                            break
+                    for feature in self.template:
+                        if feature not in observation:
+                            self.log.debug('sample %s is missing feature %s', sample.id, feature)
+                            taken = False
+                            break
+                    if not taken:
+                        break
+                if taken:
+                    self.count += 1
+                    for observation in sample.observation:
+                        self.pivot.add_observation(observation)
             else:
-                self.add_vj_sample(sample)
+                self.log.info('sample %s has multiple observations', sample.id)
         else:
-            self.log.error('%s is missing a CDR3 region', sample.id)
+            self.log.debug('sample %s has no observations', sample.id)
 
     def finalize(self):
-        def finalize_cell(cell):
-            weight = cell['weight']
-            weight['value'] = numpy.array(weight['value'])
-            weight['mean'] = numpy.mean(weight['value'])
-            weight['std'] = numpy.std(weight['value'])
-            weight['sum'] = numpy.sum(weight['value'])
-            for key,value in cell.items():
-                if key != 'weight':
-                    cell[key]['value'] = numpy.array(cell[key]['value'])
-                    cell[key]['mean'] = numpy.average(cell[key]['value'], weights=weight['value'])
-                    cell[key]['std'] = math.sqrt(numpy.average(pow(cell[key]['value'] - cell[key]['mean'], 2), weights=weight['value']))
+        self.pivot.finalize()
 
-        for v in self.distribution['vdj']['pivot'].keys():
-            for d in self.distribution['vdj']['pivot'][v]['pivot'].keys():
-                for j in self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot'].keys():
-                    finalize_cell(self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot'][j])
-
-                for term in self.template['vdj']:
-                    self.distribution['vdj']['pivot'][v]['pivot'][d]['residual'][term]['value'] = numpy.concatenate([ self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot'][j][term]['value'] for j in self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot'].keys() ])
-                finalize_cell(self.distribution['vdj']['pivot'][v]['pivot'][d]['residual'])
-
-            for term in self.template['vdj']:
-                self.distribution['vdj']['pivot'][v]['residual'][term]['value'] = numpy.concatenate([ self.distribution['vdj']['pivot'][v]['pivot'][d]['residual'][term]['value'] for d in self.distribution['vdj']['pivot'][v]['pivot'].keys() ])
-            finalize_cell(self.distribution['vdj']['pivot'][v]['residual'])
-
-        for v in self.distribution['vj']['pivot'].keys():
-            for j in self.distribution['vj']['pivot'][v]['pivot'].keys():
-                finalize_cell(self.distribution['vj']['pivot'][v]['pivot'][j])
-
-            for term in self.template['vj']:
-                self.distribution['vj']['pivot'][v]['residual'][term]['value'] = numpy.concatenate([ self.distribution['vj']['pivot'][v]['pivot'][j][term]['value'] for j in self.distribution['vj']['pivot'][v]['pivot'].keys() ])
-            finalize_cell(self.distribution['vj']['pivot'][v]['residual'])
-
-    def vdj_distribution_to_csv(self):
-        total = float(self.distribution['vdj']['sample count'])
-        header = [ 
-            'VH',
-            'DH',
-            'JH',
-            'portion',
-            'weight',
-            'chew',
-            'V 3 chew',
-            'D 5 chew',
-            'D 3 chew',
-            'J 5 chew',
-            'CDR3 length',
-            'CDR3 charge',
-            'CDR3 weight',
-            'V-D length',
-            'V-D N count',
-            'V-D P count',
-            'D-J length',
-            'D-J N count',
-            'D-J P count',
-            'N count',
-            'P count',
-        ]
-        zero = {
-            'weight': 0.0,
-            'chew': 0.0,
-            'V 3 chew': 0.0,
-            'D 5 chew': 0.0,
-            'D 3 chew': 0.0,
-            'J 5 chew': 0.0,
-            'CDR3 length': 0.0,
-            'CDR3 charge': 0.0,
-            'CDR3 weight': 0.0,
-            'V-D length': 0.0,
-            'V-D N count': 0.0,
-            'V-D P count': 0.0,
-            'D-J length': 0.0,
-            'D-J N count': 0.0,
-            'D-J P count': 0.0,
-            'N count': 0.0,
-            'P count': 0.0,
-        }
+    def residual_to_csv(self, depth):
+        total = float(self.count)
+        header = list(self.rotate[:depth])
+        header.append('weight')
+        header.append('portion')
+        for k in self.template:
+            header.append('{} mean'.format(k))
+            header.append('{} sd'.format(k))
         print(','.join(header))
-        for v in self.repertoire['VH'].keys():
-            for d in self.repertoire['DH'].keys():
-                for j in self.repertoire['JH'].keys():
-                    if  v in self.distribution['vdj']['pivot'] and \
-                        d in self.distribution['vdj']['pivot'][v]['pivot'] and \
-                        j in self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot']:
-                        cell = self.distribution['vdj']['pivot'][v]['pivot'][d]['pivot'][j]
-                        weight = cell['weight']['sum']
-                        portion = weight / total
 
-                        row = dict([(k, str(v['mean'])) for k,v in cell.items()])
-                        print(
-                            ','.join(
-                                [ 
-                                    v,
-                                    d,
-                                    j,
-                                    str(portion),
-                                    str(weight),
-                                    row['chew'],
-                                    row['V 3 chew'],
-                                    row['D 5 chew'],
-                                    row['D 3 chew'],
-                                    row['J 5 chew'],
-                                    row['CDR3 length'],
-                                    row['CDR3 charge'],
-                                    row['CDR3 weight'],
-                                    row['V-D length'],
-                                    row['V-D N count'],
-                                    row['V-D P count'],
-                                    row['D-J length'],
-                                    row['D-J N count'],
-                                    row['D-J P count'],
-                                    row['N count'],
-                                    row['P count'],
-                                ]
-                            )
-                        )
+        buffer = self.pivot.collect_residual(depth)
+        buffer = sorted(buffer, key=lambda x: -x['weight'])
 
-    def vdj_vd_residual_distribution_to_csv(self):
-        total = float(self.distribution['vdj']['sample count'])
-        header = [ 
-            'VH',
-            'DH',
-            'portion',
-            'weight',
-            'chew',
-            'V 3 chew',
-            'D 5 chew',
-            'D 3 chew',
-            'J 5 chew',
-            'CDR3 length',
-            'CDR3 charge',
-            'CDR3 weight',
-            'V-D length',
-            'V-D N count',
-            'V-D P count',
-            'D-J length',
-            'D-J N count',
-            'D-J P count',
-            'N count',
-            'P count',
-        ]
-        zero = {
-            'weight': 0.0,
-            'chew': 0.0,
-            'V 3 chew': 0.0,
-            'D 5 chew': 0.0,
-            'D 3 chew': 0.0,
-            'J 5 chew': 0.0,
-            'CDR3 length': 0.0,
-            'CDR3 charge': 0.0,
-            'CDR3 weight': 0.0,
-            'V-D length': 0.0,
-            'V-D N count': 0.0,
-            'V-D P count': 0.0,
-            'D-J length': 0.0,
-            'D-J N count': 0.0,
-            'D-J P count': 0.0,
-            'N count': 0.0,
-            'P count': 0.0,
-        }
-        print(','.join(header))
-        for v in self.repertoire['VH'].keys():
-            for d in self.repertoire['DH'].keys():
-                if  v in self.distribution['vdj']['pivot'] and \
-                    d in self.distribution['vdj']['pivot'][v]['pivot']:
-                    cell = self.distribution['vdj']['pivot'][v]['pivot'][d]['residual']
-                    weight = cell['weight']['sum']
-                    portion = weight / total
-
-                    row = dict([(k, str(v['mean'])) for k,v in cell.items()])
-                    print(
-                        ','.join(
-                            [ 
-                                v,
-                                d,
-                                str(portion),
-                                str(weight),
-                                row['chew'],
-                                row['V 3 chew'],
-                                row['D 5 chew'],
-                                row['D 3 chew'],
-                                row['J 5 chew'],
-                                row['CDR3 length'],
-                                row['CDR3 charge'],
-                                row['CDR3 weight'],
-                                row['V-D length'],
-                                row['V-D N count'],
-                                row['V-D P count'],
-                                row['D-J length'],
-                                row['D-J N count'],
-                                row['D-J P count'],
-                                row['N count'],
-                                row['P count'],
-                            ]
-                        )
-                    )
-
-    def vdj_v_residual_distribution_to_csv(self):
-        total = float(self.distribution['vdj']['sample count'])
-        header = [ 
-            'VH',
-            'portion',
-            'weight',
-            'chew',
-            'V 3 chew',
-            'D 5 chew',
-            'D 3 chew',
-            'J 5 chew',
-            'CDR3 length',
-            'CDR3 charge',
-            'CDR3 weight',
-            'V-D length',
-            'V-D N count',
-            'V-D P count',
-            'D-J length',
-            'D-J N count',
-            'D-J P count',
-            'N count',
-            'P count',
-        ]
-        zero = {
-            'weight': 0.0,
-            'chew': 0.0,
-            'V 3 chew': 0.0,
-            'D 5 chew': 0.0,
-            'D 3 chew': 0.0,
-            'J 5 chew': 0.0,
-            'CDR3 length': 0.0,
-            'CDR3 charge': 0.0,
-            'CDR3 weight': 0.0,
-            'V-D length': 0.0,
-            'V-D N count': 0.0,
-            'V-D P count': 0.0,
-            'D-J length': 0.0,
-            'D-J N count': 0.0,
-            'D-J P count': 0.0,
-            'N count': 0.0,
-            'P count': 0.0,
-        }
-        print(','.join(header))
-        for v in self.repertoire['VH'].keys():
-            if  v in self.distribution['vdj']['pivot']:
-                cell = self.distribution['vdj']['pivot'][v]['residual']
-                weight = cell['weight']['sum']
-                portion = weight / total
-
-                row = dict([(k, str(v['mean'])) for k,v in cell.items()])
-                print(
-                    ','.join(
-                        [ 
-                            v,
-                            str(portion),
-                            str(weight),
-                            row['chew'],
-                            row['V 3 chew'],
-                            row['D 5 chew'],
-                            row['D 3 chew'],
-                            row['J 5 chew'],
-                            row['CDR3 length'],
-                            row['CDR3 charge'],
-                            row['CDR3 weight'],
-                            row['V-D length'],
-                            row['V-D N count'],
-                            row['V-D P count'],
-                            row['D-J length'],
-                            row['D-J N count'],
-                            row['D-J P count'],
-                            row['N count'],
-                            row['P count'],
-                        ]
-                    )
-                )
+        for record in buffer:
+            record['portion'] = record['weight'] / total
+            row = list(record['axis'])
+            row.append(str(record['weight']))
+            row.append(str(record['portion']))
+            for k in self.template:
+                row.append(str(record['mean'][k]))
+                row.append(str(record['std'][k]))
+            print(','.join(row))
 
 
 class Diagram(object):
@@ -4923,7 +4746,10 @@ class Pipeline(object):
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'],
-                cmd.instruction['name'])
+                cmd.instruction['name'],
+                cmd.instruction['template'],
+                cmd.instruction['depth'],
+                cmd.instruction['ambiguous'])
 
         elif cmd.action == 'surveyList':
             survey = self.survey_list(
@@ -5142,6 +4968,12 @@ class Pipeline(object):
             sample = Sample(self, node)
             if sample.cdr3_sequence:
                 if sample.cdr3_sequence['query'].codon and len(sample.cdr3_sequence['query'].codon) > 2:
+                    # vh = [v['gene'] for v in sample.hit if v['picked'] and v['region'] == 'VH' ]
+                    # dh = [d['gene'] for d in sample.hit if d['picked'] and d['region'] == 'DH' ]
+                    # jh = [j['gene'] for j in sample.hit if j['picked'] and j['region'] == 'JH' ]
+                    # if (('J558.50.143'  in vh and 'DFL16.1' in dh and 'IGHJ1' in jh) or 
+                    #    ('J558.6.96'     in vh and 'DFL16.1' in dh and 'IGHJ2' in jh) or
+                    #    ('7183.7.10'     in vh and 'DFL16.1' in dh and 'IGHJ2' in jh)):
                     nucleotide = sample.cdr3_sequence['query'].nucleotide[3:-3]
                     codon = sample.cdr3_sequence['query'].codon[1:-1]
                     if codon not in distribution['sample']:
@@ -5154,18 +4986,18 @@ class Pipeline(object):
                     if nucleotide not in distribution['sample'][codon]['nucleotide']:
                         distribution['sample'][codon]['nucleotide'][nucleotide] = 0
                     distribution['sample'][codon]['nucleotide'][nucleotide] += 1
-        cursor.close()
+            cursor.close()
 
-        for codon in list(distribution['sample'].keys()):
-            if 'X' in distribution['sample'][codon]['codon']:
-                distribution['ambiguous'][codon] = distribution['sample'][codon]
-                del distribution['sample'][codon]
-        distribution['sample count'] = len(distribution['sample'])
-        distribution['ambiguous count'] = len(distribution['ambiguous'])
+            for codon in list(distribution['sample'].keys()):
+                if 'X' in distribution['sample'][codon]['codon']:
+                    distribution['ambiguous'][codon] = distribution['sample'][codon]
+                    del distribution['sample'][codon]
+            distribution['sample count'] = len(distribution['sample'])
+            distribution['ambiguous count'] = len(distribution['ambiguous'])
 
-        make_k_mer(distribution, 1)
-        make_k_mer(distribution, 2)
-        print(to_simple_json(distribution))
+            make_k_mer(distribution, 1)
+            make_k_mer(distribution, 2)
+            print(to_simple_json(distribution))
 
     def analyzed_sample_drop(self, library):
         self.resolver.analyzed_sample_drop(library)
@@ -5371,23 +5203,31 @@ class Pipeline(object):
             print(str(survey))
         cursor.close()
 
-    def study_info(self, query, limit, skip, profile, name):
-        count = 0
+    def study_info(self, query, limit, skip, profile, name, template, depth, ambiguous):
         q = self.build_query(query, profile, 'sample')
         request = { 'limit': limit, 'skip': skip, 'query': q }
-        study = Study(self, None, request, name)
+        study = Study (
+            None,
+            request,
+            name,
+            self.configuration['study'][template]['axis'],
+            self.configuration['study'][template]['feature']
+        )
+        if depth is None:
+            depth = len(self.configuration['study'][template]['axis'])
+        else:
+            depth = min(depth, len(self.configuration['study'][template]['axis']))
+
         cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
         self.log.debug('collecting samples for study %s', study.name)
         for node in cursor:
-            study.add_sample(Sample(self, node))
-            count += 1
-            if count%100 == 0: print(count)
+            sample = Sample(self, node)
+            study.add_sample(sample, ambiguous)
         cursor.close()
         study.finalize()
-        study.info()
-        # study.vdj_distribution_to_csv()
-        # study.vdj_vd_residual_distribution_to_csv()
-        # study.vdj_v_residual_distribution_to_csv()
+        # study.info()
+        study.residual_to_csv(depth)
+
     # library
     def library_populate(self, path):
         count = 0
