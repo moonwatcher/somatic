@@ -58,7 +58,14 @@ log_levels = {
 }
 
 def to_simple_json(node):
-    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4)
+    def handler(o):
+        result = None
+        if isinstance(o, datetime):
+            result = o.isoformat()
+        if isinstance(o, ObjectId):
+            result = str(o)
+        return result
+    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
 
 def parse_match(match):
     if match is not None:
@@ -107,31 +114,6 @@ def transform_to_document(node):
         return [ transform_to_document(v) for v in node ]
     elif isinstance(node, dict):
         return dict([ (k,transform_to_document(v)) for k,v in node.items() ])
-    elif isinstance(node, Sample):
-        return node.document
-    elif isinstance(node, Gene):
-        return node.document
-    elif isinstance(node, Accession):
-        return node.document
-    elif isinstance(node, Sequence):
-        return node.document
-    elif isinstance(node, Survey):
-        return node.document
-    elif isinstance(node, numpy.ndarray):
-        bytesio = BytesIO()
-        save(bytesio, node)
-        bytesio.seek(0)
-        return Binary(bytesio.read())
-    else:
-        return node
-
-def transform_to_flat_document(node):
-    if isinstance(node, set):
-        return [ transform_to_flat_document(v) for v in node ]
-    if isinstance(node, list):
-        return [ transform_to_flat_document(v) for v in node ]
-    elif isinstance(node, dict):
-        return dict([ (k,transform_to_flat_document(v)) for k,v in node.items() ])
     elif isinstance(node, Sample):
         return node.document
     elif isinstance(node, Gene):
@@ -205,6 +187,52 @@ def complement(nucleotide):
     return ''.join([ complement[n] for n in nucleotide ][::-1])
 
 def load_configuration():
+    def merge(node, other):
+        result = other
+        if node is not None:
+            result = node
+            if other is not None:
+                if isinstance(node, dict):
+                    if isinstance(other, dict):
+                        for k,v in other.items():
+                            if k in result:
+                                result[k] = merge(result[k], v)
+                            else:
+                                result[k] = v
+                    else:
+                        raise ValueError('invalid configuration structure')
+
+                elif isinstance(node, list):
+                    if isinstance(other, list):
+                        result.extend(other)
+                    else:
+                        raise ValueError('invalid configuration structure')
+                else:
+                    result = other
+        return result
+
+    def check(element):
+        result = None
+        if isinstance(element, dict):
+            if 'enabled' not in element or element['enabled']:
+                if 'enabled' in element:
+                    del element['enabled']
+
+                for k in list(element.keys()):
+                    element[k] = check(element[k])
+                result = element
+
+        elif isinstance(element, list):
+            result = []
+            for o in element:
+                checked = check(o)
+                if checked is not None:
+                    result.append(checked)
+        else:
+            result = element
+
+        return result
+
     setting = None
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'configuration/setting.json')
     with io.open(path, 'rb') as file:
@@ -228,7 +256,45 @@ def load_configuration():
 
     if configuration is not None:
         configuration['interface']['prototype']['profile']['parameter']['choices'] = list(configuration['profile'].keys())
-        configuration['interface']['prototype']['profile']['parameter']['help'] = '[ {} ]'.format(' | '.join(sorted(configuration['profile'].keys())))
+        configuration['interface']['prototype']['profile']['parameter']['help'] = 'one of: {}'.format(', '.join(sorted(configuration['profile'].keys())))
+
+        if 'study' in configuration:
+            for key in list(configuration['study']['feature'].keys()):
+                feature = deepcopy(configuration['study']['default']['feature'])
+                for column in list(feature['column'].keys()):
+                    feature['column'][column] = merge(deepcopy(configuration['study']['default']['column']), feature['column'][column])
+                    feature['column'][column]['key'] = column
+
+                feature['key'] = key
+                feature = merge(feature, configuration['study']['feature'][key])
+                configuration['study']['feature'][key] = feature
+
+            for name in list(configuration['study']['preset'].keys()):
+                preset = deepcopy(configuration['study']['default']['preset'])
+                preset['key'] = name
+                preset = merge(preset, configuration['study']['preset'][name])
+
+                for key in list(preset['feature'].keys()):
+                    feature = deepcopy(configuration['study']['feature'][key])
+                    feature = merge(feature, preset['feature'][key])
+                    preset['feature'][key] = feature
+
+                row = []
+                for feature_key in preset['order']:
+                    if feature_key in preset['feature']:
+                        feature = { 'key': feature_key, 'column': [] }
+                        for column_key in preset['feature'][feature_key]['order']:
+                            if column_key in preset['feature'][feature_key]['column']:
+                                feature['column'].append(preset['feature'][feature_key]['column'][column_key])
+                        row.append(feature)
+                preset['row'] = check(row)
+                del preset['feature']
+                del preset['order']
+                configuration['study']['preset'][name] = preset
+
+        configuration['interface']['prototype']['preset']['parameter']['choices'] = list(configuration['study']['preset'].keys())
+        configuration['interface']['prototype']['preset']['parameter']['help'] = 'one of {}'.format(', '.join(sorted(configuration['study']['preset'].keys())))
+
         configuration['expression'] = {
             'ncbi accession url': 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}',
             'blat hit': re.compile(
@@ -764,7 +830,14 @@ class Sequence(object):
 
     @property
     def document(self):
-        return dict([ (k,v) for k,v in self.node.items() if k not in ['codon', 'phred']])
+        document = transform_to_document(self.node)
+        for key in [
+            'codon',
+            'phred',
+        ]:
+            if key in document:
+                del document[key]
+        return document
 
     def reset(self):
         if self.node is None:
@@ -936,7 +1009,10 @@ class Accession(object):
         self.node = node
         
         if self.node is None:
-            self.node = { 'head': {}, 'body': {} }
+            self.node = {
+                'head': {},
+                'body': {},
+            }
             
         if 'sequence' in self.body and isinstance(self.body['sequence'], dict):
             self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
@@ -2355,9 +2431,9 @@ class Sample(object):
                 breakdown = {
                     'feature': {
                         'id': self.trimmed_id,
-                        'CDR3 length': float(self.primary['CDR3']['query'].length),
-                        'CDR3 charge': float(self.primary['CDR3']['charge']),
-                        'CDR3 weight': float(self.primary['CDR3']['weight']),
+                        'cdr3 length': float(self.primary['CDR3']['query'].length),
+                        'cdr3 charge': float(self.primary['CDR3']['charge']),
+                        'cdr3 weight': float(self.primary['CDR3']['weight']),
                     }
                 }
 
@@ -2384,53 +2460,53 @@ class Sample(object):
 
                     for feature in [
                         'chew',
-                        'V 3 chew',
-                        'D 5 chew',
-                        'D 3 chew',
-                        'J 5 chew',
-                        'CDR3 length',
-                        'CDR3 charge',
-                        'CDR3 weight',
-                        'V-D length',
-                        'V-D N count',
-                        'V-D P count',
-                        'D-J length',
-                        'D-J N count',
-                        'D-J P count',
-                        'N count',
-                        'P count',
+                        'v3 chew',
+                        'd5 chew',
+                        'd3 chew',
+                        'j5 chew',
+                        'cdr3 length',
+                        'cdr3 charge',
+                        'cdr3 weight',
+                        'vd length',
+                        'vd n count',
+                        'vd p count',
+                        'dj length',
+                        'dj n count',
+                        'dj p count',
+                        'n count',
+                        'p count',
                     ]:
-                        if feature not in breakdown:
+                        if feature not in breakdown['feature']:
                             breakdown['feature'][feature] = 0.0
 
                     # chewback
                     chew = [ v['3 chew'].length for v in breakdown['region']['VH'] if '3 chew' in v ]
-                    if chew: breakdown['feature']['V 3 chew'] = float(numpy.mean(chew))
+                    if chew: breakdown['feature']['v3 chew'] = float(numpy.mean(chew))
                     chew = [ j['5 chew'].length for j in breakdown['region']['JH'] if '5 chew' in j ]
-                    if chew: breakdown['feature']['J 5 chew'] = float(numpy.mean(chew))
+                    if chew: breakdown['feature']['j5 chew'] = float(numpy.mean(chew))
                     chew = [ d['3 chew'].length for d in breakdown['region']['DH'] if '3 chew' in d ]
-                    if chew: breakdown['feature']['D 3 chew'] = float(numpy.mean(chew))
+                    if chew: breakdown['feature']['d3 chew'] = float(numpy.mean(chew))
                     chew = [ d['5 chew'].length for d in breakdown['region']['DH'] if '5 chew' in d ]
-                    if chew: breakdown['feature']['D 5 chew'] = float(numpy.mean(chew))
+                    if chew: breakdown['feature']['d5 chew'] = float(numpy.mean(chew))
                     breakdown['feature']['chew'] = \
-                        breakdown['feature']['V 3 chew'] + \
-                        breakdown['feature']['J 5 chew'] + \
-                        breakdown['feature']['D 3 chew'] + \
-                        breakdown['feature']['D 5 chew']
+                        breakdown['feature']['v3 chew'] + \
+                        breakdown['feature']['j5 chew'] + \
+                        breakdown['feature']['d3 chew'] + \
+                        breakdown['feature']['d5 chew']
 
                     # junction
                     if 'V-D' in self.primary:
-                        breakdown['feature']['V-D length'] = float(self.primary['V-D']['query'].length)
-                        breakdown['feature']['V-D N count'] = float(self.primary['V-D']['palindrome'].count('N'))
-                        breakdown['feature']['V-D P count'] = float(self.primary['V-D']['palindrome'].count('P'))
-                        breakdown['feature']['N count'] += breakdown['feature']['V-D N count']
-                        breakdown['feature']['P count'] += breakdown['feature']['V-D P count']
+                        breakdown['feature']['vd length'] = float(self.primary['V-D']['query'].length)
+                        breakdown['feature']['vd n count'] = float(self.primary['V-D']['palindrome'].count('N'))
+                        breakdown['feature']['vd p count'] = float(self.primary['V-D']['palindrome'].count('P'))
+                        breakdown['feature']['n count'] += breakdown['feature']['vd n count']
+                        breakdown['feature']['p count'] += breakdown['feature']['vd p count']
                     if 'D-J' in self.primary:
-                        breakdown['feature']['D-J length'] = float(self.primary['D-J']['query'].length)
-                        breakdown['feature']['D-J N count'] = float(self.primary['D-J']['palindrome'].count('N'))
-                        breakdown['feature']['D-J P count'] = float(self.primary['D-J']['palindrome'].count('P'))
-                        breakdown['feature']['N count'] += breakdown['feature']['D-J N count']
-                        breakdown['feature']['P count'] += breakdown['feature']['D-J P count']
+                        breakdown['feature']['dj length'] = float(self.primary['D-J']['query'].length)
+                        breakdown['feature']['dj n count'] = float(self.primary['D-J']['palindrome'].count('N'))
+                        breakdown['feature']['dj p count'] = float(self.primary['D-J']['palindrome'].count('P'))
+                        breakdown['feature']['n count'] += breakdown['feature']['dj n count']
+                        breakdown['feature']['p count'] += breakdown['feature']['dj p count']
 
                     for vh in breakdown['region']['VH']:
                         for dh in breakdown['region']['DH']:
@@ -2450,32 +2526,32 @@ class Sample(object):
 
                     for feature in [
                         'chew',
-                        'V 3 chew',
-                        'J 5 chew',
-                        'CDR3 length',
-                        'CDR3 charge',
-                        'CDR3 weight',
-                        'V-J length',
-                        'V-J N count',
-                        'V-J P count',
+                        'v3 chew',
+                        'j5 chew',
+                        'cdr3 length',
+                        'cdr3 charge',
+                        'cdr3 weight',
+                        'vj length',
+                        'vj n count',
+                        'vj p count',
                     ]:
-                        if feature not in breakdown:
+                        if feature not in breakdown['feature']:
                             breakdown['feature'][feature] = 0.0
 
                     # chewback
                     chew = [ float(j['5 chew'].length) for j in breakdown['region']['JH'] if '5 chew' in j ]
-                    if chew: breakdown['feature']['J 5 chew'] = float(numpy.mean(chew))
+                    if chew: breakdown['feature']['j5 chew'] = float(numpy.mean(chew))
                     chew = [ float(v['3 chew'].length) for v in breakdown['region']['VH'] if '3 chew' in v ]
-                    if chew: breakdown['feature']['V 3 chew'] = float(numpy.mean(chew))
+                    if chew: breakdown['feature']['v3 chew'] = float(numpy.mean(chew))
                     breakdown['feature']['chew'] = \
-                        breakdown['feature']['J 5 chew'] + \
-                        breakdown['feature']['V 3 chew']
+                        breakdown['feature']['j5 chew'] + \
+                        breakdown['feature']['v3 chew']
 
                     # junction
                     if 'V-J' in self.primary:
-                        breakdown['feature']['V-J length'] = float(self.primary['V-J']['query'].length)
-                        breakdown['feature']['V-J N count'] = float(self.primary['V-J']['palindrome'].count('N'))
-                        breakdown['feature']['V-J P count'] = float(self.primary['V-J']['palindrome'].count('P'))
+                        breakdown['feature']['vj length'] = float(self.primary['V-J']['query'].length)
+                        breakdown['feature']['vj n count'] = float(self.primary['V-J']['palindrome'].count('N'))
+                        breakdown['feature']['vj p count'] = float(self.primary['V-J']['palindrome'].count('P'))
 
                     for vh in breakdown['region']['VH']:
                         for jh in breakdown['region']['JH']:
@@ -2630,748 +2706,8 @@ class Sample(object):
         return self.head['productive']
 
 
-class Histogram(object):
-    def __init__(self, name):
-        self.log = logging.getLogger('Histogram')
-        self.name = name
-        self.count = 0
-        self.plots = {
-            'VDJ CDR3 length': {
-                'position': [0,0],
-                'name': 'VDJ CDR3 length',
-            },
-            'VDJ CDR3 charge': {
-                'position': [0,1],
-                'name': 'VDJ CDR3 charge',
-            },
-            'VDJ CDR3 weight': {
-                'position': [0,2],
-                'name': 'VDJ CDR3 atomic weight',
-            },
-
-            'VJ CDR3 length': {
-                'position': [1,0],
-                'name': 'VJ CDR3 length',
-            },
-            'VJ CDR3 charge': {
-                'position': [1,1],
-                'name': 'VJ CDR3 charge',
-            },
-            'VJ CDR3 weight': {
-                'position': [1,2],
-                'name': 'VJ CDR3 atomic weight',
-            },
-
-            'VDJ V-D N count': {
-                'position': [2,0],
-                'name': 'VDJ V-D Junction N count',
-            },
-            'VDJ D-J N count': {
-                'position': [2,1],
-                'name': 'VDJ D-J Junction N count',
-            },
-            'VDJ N count': {
-                'position': [2,2],
-                'name': 'VDJ Total Junction N count',
-            },
-            'VJ V-J N count': {
-                'position': [2,3],
-                'name': 'VJ V-J Junction N count',
-            },
-
-            'VDJ V-D P count': {
-                'position': [3,0],
-                'name': 'VDJ V-D Junction P count',
-            },
-            'VDJ D-J P count': {
-                'position': [3,1],
-                'name': 'VDJ D-J Junction P count',
-            },
-            'VDJ P count': {
-                'position': [3,2],
-                'name': 'VDJ Total Junction P count',
-            },
-            'VJ V-J P count': {
-                'position': [3,3],
-                'name': 'VJ V-J Junction P count',
-            },
-
-            'VDJ V-D length': {
-                'position': [4,0],
-                'name': 'VDJ V-D Junction length',
-            },
-            'VDJ D-J length': {
-                'position': [4,1],
-                'name': 'VDJ D-J Junction length',
-            },
-            'VJ V-J length': {
-                'position': [4,2],
-                'name': 'VJ V-J Junction length',
-            },
-
-            'VDJ chew': {
-                'position': [5,0],
-                'name': 'VDJ Total chew back',
-            },
-            'VJ chew': {
-                'position': [5,1],
-                'name': 'VJ Total chew back',
-            },
-
-            'VDJ V 3 chew': {
-                'position': [6,0],
-                'name': 'VDJ V 3\' chew back',
-            },
-            'VDJ D 5 chew': {
-                'position': [6,1],
-                'name': 'VDJ D 5\' chew back',
-            },
-            'VDJ D 3 chew': {
-                'position': [6,2],
-                 'name': 'VDJ D 3\' chew back',
-            },
-            'VDJ J 5 chew': {
-                'position': [6,3],
-                'name': 'VDJ J 5\' chew back',
-            },
-
-            'VJ V 3 chew': {
-                'position': [7,0],
-                'name': 'VJ V 3\' chew back',
-            },
-            'VJ J 5 chew': {
-                'position': [7,1],
-                'name': 'VJ J 5\' chew back',
-            },
-            'expression': {
-                'position': [8,0],
-                'name': 'Expression',
-                'colspan': 4
-            },
-        }
-
-        import matplotlib.pyplot as pyplot
-        
-        space = [0,0]
-        for plot in self.plots.values():
-            space[0] = max(space[0], plot['position'][0])
-            space[1] = max(space[1], plot['position'][1])
-        space[0] += 1
-        space[1] += 1
-        self.figure = pyplot.figure(figsize=(space[1] * 5, space[0] * 5))
-        self.figure.suptitle(self.name, fontsize=16, fontweight='bold')
-        for key,plot in self.plots.items():
-            if 'colspan' in plot:
-                plot['plot'] = pyplot.subplot2grid(space, plot['position'], colspan=plot['colspan'])
-            else:
-                plot['plot'] = pyplot.subplot2grid(space, plot['position'])
-
-    def draw(self, survey, edgecolor='#669803', facecolor='#DDE7AC', alpha=0.65):
-        for kind in ['vdj', 'vj']:
-            for key, distribution in survey.body[kind]['distribution'].items():
-                plot = self.plots[key]
-                bins = numpy.array(distribution['histogram']['bins']) / survey.body[kind]['sample count']
-                edges = numpy.array(distribution['histogram']['edges'])
-                width = 0.7 * (edges[1] - edges[0])
-                center = (edges[:-1] + edges[1:]) / 2 
-                label = '{}\nmean {:.2f}\nsd {:.2f}\ncount {}'.format(survey.name, distribution['mean'], distribution['std'], survey.body[kind]['sample count'])
-                plot['plot'].bar(center, bins, label=label, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
-                plot['plot'].set_title(plot['name'], fontweight='bold')
-        self.draw_expression(survey, edgecolor, facecolor, alpha)
-        self.count += 1
-
-    def draw_expression(self, survey, edgecolor, facecolor, alpha):
-        for region in ['VH', 'DH', 'JH']:
-            total = sum([ x['value'] for x in survey.expression if x['region'] == region and x['value']])
-            for x in survey.expression:
-                if x['region'] == region:
-                    if x['value'] :
-                        x['value'] /= total
-                    else:
-                        x['value'] = 0.0
-
-        plot = self.plots['expression']
-        width = 0.3
-        left = arange(len(survey.expression)) + (float(self.count) * width)
-        height = numpy.array([ x['value'] for x in survey.expression ], dtype=float64)
-        height = numpy.array([ math.log(1.0 + (100.0 * x), 2) for x in height ])
-        plot['plot'].bar(left, height, label=survey.name, alpha=alpha, width=width, edgecolor=edgecolor, facecolor=facecolor)
-        plot['plot'].set_xticks(left)
-        plot['plot'].set_xticklabels([ x['name'] for x in survey.expression ], rotation='vertical', size=5)        
-        plot['plot'].autoscale_view()
-
-    def save(self, path):
-        import matplotlib.pyplot as pyplot
-        for key,plot in self.plots.items():
-            plot['plot'].legend()
-        pyplot.savefig('{}.pdf'.format(path))
-
-
-class Survey(object):
-    def __init__(self, pipeline, node=None, request=None, name=None):
-        self.log = logging.getLogger('Survey')
-        self.pipeline = pipeline
-        self.node = node
-        self._lookup = None
-
-        if self.node is not None:
-            # loading an existing object
-            for slice in self.slice.values():
-                if 'correlation' in slice:
-                    for k,v in slice['correlation'].items():
-                        binary = BytesIO(v)
-                        binary.seek(0)
-                        slice['correlation'][k] = load(binary)
-        else:
-            # constructing a new object
-            if request:
-                self._bootstrap('C57BL/6', request, name)
-            else:
-                raise ValueError('must specify a query to calculate survey')
-
-    def __str__(self):
-        buffer = []
-        buffer.append(self.id)
-        buffer.append('{:<9}'.format(self.count))
-        if self.id != self.name:
-            buffer.append(self.name)
-        return '\t'.join(buffer)
-
-    def _bootstrap(self, strain, request, name):
-        self.node = {
-            'head': {
-                'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
-                'strain': strain,
-                'sample count': 0,
-            },
-            'body': {
-                'query': json.dumps(request, sort_keys=True, ensure_ascii=False),
-                'repertoire': {},
-                'slice': {},
-                'vdj': { 'feature': {}, 'sample count': 0 },
-                'vj': { 'feature': {}, 'sample count': 0 },
-            }
-        }
-
-        self.head['name'] = name if name is not None else self.id
-
-        for word in ['library', 'profile']:
-            if word in request['query']:
-               self.head[word] = request['query'][word]
-
-        self.body['repertoire'] = {
-            'VH': self._fetch_region_repertoire({'head.region': 'VH', 'head.strain': strain}),
-            'DH': self._fetch_region_repertoire({'head.region': 'DH', 'head.strain': strain}),
-            'JH': self._fetch_region_repertoire({'head.region': 'JH', 'head.strain': strain}),
-        }
-
-        for feature in self.configuration['histogram']['vj'].keys():
-            self.vj['feature'][feature] = []
-
-        for feature in self.configuration['histogram']['vdj'].keys():
-            self.vdj['feature'][feature] = []
-
-        self.body['slice'] = {
-            'family': self._initialize_slice('family'),
-            'allele': self._initialize_slice('allele'),
-        }
-
-    @property
-    def expression(self):
-        if 'expression' not in self.body:
-            self.log.debug('loading expression on %s', self)
-            self.body['expression'] = {}
-
-            for name,region in self.repertoire.items():
-                for gene in region:
-                    self.body['expression'][gene['allele']] = {
-                        'name': gene['allele'],
-                        'functionality': gene['functionality'],
-                        'start': gene['start'],
-                        'end': gene['end'],
-                        'length': gene['end'] - gene['start'],
-                        'region': name,
-                        'value': 0,
-                    }
-
-            # load expression from VJ joints
-            for j in self.repertoire['JH']:
-                for v in self.repertoire['VH']:
-                    # find the index of the V and J genes
-                    ji = self.lookup['allele']['JH']['lookup'][j['allele']]
-                    vi = self.lookup['allele']['VH']['lookup'][v['allele']]
-
-                    # find the expression value
-                    value = self.slice['allele']['correlation']['vj'][ji][vi]
-
-                    # add the expression value to each of the genes
-                    self.body['expression'][j['allele']]['value'] += value
-                    self.body['expression'][v['allele']]['value'] += value
-
-            # load expression from VDJ joints
-            for j in self.repertoire['JH']:
-                for d in self.repertoire['DH']:
-                    for v in self.repertoire['VH']:
-                        # find the index of the V, D and J genes
-                        ji = self.lookup['allele']['JH']['lookup'][j['allele']]
-                        di = self.lookup['allele']['DH']['lookup'][d['allele']]
-                        vi = self.lookup['allele']['VH']['lookup'][v['allele']]
-
-                        # find the expression value
-                        value = self.slice['allele']['correlation']['vdj'][ji][di][vi]
-
-                        # add the expression value to each of the genes
-                        self.body['expression'][j['allele']]['value'] += value
-                        self.body['expression'][d['allele']]['value'] += value
-                        self.body['expression'][v['allele']]['value'] += value
-
-            # sort expression by start point
-            self.body['expression'] = sorted(self.body['expression'].values(), key=lambda x: x['start'])
-
-        return self.body['expression']
-
-    @property
-    def intensity(self):
-        def load_region_intensity(name, interval, genes):
-            genes = sorted(genes, key=lambda x: x['start'])
-            intensity = {
-                'max name length': max([len(gene['name']) for gene in genes]),
-                'gene count': len(genes),
-                'tile length': interval,
-                'reference start': genes[0]['start'],
-                'reference end': genes[-1]['end'],
-            }
-            intensity['length'] = intensity['reference end'] - intensity['reference start']
-            intensity['tile count'] = math.ceil(float(intensity['length']) / float(intensity['tile length']))
-            intensity['tiled length'] = intensity['tile count'] * intensity['tile length']
-            intensity['tiled start'] = intensity['reference start'] - math.floor(float(intensity['tiled length'] - intensity['length']) / 2.0)
-            intensity['tiled end'] = intensity['tiled start'] + intensity['tiled length']
-            intensity['tiles'] = [ { 'gene':[], 'intensity': 0.0 } for i in range(intensity['tile count']) ]
-
-            intensity['tiles'] = []
-            for index in range(intensity['tile count']):
-                intensity['tiles'].append(
-                    {
-                        'intensity': 0.0,
-                        'gene':[],
-                        'reference start': intensity['tiled start'] + intensity['tile length'] * index,
-                        'reference end': intensity['tiled end'] + intensity['tile length'] * (index + 1),
-                    }
-                )
-            for gene in genes:
-                tile = None
-                left = math.floor(float(gene['start'] - intensity['tiled start']) / float(intensity['tile length']))
-                right = math.floor(float(gene['end'] - intensity['tiled start']) / float(intensity['tile length']))
-                if left == right:
-                    tile = intensity['tiles'][left]
-                else:
-                    split = intensity['tiled start'] + ( right * intensity['tile length'] )
-                    left_part = float(split - gene['start']) / float(gene['length'])
-                    right_part = float(gene['end'] - split) / float(gene['length'])
-                    if left_part > right_part:
-                        tile = intensity['tiles'][left]
-                    else:
-                        tile = intensity['tiles'][right]
-                tile['intensity'] += gene['value']
-                tile['gene'].append(gene)
-            return intensity
-
-        if 'intensity' not in self.body:
-            self.log.debug('loading intensity on %s', self)
-            self.body['intensity'] = {}
-
-            VH = [ gene for gene in self.expression if gene['region'] == 'VH' ]
-            self.body['intensity']['VH'] = load_region_intensity('VH', 70000, VH)
-
-            DH = [ gene for gene in self.expression if gene['region'] == 'DH' ]
-            self.body['intensity']['DH'] = load_region_intensity('DH', 2500, DH)
-
-            JH = [ gene for gene in self.expression if gene['region'] == 'JH' ]
-            self.body['intensity']['JH'] = load_region_intensity('JH', 400, JH)
-        return self.body['intensity']
-
-    @property
-    def prevalence(self):
-        if 'prevalence' not in self.body:
-            self.log.debug('loading prevalence on %s', self)
-            self.body['prevalence'] = {}
-
-            # load expression from VJ joints
-            for j in self.repertoire['JH']:
-                self.body['prevalence'][j['allele']] = {}
-                for v in self.repertoire['VH']:
-
-                    # find the index of the V and J genes
-                    ji = self.lookup['allele']['JH']['lookup'][j['allele']]
-                    vi = self.lookup['allele']['VH']['lookup'][v['allele']]
-
-                    # find the expression value
-                    value = self.slice['allele']['correlation']['vj'][ji][vi]
-                    for d in self.repertoire['DH']:
-                        di = self.lookup['allele']['DH']['lookup'][d['allele']]
-                        value += self.slice['allele']['correlation']['vdj'][ji][di][vi]
-
-                    self.body['prevalence'][j['allele']][v['allele']] = value
-
-        return self.body['prevalence']
-
-    @property
-    def configuration(self):
-        return self.pipeline.configuration
-
-    @property
-    def database(self):
-        return self.pipeline.resolver.database
-
-    @property
-    def lookup(self):
-        if self._lookup is None:
-            self._lookup = {}
-            for slice in [ 'allele', 'family' ]:
-                lookup = {
-                    'VH': { 'label': [], 'name': {}, 'lookup': {}, 'index':{} },
-                    'DH': { 'label': [], 'name': {}, 'lookup': {}, 'index':{} },
-                    'JH': { 'label': [], 'name': {}, 'lookup': {}, 'index':{} },
-                }
-                for region in lookup.keys():
-                    if region == 'JH' and slice == 'family':
-                        index = 0
-                        for gene in self.repertoire[region]:
-                            if gene[slice] not in lookup[region]['name']:
-                                lookup[region]['label'].append(gene['gene'])
-                                lookup[region]['name'][gene['gene']] = index
-                                lookup[region]['index'][index] = gene['gene']
-                                index += 1
-                            lookup[region]['lookup'][gene['allele']] = lookup[region]['name'][gene['gene']]
-                    else:
-                        index = 0
-                        for gene in self.repertoire[region]:
-                            if gene[slice] not in lookup[region]['name']:
-                                lookup[region]['label'].append(gene[slice])
-                                lookup[region]['name'][gene[slice]] = index
-                                lookup[region]['index'][index] = gene[slice]
-                                index += 1
-                            lookup[region]['lookup'][gene['allele']] = lookup[region]['name'][gene[slice]]
-                self._lookup[slice] = lookup
-        return self._lookup
-
-    @property
-    def head(self):
-        return self.node['head']
-
-    @property
-    def body(self):
-        return self.node['body']
-
-    @property
-    def slice(self):
-        return self.body['slice']
-
-    @property
-    def family(self):
-        return self.slice['family']
-
-    @property
-    def allele(self):
-        return self.slice['allele']
-
-    @property
-    def id(self):
-        return self.head['id']
-
-    @property
-    def name(self):
-        return self.head['name']
-
-    @property
-    def document(self):
-        document = transform_to_document(self.node)
-        for k in [ 'vj', 'vdj' ]:
-            if k in document['body']:
-                del document['body'][k]
-        return document
-
-    @property
-    def query(self):
-        if 'query' in self.body:
-            return json.loads(self.body['query'])
-        else:
-            return None
-
-    @property
-    def json(self):
-        document = transform_to_document(self.node)
-        if 'query' in document['body']:
-            document['body']['query'] = json.loads(document['body']['query'])
-        return(to_json(document))
-
-    def info(self, profile):
-        print(self.json)
-
-    @property
-    def count(self):
-        if 'sample count' in self.head:
-            return self.head['sample count']
-        else:
-            return 0
-
-    @property
-    def strain(self):
-        return self.head['strain']
-
-    @property
-    def vdj(self):
-        return self.body['vdj']
-
-    @property
-    def vj(self):
-        return self.body['vj']
-
-    @property
-    def repertoire(self):
-        return self.body['repertoire']
-
-    def add_sample(self, sample):
-        if 'CDR3' in sample.primary:
-            self.head['sample count'] += 1
-            if 'DH' not in sample.primary:
-                self.vj['sample count'] += 1
-                breakdown = {
-                    'type': 'vj',
-                    'sample': sample,
-                    'portion': None,
-                    'combination': None,
-                    'region': { 'VH': [], 'JH': [] }
-                }
-
-                # collect CDR3 features
-                self.vj['feature']['VJ CDR3 length'].append(sample.primary['CDR3']['query'].length)
-                self.vj['feature']['VJ CDR3 charge'].append(sample.primary['CDR3']['charge'])
-                self.vj['feature']['VJ CDR3 weight'].append(sample.primary['CDR3']['weight'])
-
-                length = 0 if 'V-J' not in sample.primary else sample.primary['V-J']['query'].length
-                ncount = 0 if 'V-J' not in sample.primary else sample.primary['V-J']['palindrome'].count('N')
-                pcount = 0 if 'V-J' not in sample.primary else sample.primary['V-J']['palindrome'].count('P')
-
-                self.vj['feature']['VJ V-J length'].append(length)
-                self.vj['feature']['VJ V-J N count'].append(ncount)
-                self.vj['feature']['VJ V-J P count'].append(pcount)
-
-                # collect the picked VH and JH hits and count the number of possible combinations 
-                for hit in sample.hit:
-                    if hit['picked'] and hit['region'] in breakdown['region'].keys():
-                        breakdown['region'][hit['region']].append(hit)
-                breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH'])
-                breakdown['portion'] = 1.0 / float(breakdown['combination'])
-                chewback = {
-                    'VJ V 3 chew': [ h['3 chew'].length for h in breakdown['region']['VH'] if '3 chew' in h ],
-                    'VJ J 5 chew': [ h['5 chew'].length for h in breakdown['region']['JH'] if '5 chew' in h ],
-                }
-                total = 0
-                for k,v in chewback.items():
-                    if v:
-                        c = numpy.mean(v)
-                        total += c
-                        self.vj['feature'][k].append(c)
-                    else:
-                        self.vj['feature'][k].append(0)
-                self.vj['feature']['VJ chew'].append(total)
-
-                for slice in self.slice.keys():
-                    self._add_sample_to_slice(slice, breakdown)
-            else:
-                self.vdj['sample count'] += 1
-                breakdown = {
-                    'type': 'vdj',
-                    'sample': sample,
-                    'portion': None,
-                    'combination': None,
-                    'region': { 'VH': [], 'DH': [], 'JH': [] }
-                }
-
-                # collect CDR3 features
-                self.vdj['feature']['VDJ CDR3 length'].append(sample.primary['CDR3']['query'].length)
-                self.vdj['feature']['VDJ CDR3 charge'].append(sample.primary['CDR3']['charge'])
-                self.vdj['feature']['VDJ CDR3 weight'].append(sample.primary['CDR3']['weight'])
-
-                ntotal = 0
-                ptotal = 0
-
-                for junction in ['V-D', 'D-J']:
-                    length = 0 if junction not in sample.primary else sample.primary[junction]['query'].length
-                    ncount = 0 if junction not in sample.primary else sample.primary[junction]['palindrome'].count('N')
-                    pcount = 0 if junction not in sample.primary else sample.primary[junction]['palindrome'].count('P')
-                    ntotal += ncount
-                    ptotal += pcount
-
-                    self.vdj['feature']['VDJ {} length'.format(junction)].append(length)
-                    self.vdj['feature']['VDJ {} N count'.format(junction)].append(ncount)
-                    self.vdj['feature']['VDJ {} P count'.format(junction)].append(pcount)
-
-                self.vdj['feature']['VDJ N count'].append(ntotal)
-                self.vdj['feature']['VDJ P count'].append(ptotal)
-
-                # collect the picked VH, DH and JH hits and count the number of possible combinations 
-                for hit in breakdown['sample'].hit:
-                    if hit['picked'] and hit['region'] in breakdown['region'].keys():
-                        breakdown['region'][hit['region']].append(hit)
-                breakdown['combination'] = len(breakdown['region']['VH']) * len(breakdown['region']['JH']) * len(breakdown['region']['DH'])
-                breakdown['portion'] = 1.0 / float(breakdown['combination'])
-
-                chewback = {
-                    'VDJ V 3 chew': [ h['3 chew'].length for h in breakdown['region']['VH'] if '3 chew' in h ],
-                    'VDJ J 5 chew': [ h['5 chew'].length for h in breakdown['region']['JH'] if '5 chew' in h ],
-                    'VDJ D 3 chew': [ h['3 chew'].length for h in breakdown['region']['DH'] if '3 chew' in h ],
-                    'VDJ D 5 chew': [ h['5 chew'].length for h in breakdown['region']['DH'] if '5 chew' in h ],
-                }
-
-                total = 0
-                for k,v in chewback.items():
-                    if v:
-                        c = numpy.mean(v)
-                        total += c
-                        self.vdj['feature'][k].append(c)
-                    else:
-                        self.vdj['feature'][k].append(0)
-                self.vdj['feature']['VDJ chew'].append(total)
-
-                for slice in self.slice.keys():
-                    self._add_sample_to_slice(slice, breakdown)
-        else:
-            self.log.error('%s is missing a CDR3 region', sample.id)
-
-    def done(self):
-        for kind in ['vj', 'vdj']:
-            self.body[kind]['distribution'] = {}
-            for name, feature in self.body[kind]['feature'].items():
-                feature = numpy.array(feature, dtype=float64)
-                self.body[kind]['feature'][name] = feature
-                self.body[kind]['distribution'][name] = {
-                    'min': float(numpy.amin(feature)),
-                    'max': float(numpy.amax(feature)),
-                    'std': float(numpy.std(feature)),
-                    'mean': float(numpy.mean(feature)),
-                    'median': float(numpy.median(feature)),
-                }
-                bins, edges = histogram(feature, **self.configuration['histogram'][kind][name])
-                self.body[kind]['distribution'][name]['histogram'] = { 
-                    'bins': [ float(x) for x in bins ], 
-                    'edges': [ float(x) for x in edges ]
-                }
-
-    def save(self):
-        path = os.path.join(self.configuration['cache']['path'], self.id)
-        try:
-            self.pipeline.verify_directory(self.configuration['cache']['path'])
-            with io.open(path, 'wb') as f:
-                pickle.dump(self.node, f)
-            self.log.debug('saved cache to %s', path)
-        except OSError as e:
-            self.log.error('failed writing cached survey file to %s', path)
-            self.log.debug(str(e))
-
-    def load(self):
-        path = os.path.join(self.configuration['cache']['path'], self.id)
-        if os.path.exists(path):
-            try:
-                node = None
-                with io.open(path, 'rb') as f:
-                    node = pickle.load(f)
-                self.body['vdj'] = node['body']['vdj']
-                self.body['vj'] = node['body']['vj']
-                self.log.debug('cached survey loaded from %s', path)
-                if 'expression' in self.body:
-                    del self.body['expression']
-                if 'intensity' in self.body:
-                    del self.body['intensity']
-            except KeyError:
-                self.log.warning('failed loading cached survey from %s', path)
-
-    def _add_sample_to_slice(self, slice, breakdown):
-        if breakdown['type'] == 'vj':
-            for j in range(len(breakdown['region']['JH'])):
-                for v in range(len(breakdown['region']['VH'])):
-                    ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                    vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                    self.slice[slice]['correlation']['vj'][ji][vi] += breakdown['portion']
-        else:
-            for j in range(len(breakdown['region']['JH'])):
-                for d in range(len(breakdown['region']['DH'])):
-                    for v in range(len(breakdown['region']['VH'])):
-                        ji = self.lookup[slice]['JH']['lookup'][breakdown['region']['JH'][j]['allele']]
-                        di = self.lookup[slice]['DH']['lookup'][breakdown['region']['DH'][d]['allele']]
-                        vi = self.lookup[slice]['VH']['lookup'][breakdown['region']['VH'][v]['allele']]
-                        self.slice[slice]['correlation']['vdj'][ji][di][vi] += breakdown['portion']
-
-    def _fetch_region_repertoire(self, query):
-        repertoire = []
-        cursor = self.database['gene'].find(query).sort([
-            ('body.family', pymongo.ASCENDING),
-            ('body.gene', pymongo.ASCENDING),
-            ('body.allele', pymongo.ASCENDING),
-        ])
-        for gene in cursor:
-            node = {
-                'id': gene['head']['id'],
-                'allele': gene['body']['allele'],
-                'gene': gene['body']['gene'],
-                'family': gene['body']['family'],
-                'functionality': gene['body']['functionality'],
-                'start': gene['body']['reference start'],
-                'end': gene['body']['reference end'],
-                'strand': gene['body']['reference strand'],
-                'length': gene['body']['length'],
-            }
-            for artifact in [
-                '3 heptamer',
-                '3 nonamer',
-                '3 spacer',
-                '5 heptamer',
-                '5 nonamer',
-                '5 spacer',
-                '3 gap',
-                '5 gap',
-            ]:
-                if artifact in gene['body']:
-                    node[artifact] = gene['body'][artifact]['sequence']['nucleotide']
-            repertoire.append(node)
-        repertoire = sorted(repertoire, key=lambda x: x['start'])
-
-        # index the genes after they were sorted by start site
-        # we will use this ordering in the matrices
-        for index,gene in enumerate(repertoire):
-            gene['index'] = index
-
-        return repertoire
-
-    def _initialize_slice(self, slice):
-        node = {
-            'correlation': { 'vj': None, 'vdj': None },
-            'dimension': {},
-        }
-
-        for region in [ 'VH', 'DH', 'JH' ]:
-            node['dimension'][region] = len(self.lookup[slice][region]['label'])
-
-        node['correlation']['vj'] = zeros((node['dimension']['JH'], node['dimension']['VH']))
-        self.log.debug(
-            '%s VJ correlation matrix is %s JH by %s VH',
-            slice,
-            node['dimension']['JH'], 
-            node['dimension']['VH'])
-
-        node['correlation']['vdj'] = zeros((node['dimension']['JH'], node['dimension']['DH'], node['dimension']['VH']))
-        self.log.debug(
-            '%s VDJ correlation matrix is %s JH by %s DH by %s VH',
-            slice,
-            node['dimension']['JH'],
-            node['dimension']['DH'],
-            node['dimension']['VH'])
-        return node
-
-
 class Pivot(object):
-    def __init__(self, study, node, name, rotate):
+    def __init__(self, study, node=None, name=None, rotate=None):
         self.log = logging.getLogger('Pivot')
         self.study = study
         self.node = node
@@ -3383,21 +2719,40 @@ class Pivot(object):
                 'pivot': None,
                 'count': 0,
                 'weight': [],
-                'residual': dict([(key, { 'value': [] }) for key in self.template ])
+                'residual': {}
             }
+            for feature in self.row:
+                # TODO types of features
+                self.residual[feature['key']] = dict([(column['key'], None) for column in feature['column']])
+                self.residual[feature['key']]['value'] = []
+
             if rotate:
                 self.node['axis'] = rotate[0]
                 self.node['pivot'] = {}
                 if len(rotate) > 1:
                     self.node['rotate'] = rotate[1:]
+        else:
+            if isinstance(self.node['pivot'], list):
+                self.node['pivot'] = dict([(node['name'], Pivot(self.study, node)) for node in self.node['pivot']])
+
+    @property
+    def empty(self):
+        return not self.count > 0
 
     @property
     def document(self):
-        return transform_to_flat_document(self.node)
+        document = transform_to_document(self.node)
+        if isinstance(document['pivot'], dict):
+            document['pivot'] = list(document['pivot'].values())
+        return document
 
     @property
-    def template(self):
-        return self.study.template
+    def row(self):
+        return self.study.row
+
+    @property
+    def feature(self):
+        return self.study.feature
 
     @property
     def axis(self):
@@ -3431,6 +2786,10 @@ class Pivot(object):
     def residual(self):
         return self.node['residual']
 
+    @property
+    def mean(self):
+        return self.node['residual']
+
     def add_observation(self, observation):
         self.count += 1
         self.weight.append(observation['weight'])
@@ -3445,51 +2804,73 @@ class Pivot(object):
             pivot.add_observation(observation)
 
     def finalize(self):
-        self.node['weight'] = numpy.array(self.node['weight'])
-        for key,term in self.residual.items():
-            term['value'] = numpy.array(term['value'])
-            term['mean'] = numpy.average(term['value'], weights=self.weight)
-            term['std'] = math.sqrt(numpy.average(pow(term['value'] - term['mean'], 2), weights=self.weight))
+        if not self.empty:
+            self.node['weight'] = numpy.array(self.node['weight'])
+            for key,feature in self.residual.items():
+                feature['value'] = numpy.array(feature['value'])
+                feature['min'] = numpy.amin(feature['value'])
+                feature['max'] = numpy.amax(feature['value'])
+                feature['mean'] = numpy.average(feature['value'], weights=self.weight)
+                feature['std'] = math.sqrt(numpy.average(pow(feature['value'] - feature['mean'], 2), weights=self.weight))
 
         if self.axis is not None:
             for pivot in self.pivot.values():
                 pivot.finalize()
 
-    def collect_residual(self, depth, parent=[]):
-        buffer = []
-        if depth > 0:
+    def collect(self, template={}, buffer=[]):
+        if 'depth' not in template:
+            template['depth'] = 0
+
+        if 'rotate' not in template:
+            template['rotate'] = []
+
+        if template['depth'] > 0:
             for name, pivot in self.pivot.items():
-                buffer.extend(pivot.collect_residual(depth - 1, parent + [ name ]))
-        else:
-            buffer.append (
-                {
-                    'axis': parent,
-                    'weight': numpy.sum(self.weight),
-                    'mean': dict([(k, v['mean']) for k,v in self.residual.items()]),
-                    'std': dict([(k, v['std']) for k,v in self.residual.items()]),
+                iteration = {
+                    'depth': template['depth'] - 1,
+                    'rotate': template['rotate'] + [ name ]
                 }
-            )
+                pivot.collect(iteration, buffer)
+        else:
+            template['weight'] = numpy.sum(self.weight)
+            template['residual'] = self.residual
+            buffer.append(template)
         return buffer
 
 
 class Study(object):
-    def __init__(self, node, query, name, rotate, template):
+    def __init__(self, pipeline, node=None, request=None, name=None):
         self.log = logging.getLogger('Study')
+        self.pipeline = pipeline
         self.node = node
         if self.node is None:
             self.node = {
                 'head' :{
-                    'id': hashlib.sha1(to_json(query).encode('utf8')).hexdigest(),
+                    'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
                     'name': name,
-                    'count': 0,
+                    'count': 0
                 },
                 'body': {
-                    'query': json.dumps(query, sort_keys=True, ensure_ascii=False),
-                    'rotate': rotate,
-                    'template': template,
+                    'request': request
                 }
             }
-            self.body['pivot'] = Pivot(self, None, 'root', rotate)
+            self.body['repertoire'] = dict([(x, {}) for x in self.rotate])
+            self.body['pivot'] = Pivot(self, None, None, self.rotate)
+            if self.name is None:
+                self.head['name'] = self.id
+        else:
+            self.body['request'] = json.loads(self.body['request'])
+            for key in list(self.repertoire.keys()):
+                if isinstance(self.repertoire[key], list):
+                    self.repertoire[key] = dict([(x['name'], x) for x in self.repertoire[key]])
+            self.body['pivot'] = Pivot(self, self.body['pivot'])
+
+    def __str__(self):
+        return '\t'.join([self.id, self.name, str(self.count)])
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
 
     @property
     def head(self):
@@ -3508,23 +2889,46 @@ class Study(object):
         return self.head['name']
 
     @property
-    def document(self):
-        return transform_to_flat_document(self.node)
-
-    def info(self):
-        print(to_simple_json(self.document))
+    def request(self):
+        return self.body['request']
 
     @property
-    def template(self):
-        return self.body['template']
+    def preset(self):
+        return self.request['preset']
+
+    @property
+    def ambiguous(self):
+        return self.preset['ambiguous']
+
+    @property
+    def row(self):
+        return self.preset['row']
+
+    @property
+    def feature(self):
+        return self.preset['feature']
 
     @property
     def rotate(self):
-        return self.body['rotate']
+        return self.preset['rotate']
 
     @property
     def pivot(self):
         return self.body['pivot']
+
+    @property
+    def repertoire(self):
+        return self.body['repertoire']
+
+    @property
+    def document(self):
+        document = transform_to_document(self.node)
+        document['body']['request'] = json.dumps(document['body']['request'], sort_keys=False, ensure_ascii=False)
+        if isinstance(document['body']['repertoire'], dict):
+            for key in list(document['body']['repertoire'].keys()):
+                if isinstance(document['body']['repertoire'][key], dict):
+                    document['body']['repertoire'][key] = list(document['body']['repertoire'][key].values())
+        return document
 
     @property
     def count(self):
@@ -3534,57 +2938,180 @@ class Study(object):
     def count(self, value):
         self.head['count'] = value
 
-    def add_sample(self, sample, ambiguous=False):
+    def index_sample(self, sample):
+        self.count += 1
+        for axis in self.rotate:
+            for observation in sample.observation:
+                if observation[axis] not in self.repertoire[axis]:
+                    name = observation[axis]
+                    if axis in ['VH', 'DH', 'JH'] and name in self.request['repertoire']:
+                        node = deepcopy(self.request['repertoire'][name])
+                    else:
+                        node = {}
+                    node['name'] = name
+                    node['weight'] = 0.0
+                    self.repertoire[axis][name] = node
+                self.repertoire[axis][observation[axis]]['weight'] += observation['weight']
+
+    def add_sample(self, sample):
         taken = True
         if sample.observable:
-            if ambiguous or len(sample.observation) == 1:
+            if self.ambiguous or len(sample.observation) == 1:
+                # check the observations
                 for observation in sample.observation:
                     for axis in self.rotate:
                         if axis not in observation:
-                            self.log.debug('sample %s is missing axis %s', sample.id, axis)
+                            self.log.debug('ignoring sample %s with missing axis %s', sample.id, axis)
                             taken = False
                             break
-                    for feature in self.template:
-                        if feature not in observation:
-                            self.log.debug('sample %s is missing feature %s', sample.id, feature)
+                    for feature in self.row:
+                        if feature['key'] not in observation:
+                            self.log.debug('ignoring sample %s with missing feature %s', sample.id, feature['key'])
                             taken = False
                             break
                     if not taken:
                         break
+
                 if taken:
-                    self.count += 1
+                    self.index_sample(sample)
                     for observation in sample.observation:
                         self.pivot.add_observation(observation)
             else:
-                self.log.info('sample %s has multiple observations', sample.id)
+                self.log.debug('ignoring sample %s with multiple observations', sample.id)
         else:
-            self.log.debug('sample %s has no observations', sample.id)
+            self.log.debug('ignoring sample %s with no observations', sample.id)
 
     def finalize(self):
         self.pivot.finalize()
 
-    def residual_to_csv(self, depth):
-        total = float(self.count)
-        header = list(self.rotate[:depth])
-        header.append('weight')
-        header.append('portion')
-        for k in self.template:
-            header.append('{} mean'.format(k))
-            header.append('{} sd'.format(k))
-        print(','.join(header))
+    def collect(self, template={}, buffer=[]):
+        if 'depth' not in template or template['depth'] is None:
+            template['depth'] = len(self.rotate)
+        template['depth'] = min(template['depth'], len(self.rotate))
+        buffer = self.pivot.collect({ 'depth': template['depth'] })
 
-        buffer = self.pivot.collect_residual(depth)
-        buffer = sorted(buffer, key=lambda x: -x['weight'])
+        if 'sort' in template:
+            for sort in template['sort']:
+                buffer = sorted(buffer, key=lambda x: x['sort'], reverse=True)
 
-        for record in buffer:
-            record['portion'] = record['weight'] / total
-            row = list(record['axis'])
-            row.append(str(record['weight']))
-            row.append(str(record['portion']))
-            for k in self.template:
-                row.append(str(record['mean'][k]))
-                row.append(str(record['std'][k]))
-            print(','.join(row))
+        return buffer
+
+    def to_csv(self, preset=None):
+        def to_header(template, buffer=[]):
+            header = self.rotate[:template['depth']] + [ 'weight' , 'portion' ]
+            for feature in template['row']:
+                for column in feature['column']:
+                    header.append('{} {}'.format(feature['key'], column['key']))
+            buffer.append(header)
+            return buffer
+
+        def to_table(template, buffer=[]):
+            collection = self.collect(template)
+            weight = float(self.count)
+
+            for record in collection:
+                row = record['rotate'] + [ record['weight'], record['weight'] / weight ]
+                for feature in template['row']:
+                    for column in feature['column']:
+                        if feature['key'] in record['residual'] and column['key'] in record['residual'][feature['key']]:
+                            row.append(record['residual'][feature['key']][column['key']])
+                        else:
+                            row.append(None)
+                buffer.append(row)
+            return buffer
+
+        template = {
+            'row': deepcopy(self.row),
+        }
+        if preset: template.update(preset)
+        if 'depth' not in template or template['depth'] is None:
+            template['depth'] = len(self.rotate)
+        template['depth'] = min(template['depth'], len(self.rotate))
+
+        buffer = []
+        to_header(template, buffer)
+        to_table(template, buffer)
+        for row in buffer:
+            print(','.join([str(column) for column in row]))
+
+    def tiled_rotation_intensity(self, name, interval):
+        scale = [ p for p in self.request['repertoire'].values() if p['pivot'] == name ]
+        scale = sorted(scale, key=lambda x: x['start'])
+        intensity = {
+            'max name length': max([len(pivot['name']) for pivot in scale]),
+            'pivot count': len(scale),
+            'tile length': interval,
+            'start': scale[0]['start'],
+            'end': scale[-1]['end'],
+            'tiles': [],
+        }
+        intensity['length'] = intensity['end'] - intensity['start']
+        intensity['tile count'] = math.ceil(float(intensity['length']) / float(intensity['tile length']))
+        intensity['tiled length'] = intensity['tile count'] * intensity['tile length']
+        intensity['tiled start'] = intensity['start'] - math.floor(float(intensity['tiled length'] - intensity['length']) / 2.0)
+        intensity['tiled end'] = intensity['tiled start'] + intensity['tiled length']
+
+        for index in range(intensity['tile count']):
+            intensity['tiles'].append(
+                {
+                    'intensity': 0.0,
+                    'pivot':[],
+                    'start': intensity['tiled start'] + intensity['tile length'] * index,
+                    'end': intensity['tiled end'] + intensity['tile length'] * (index + 1),
+                }
+            )
+
+        for pivot in self.repertoire[name].values():
+            tile = None
+            left = math.floor(float(pivot['start'] - intensity['tiled start']) / float(intensity['tile length']))
+            right = math.floor(float(pivot['end'] - intensity['tiled start']) / float(intensity['tile length']))
+            if left == right:
+                tile = intensity['tiles'][left]
+            else:
+                split = intensity['tiled start'] + ( right * intensity['tile length'] )
+                left_part = float(split - pivot['start']) / float(pivot['length'])
+                right_part = float(pivot['end'] - split) / float(pivot['length'])
+                if left_part > right_part:
+                    tile = intensity['tiles'][left]
+                else:
+                    tile = intensity['tiles'][right]
+            tile['intensity'] += pivot['weight']
+            tile['pivot'].append(pivot)
+        return intensity
+
+    def to_tiled_density(self, buffer):
+        density = {
+            'VH': {
+                'order': 3,
+                'interval': 70000,
+            },
+            'DH': {
+                'order': 2,
+                'interval': 2500,
+            },
+            'JH': {
+                'order': 1,
+                'interval': 400,
+            }
+        }
+        for pivot, node in density.items():
+            node['intensity'] = self.tiled_rotation_intensity(pivot, node['interval'])
+            node['total'] = float(sum([tile['intensity'] for tile in node['intensity']['tiles']]))
+            node['factor'] = float(node['intensity']['pivot count']) / node['total']
+            for tile in node['intensity']['tiles']:
+                row = {
+                    'study': self.name,
+                    'pivot': pivot,
+                    'start': tile['start'],
+                    'end': tile['end'],
+                    'intensity': tile['intensity'],
+                    'adjusted': float(tile['intensity'] * node['factor']),
+                    'element': ';'.join([e['name'] for e in tile['pivot']])
+                }
+                buffer.append(row)
+
+    def info(self):
+        print(to_simple_json(transform_to_document(self.node)))
 
 
 class Diagram(object):
@@ -4302,38 +3829,35 @@ class Resolver(object):
             self.log.error('unknown reference %s', name)
         return reference
 
-    def survey_find(self, name):
-        survey = None
+    def study_find(self, name):
+        study = None
         if name is not None:
-            document = self.database['survey'].find_one({'head.name': name})
+            document = self.database['study'].find_one({'head.name': name})
             if document:
-                survey = Survey(self.pipeline, document)
-                survey.load()
-        return survey
+                study = Study(self.pipeline, document)
+        return study
 
-    def survey_fetch(self, id):
-        survey = None
-        document = self.database['survey'].find_one({'head.id': id})
+    def study_fetch(self, id):
+        study = None
+        document = self.database['study'].find_one({'head.id': id})
         if document:
-            survey = Survey(self.pipeline, document)
-            survey.load()
-        return survey
+            study = Study(self.pipeline, document)
+        return study
 
-    def survey_drop(self, id):
-        survey = survey_fetch(id)
-        if survey:
-            result = self.database['survey'].delete({ 'head.id': id })
+    def study_drop(self, id):
+        study = study_fetch(id)
+        if study:
+            result = self.database['study'].delete({ 'head.id': id })
             if result:
-                self.log.info('dropped survey record for\n%s', survey.query)
+                self.log.info('dropped study record for\n%s', study.query)
 
-    def survey_save(self, survey):
-        if survey is not None:
-            existing = self.survey_fetch(survey.id)
+    def study_save(self, study):
+        if study is not None:
+            existing = self.study_fetch(study.id)
             if existing:
-                self.log.debug('existing survey found for %s', survey.id)
-                survey.node['_id'] = existing.node['_id']
-            self.database['survey'].save(survey.document)
-            survey.save()
+                self.log.debug('existing study found for %s', study.id)
+                study.node['_id'] = existing.node['_id']
+            self.database['study'].save(study.document)
 
     def library_store(self, node):
         if node is not None:
@@ -4382,6 +3906,34 @@ class Resolver(object):
             except BulkWriteError as e:
                 self.log.critical(e.details)
 
+    def make_repertoire(self, request):
+        template = {
+            'region': 'pivot',
+            'family': 'family',
+            'gene': 'name',
+            'functionality': 'functionality',
+            'reference end': 'end',
+            'reference start': 'start',
+            'reference strand': 'strand',
+            'length': 'length',
+        }
+
+        organism = request['preset']['organism name']
+        strain = request['preset']['strain']
+        repertoire = {}
+        query = {
+            'head.organism name': organism,
+            'head.strain': strain
+        }
+        cursor = self.database['gene'].find(query)
+        for node in cursor:
+            record = {}
+            for k,v in template.items():
+                if k in node['body']:
+                    record[v] = node['body'][k]
+            repertoire[record['name']] = record
+        return repertoire
+
     def gene_fetch(self, id):
         if id not in self.cache['gene']:
             document = self.database['gene'].find_one({'head.id': id})
@@ -4419,7 +3971,8 @@ class Resolver(object):
                 'functionality',
                 'organism name',
                 'strain',
-                'identified'
+                'identified',
+                'gene',
             ]:
                 if k in node:
                     document['head'][k] = node[k]
@@ -4624,33 +4177,57 @@ class Pipeline(object):
             os.makedirs(path)
 
     def build_query(self, override, profile, kind):
-        query = {}
-        if profile is not None and profile in self.configuration['profile']:
-            if kind in self.configuration['profile'][profile]:
-                for k,v in self.configuration['profile'][profile][kind].items():
-                    query[k] = v
-            else:
-                self.log.critical('profile %s is undefined for %s', profile, kind)
-                raise SystemExit(1)
+        def normalize_query(node):
+            return json.loads(json.dumps(node, sort_keys=True, ensure_ascii=False))
 
+        query = { }
+
+        # potentially load a profile query
+        if profile is not None:
+            if profile in self.configuration['profile']:
+                if kind in self.configuration['profile'][profile]:
+                    for key,value in self.configuration['profile'][profile][kind].items():
+                        query[key] = value
+                else:
+                    raise ValueError('profile {} is undefined for {}'.format(profile, kind))
+            else:
+                raise ValueError('profile {} is undefined'.format(profile))
+
+        # potentially override the profile query
         if override:
-            for k,v in override.items():
-                if k == 'library':
-                    library = self.resolver.library_fetch(v)
+            for key,value in override.items():
+                if key == 'library':
+                    library = self.resolver.library_fetch(value)
                     if library:
                         if library.reference:
-                            query['$or'] = []
+                            query[ '$or' ] = [ ]
                             for reference in library.reference:
-                                query['$or'].append({'library': reference})
+                                query[ '$or' ].append({ 'library': reference })
                         else:
-                            query['library'] = v
+                            query[ 'library' ] = value
                     else:
-                        self.log.error('library %s does not exist', v)
-                        SystemExit(1)
+                        raise ValueError('library {} does not exist'.format(value))
                 else:
-                    query[k] = v
-        if query: self.log.debug('search query is:\n{}'.format(to_json(query)))
+                    query[key] = value
+
+        if query: query = normalize_query(query)
         return query
+
+    def build_request(self, override, profile, kind, preset, limit, skip):
+        request = {
+            'limit': limit,
+            'skip': skip,
+        }
+        if preset is not None:
+            if preset in self.configuration['study']['preset']:
+                request['preset'] = self.configuration['study']['preset'][preset]
+                request['repertoire'] = self.resolver.make_repertoire(request)
+            else:
+                raise ValueError('preset {} is undefined'.format(preset))
+
+        request['query'] = self.build_query(override, profile, kind)
+        self.log.debug('request is:\n{}'.format(to_simple_json(request)))
+        return request
 
     def execute(self, cmd):
         if cmd.action == 'samplePopulate':
@@ -4711,52 +4288,42 @@ class Pipeline(object):
                 
         elif cmd.action == 'analyzedSampelDrop':
             self.analyzed_sample_drop(cmd.instruction['library'])
-            
-
-        elif cmd.action == 'survey':
-            survey = self.survey_make(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'],
-                cmd.instruction['name'])
-
-        elif cmd.action == 'surveyPlot':
-            self.survey_plot(cmd.instruction['names'])
-                
-        elif cmd.action == 'surveyDensity':
-            self.survey_density(cmd.instruction['names'])
-
-        elif cmd.action == 'surveyPrevalence':
-            self.survey_prevalence(cmd.instruction['names'])
-
-        elif cmd.action == 'surveyR':
-            self.survey_r(cmd.instruction['names'])
-                
-        elif cmd.action == 'surveyInfo':
-            survey = self.survey_info(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
 
         elif cmd.action == 'study':
-            survey = self.study_info(
+            study = self.study_make(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'],
-                cmd.instruction['name'],
-                cmd.instruction['template'],
-                cmd.instruction['depth'],
-                cmd.instruction['ambiguous'])
+                cmd.instruction['preset'],
+                cmd.instruction['name'])
 
-        elif cmd.action == 'surveyList':
-            survey = self.survey_list(
+        elif cmd.action == 'studyInfo':
+            study = self.study_info(
                 cmd.query,
                 cmd.instruction['limit'],
                 cmd.instruction['skip'],
                 cmd.instruction['profile'])
+
+        elif cmd.action == 'studyList':
+            study = self.study_list(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'])
+
+        elif cmd.action == 'studyCSV':
+            study = self.study_csv(
+                cmd.query,
+                cmd.instruction['limit'],
+                cmd.instruction['skip'],
+                cmd.instruction['profile'],
+                cmd.instruction['preset'],
+                cmd.instruction['name'],
+                cmd.instruction['depth'])
+
+        elif cmd.action == 'studyDensity':
+            self.study_density(cmd.instruction['names'])
 
         elif cmd.action == 'libraryPopulate':
             for path in cmd.instruction['path']:
@@ -5002,231 +4569,107 @@ class Pipeline(object):
     def analyzed_sample_drop(self, library):
         self.resolver.analyzed_sample_drop(library)
 
-    # survey
-    def survey_make(self, query, limit, skip, profile, name=None):
-        survey = self.resolver.survey_find(name)
-        if survey is None:
-            q = self.build_query(query, profile, 'sample')
-            request = { 'limit': limit, 'skip': skip, 'query': q }
-            id = hashlib.sha1(to_json(request).encode('utf8')).hexdigest()
-            survey = self.resolver.survey_fetch(id)
-            if survey is None:
-                survey = Survey(self, None, request, name)
-                cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
-                self.log.debug('collecting samples for survey %s', survey.name)
+    # study
+    def study_make(self, query, limit, skip, profile, preset, name=None):
+        study = None
+        request = self.build_request(query, profile, 'sample', preset, limit, skip)
+        id = hashlib.sha1(to_json(request).encode('utf8')).hexdigest()
+        # try by name
+        if name is not None:
+            study = self.resolver.study_find(name)
+            if study is not None and study.id != id:
+                study = None
+
+        # try by id
+        if study is None:
+            study = self.resolver.study_fetch(id)
+            if study is None:
+                study = Study(self, None, request, name)
+                cursor = self.resolver.make_cursor('analyzed_sample', request['query'], request['limit'], request['skip'])
+                self.log.debug('collecting samples for study %s', study.name)
                 for node in cursor:
-                    survey.add_sample(Sample(self, node))
+                    sample = Sample(self, node)
+                    study.add_sample(sample)
                 cursor.close()
-                survey.done()
-                self.resolver.survey_save(survey)
-        return survey
+                study.finalize()
+                self.resolver.study_save(study)
+        return study
 
-    def survey_plot(self, names):
-        plot_name = []
-        surveys = []
-        colors = [
-            ['#C0392b', '#D14A3C'],
-            ['#669803', '#DDE7AC'],
-            ['#EEB63E', '#FFC74F'],
-            ['#C64AC3', '#D75BD4'],
-        ]
-        if len(names) > 0 and len(names) < 5:
-            for name in names:
-                survey = self.resolver.survey_find(name)
-                if survey:
-                    surveys.append(survey)
-                    plot_name.append(survey.name)
+    def study_info(self, query, limit, skip, profile):
+        request = {
+            'limit': limit,
+            'skip': skip,
+            'query': self.build_query(query, profile, 'study')
+        }
+        cursor = self.resolver.make_cursor('study', request['query'], request['limit'], request['skip'])
+        for node in cursor:
+            study = Study(self, node)
+            study.info()
+        cursor.close()
 
-                else:
-                    raise ValueError('could not locate survey {}'.format(name))
+    def study_list(self, query, limit, skip, profile):
+        request = {
+            'limit': limit,
+            'skip': skip,
+            'query': self.build_query(query, profile, 'study')
+        }
+        cursor = self.resolver.make_cursor('study', request['query'], request['limit'], request['skip'])
+        for node in cursor:
+            study = Study(self, node)
+            print(str(study))
+        cursor.close()
 
-            histogram = Histogram(' vs '.join(plot_name))
-            for index,survey in enumerate(surveys):
-                histogram.draw(survey, colors[index][0], colors[index][1])
-            histogram.save('+'.join(plot_name))
-        else:
-            raise ValueError('comparison plots take up to 4 surveys')
+    def study_csv(self, query, limit, skip, profile, preset, name, depth):
+        study = self.study_make(query, limit, skip, profile, preset, name)
+        study.to_csv({ 'depth': depth })
 
-    def survey_density(self, names):
-        region_order = {'VH': 30, 'DH': 20, 'JH': 10}
-        name_order = {}
-        head = [ 'index', 'region', 'prod', 'start', 'end', 'expression', 'intensity', 'gene' ]
-        buffer = []
-        name_position = 10
-        for name in names:
-            name_order[name] = name_position
-            name_position += 10
-            survey = self.resolver.survey_find(name)
-            if survey:
-                for region, intensity in survey.intensity.items():
-                    total = float(sum([t['intensity'] for t in intensity['tiles']]))
-                    factor =  float(intensity['gene count']) / total
-                    for tile in intensity['tiles']:
-                        row = [
-                            region,
-                            name,
-                            tile['reference start'],
-                            tile['reference end'],
-                            tile['intensity'],
-                            float(tile['intensity'] * factor),
-                            ';'.join([gene['name'] for gene in tile['gene']])
-                        ]
-                        buffer.append(row)
-        buffer = sorted(buffer, key=lambda x: -region_order[x[0]])
-        buffer = sorted(buffer, key=lambda x: -name_order[x[1]])
-        buffer = sorted(buffer, key=lambda x: -x[2])
-        index = 0
-        current = buffer[0][2]
-        for row in buffer:
-            if row[2] != current:
-                index += 1
-                current = row[2]
-            row.insert(0, index)
-        buffer.insert(0,head)
-        print('\n'.join([', '.join([str(column) for column in row]) for row in buffer]))
-
-    def survey_prevalence(self, names):
-        allele = re.compile('\*01$')
-        buffer = []
-        for name in names:
-            survey = self.resolver.survey_find(name)
-            if survey:
-                for j, pivot in survey.prevalence.items():
-                    for v, value in pivot.items():
-                        if value > 0:
-                            buffer.append([name, allele.sub('', j), allele.sub('', v), value])
-        if buffer:
-            length = {
-                'name': max([len(row[0]) for row in buffer]),
-                'j': max([len(row[1]) for row in buffer]),
-                'v': max([len(row[2]) for row in buffer]),
+    def study_density(self, names):
+        pattern = {
+            'row': '{index},{pivot},{study},{start},{intensity},{adjusted},{element}',
+            'head': {
+                'index': 'index',
+                'pivot': 'pivot',
+                'study': 'study',
+                'start': 'start',
+                'intensity': 'intensity',
+                'adjusted': 'adjusted',
+                'element': 'element',
             }
-            total = sum([row[3] for row in buffer])
-            buffer = sorted(buffer, key=lambda x: x[2])
-            buffer = sorted(buffer, key=lambda x: x[1])
-            buffer = sorted(buffer, key=lambda x: x[0])
-            buffer = sorted(buffer, key=lambda x: -x[3])
-            for row in buffer:
-                row.append((row[3] / total) * 100.0)
-                row[3] = '{:.2f}'.format(row[3])
-                row[4] = '{:.4f}'.format(row[4])
+        }
+        order = {
+            'study': { },
+            'pivot': {
+                'VH': 3,
+                'DH': 2,
+                'JH': 1,
+            },
+        }
+        buffer = []
 
-            pattern = '{{:<{}}} {{:<{}}} {{:<{}}} {{:<8}} {{:<8}}'.format(length['name'], length['j'], length['v'])
-            print('\n'.join([pattern.format(*row) for row in buffer]))
-            # print(to_simple_json(survey.prevalence))
-
-    def survey_r(self, names):
-        from rpy2.robjects import numpy2ri, r, FloatVector, DataFrame, Matrix, ListVector, StrVector
-        from rpy2 import robjects
-        # from rpy2.robjects.numpy2ri import numpy2ri
-        # numpy2ri.activate()
-
-        def add_survey(survey):
-            rsurvey = {}
-
-            rsurvey['vj'] = {}
-            for k,v in survey.vj['feature'].items():
-                name = k.replace(' ', '_').replace('-', '_')
-                rsurvey['vj'][name] = FloatVector(numpy.array(v, dtype="float64"))
-            rsurvey['vj'] = DataFrame(rsurvey['vj'])
-            r.assign('vjdf', rsurvey['vj'])
-
-            m = survey.slice['allele']['correlation']['vj']
-            rsurvey['vj correlation'] = robjects.r.matrix(FloatVector(m.T.ravel()), nrow=m.shape[0])
-            rsurvey['vj correlation'].rownames = StrVector(survey.lookup['allele']['JH']['label'])
-            rsurvey['vj correlation'].colnames = StrVector(survey.lookup['allele']['VH']['label'])
-            r.assign('vjc', rsurvey['vj correlation'])
-
-            rsurvey['vdj'] = {}
-            for k,v in survey.vdj['feature'].items():
-                name = k.replace(' ', '_').replace('-', '_')
-                rsurvey['vdj'][name] = FloatVector(numpy.array(v, dtype="float64"))
-            rsurvey['vdj'] = DataFrame(rsurvey['vdj'])
-            r.assign('vdjdf', rsurvey['vdj'])
-
-            rsurvey['vdj correlation'] = {}
-            for j in range(survey.slice['allele']['dimension']['JH']):
-                m = survey.slice['allele']['correlation']['vdj'][j]
-                name = survey.lookup['allele']['JH']['index'][j]
-                rsurvey['vdj correlation'][name] = robjects.r.matrix(FloatVector(m.T.ravel()), nrow=m.shape[0])
-                rsurvey['vdj correlation'][name].rownames = StrVector(survey.lookup['allele']['DH']['label'])
-                rsurvey['vdj correlation'][name].colnames = StrVector(survey.lookup['allele']['VH']['label'])
-            r.assign('vdjc', robjects.vectors.ListVector(rsurvey['vdj correlation']))
-
-            r('survey <- new("Survey", vj=vjdf, vdj=vdjdf, vj_correlation=vjc, vdj_correlation=vdjc)')
-            r('somatic <- c(somatic, {}=survey)'.format(survey.name))
-
-        # define a list of results
-        r('somatic <- list()')
-
-        # define the S4 class structure
-        r(
-            """
-            setClass(
-                "Survey",
-                representation(
-                    vj="data.frame",
-                    vdj="data.frame",
-                    vj_correlation="matrix",
-                    vdj_correlation="list",
-                    repertoire="data.frame"
-                )
-            )
-            """
-        )
-
+        position = 0
         for name in names:
-            survey = self.resolver.survey_find(name)
-            if survey: add_survey(survey)
+            position += 1
+            order['study'][name] = position
+            study = self.resolver.study_find(name)
+            if study:
+                print(to_simple_json(study.request))
+                study.to_tiled_density(buffer)
 
-        r('save(somatic, file="somatic.bz2", compress="bzip2")')
+        buffer = sorted(buffer, key=lambda x: -order['pivot'][x['pivot']])
+        buffer = sorted(buffer, key=lambda x: -order['study'][x['study']])
+        buffer = sorted(buffer, key=lambda x: -x['start'])
 
-    def survey_info(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'survey')
-        request = { 'limit': limit, 'skip': skip, 'query': q }
-        cursor = self.resolver.make_cursor('survey', q, limit, skip)
-        for node in cursor:
-            survey = Survey(self, node)
-            survey.load()
-            survey.prevalence
-            survey.intensity
-            survey.info(profile)
-        cursor.close()
+        index = 0
+        current = None
+        for row in buffer:
+            if current is None or current == row['study']:
+                index += 1
+                current = row['study']
+            row['index'] = index
 
-    def survey_list(self, query, limit, skip, profile):
-        print('{:<40}\t{:<9}\t{:<9}'.format('uuid', 'count', 'name'))
-        print('-'* ((40 + 9 + 15) + (3*4)))
-        q = self.build_query(query, profile, 'survey')
-        cursor = self.resolver.make_cursor('survey', q, limit, skip)
-        for node in cursor:
-            survey = Survey(self, node)
-            print(str(survey))
-        cursor.close()
-
-    def study_info(self, query, limit, skip, profile, name, template, depth, ambiguous):
-        q = self.build_query(query, profile, 'sample')
-        request = { 'limit': limit, 'skip': skip, 'query': q }
-        study = Study (
-            None,
-            request,
-            name,
-            self.configuration['study'][template]['axis'],
-            self.configuration['study'][template]['feature']
-        )
-        if depth is None:
-            depth = len(self.configuration['study'][template]['axis'])
-        else:
-            depth = min(depth, len(self.configuration['study'][template]['axis']))
-
-        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
-        self.log.debug('collecting samples for study %s', study.name)
-        for node in cursor:
-            sample = Sample(self, node)
-            study.add_sample(sample, ambiguous)
-        cursor.close()
-        study.finalize()
-        # study.info()
-        study.residual_to_csv(depth)
+        print(pattern['row'].format(**pattern['head']))
+        for row in buffer:
+            print(pattern['row'].format(**row))
 
     # library
     def library_populate(self, path):

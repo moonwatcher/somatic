@@ -14720,6 +14720,7 @@
         "imgt family name": "IGHV1", 
         "imgt gene name": "IGHV1-62-3", 
         "length": 305, 
+        "organism name": "mus musculus", 
         "preamble": {
             "accession end": 609775, 
             "accession start": 609767, 
