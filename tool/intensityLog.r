@@ -8,9 +8,8 @@ title = args[2]
 diagram_filename = gsub('.csv', '.pdf', data_filename)
 
 intensity = read.csv(data_filename, header=T)
-intensity_plot <- ggplot(intensity, aes(index, log(intensity + 1, 2), fill=region)) +
-geom_bar(stat="identity", position="dodge") +
-facet_grid(prod ~ .) +
+intensity_plot <- ggplot(intensity, aes(index, log(intensity + 1, 2), fill=pivot)) +
+geom_bar(stat="identity", position="dodge") + facet_grid(study ~ .) +
 scale_alpha_manual(name="Sample", values=c(0.4, 1.0)) +
 scale_fill_manual(name="Region", values=c('#0B345B', '#D97A04', '#581A4D')) +
 scale_x_continuous(breaks = intensity$index[which(intensity$index%%2 == 0)], labels = intensity$start[which(intensity$index%%2 == 0)]) +
@@ -25,4 +24,4 @@ theme (
     panel.grid.major = element_line(colour = "#F2F2F2", size = rel(0.4), linetype = "solid"),
     plot.title = element_text(vjust = 1)
 )
-ggsave(diagram_filename, plot = intensity_plot, width = 16, height = length(unique(intensity$prod)) * 3, limitsize=FALSE)
+ggsave(diagram_filename, plot = intensity_plot, width = 16, height = length(unique(intensity$study)) * 3, limitsize=FALSE)

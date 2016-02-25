@@ -13,7 +13,6 @@ geom_bar(stat="identity", position="dodge") + facet_grid(study ~ .) +
 scale_alpha_manual(name="Sample", values=c(0.4, 1.0)) +
 scale_fill_manual(name="Region", values=c('#0B345B', '#D97A04', '#581A4D')) +
 scale_x_continuous(breaks = intensity$index[which(intensity$index%%2 == 0)], labels = intensity$start[which(intensity$index%%2 == 0)]) +
-# scale_x_continuous(breaks = intensity$index, labels = intensity$gene) +
 ggtitle(title) +
 xlab("chromosome") + 
 ylab("expression") +  

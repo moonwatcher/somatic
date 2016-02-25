@@ -35,6 +35,7 @@ from io import StringIO, BytesIO
 from datetime import timedelta, datetime
 from argparse import ArgumentParser
 from subprocess import Popen, PIPE
+from copy import deepcopy
 
 from bson.objectid import ObjectId
 from bson.binary import Binary
@@ -42,12 +43,14 @@ from pymongo.errors import BulkWriteError
 from pymongo import MongoClient, DESCENDING, ASCENDING
 
 import xmltodict
-import urllib.request, urllib.parse, urllib.error
+import urllib.request
 import urllib.parse
-from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
-from http.client import BadStatusLine
-from copy import deepcopy
+import urllib.error
+import urllib.parse
+import urllib.request
+import urllib.error
+import http.client
+
 
 log_levels = {
     'debug': logging.DEBUG,
@@ -502,36 +505,6 @@ class CommandLineParser(object):
 
     def help(self):
         self.parser.print_help()
-
-    @property
-    def query(self):
-        query = {}
-        for k in [
-            'names',
-            'library',
-            'id',
-            'region',
-            'format',
-            'strain',
-            'functionality',
-        ]:
-            if k in self.instruction:
-                v = self.instruction[k]
-                if v is not None: query[k] = v
-        for k in [
-            'gapped',
-            'valid',
-            'framed',
-            'in frame',
-            'premature',
-            'productive',
-        ]:
-            if k in self.instruction:
-                v = self.instruction[k]
-                if v is not None:
-                    if v == 'Y': query[k] = True
-                    elif v == 'N': query[k] = False
-        return query
 
 
 class Blat(object):
@@ -2515,6 +2488,8 @@ class Sample(object):
                                 observation['VH'] = vh['gene']
                                 observation['DH'] = dh['gene']
                                 observation['JH'] = jh['gene']
+                                observation['vh family'] = vh['family']
+                                observation['dh family'] = dh['family']
                                 self._observation.append(observation)
                 else:
                     breakdown['region'] = { 'VH': [], 'JH': [] }
@@ -2534,7 +2509,9 @@ class Sample(object):
                         'vj length',
                         'vj n count',
                         'vj p count',
-                    ]:
+                        'n count',
+                        'p count',
+                     ]:
                         if feature not in breakdown['feature']:
                             breakdown['feature'][feature] = 0.0
 
@@ -2558,6 +2535,7 @@ class Sample(object):
                             observation = deepcopy(breakdown['feature'])
                             observation['VH'] = vh['gene']
                             observation['JH'] = jh['gene']
+                            observation['vh family'] = vh['family']
                             self._observation.append(observation)
 
         return self._observation
@@ -2842,28 +2820,68 @@ class Study(object):
     def __init__(self, pipeline, node=None, request=None, name=None):
         self.log = logging.getLogger('Study')
         self.pipeline = pipeline
-        self.node = node
-        if self.node is None:
-            self.node = {
+        self.node = self.load(node, request, name)
+
+    def load(self, node, request=None, name=None):
+        # potentially more tests
+        if node is not None:
+            if 'body' in node:
+                if 'request' in node['body']:
+                    if 'query' in node['body']['request']:
+                        node['body']['request']['query'] = json.loads(node['body']['request']['query'])
+
+                if 'repertoire' in node['body']:
+                    for key in list(node['body']['repertoire'].keys()):
+                        node['body']['repertoire'][key] = dict([(x['key'], x) for x in node['body']['repertoire'][key]])
+
+        elif request is not None:
+            node = {
                 'head' :{
-                    'id': hashlib.sha1(to_json(request).encode('utf8')).hexdigest(),
-                    'name': name,
+                    'id': request.hash,
                     'count': 0
                 },
                 'body': {
-                    'request': request
+                    'request': request.document,
+                    'repertoire': dict([(pivot, {}) for pivot in request.preset['rotate']]),
                 }
             }
-            self.body['repertoire'] = dict([(x, {}) for x in self.rotate])
-            self.body['pivot'] = Pivot(self, None, None, self.rotate)
-            if self.name is None:
-                self.head['name'] = self.id
-        else:
-            self.body['request'] = json.loads(self.body['request'])
-            for key in list(self.repertoire.keys()):
-                if isinstance(self.repertoire[key], list):
-                    self.repertoire[key] = dict([(x['name'], x) for x in self.repertoire[key]])
-            self.body['pivot'] = Pivot(self, self.body['pivot'])
+
+            if name is not None:
+                node['head']['name'] = name
+            else:
+                node['head']['name'] = node['head']['id']
+
+            if request.repertoire:
+                for pivot in request.repertoire.values():
+                    for predicate in pivot:
+                        if predicate['pivot'] in node['body']['repertoire']:
+                            node['body']['repertoire'][predicate['pivot']][predicate['key']] = deepcopy(predicate)
+                            node['body']['repertoire'][predicate['pivot']][predicate['key']]['weight'] = 0.0
+
+        return node
+
+    def delete(self):
+        path = os.path.join(self.configuration['cache']['path'], self.id)
+        if os.path.exists(path):
+            os.remove(path)
+
+    def persist(self):
+        path = os.path.join(self.configuration['cache']['path'], self.id)
+        try:
+            self.pipeline.verify_directory(self.configuration['cache']['path'])
+            with io.open(path, 'wb') as file:
+                pickle.dump(self.document, file)
+            self.log.debug('pickled study %s to %s', self.id, path)
+        except OSError as e:
+            self.log.error('failed writing pickled study %s to %s', self.id, path)
+            self.log.debug(str(e))
+
+    def restore(self):
+        path = os.path.join(self.configuration['cache']['path'], self.id)
+        if os.path.exists(path):
+            with io.open(path, 'rb') as file:
+                self.node = self.load(pickle.load(file))
+                self.body['pivot'] = Pivot(self, self.body['pivot'], None, self.rotate)
 
     def __str__(self):
         return '\t'.join([self.id, self.name, str(self.count)])
@@ -2897,8 +2915,8 @@ class Study(object):
         return self.request['preset']
 
     @property
-    def ambiguous(self):
-        return self.preset['ambiguous']
+    def unique(self):
+        return self.preset['unique']
 
     @property
     def row(self):
@@ -2914,6 +2932,12 @@ class Study(object):
 
     @property
     def pivot(self):
+        if 'pivot' not in self.body:
+            self.body['pivot'] = Pivot(self, None, None, self.rotate)
+
+        if self.body['pivot'] is None:
+            self.restore()
+
         return self.body['pivot']
 
     @property
@@ -2922,13 +2946,16 @@ class Study(object):
 
     @property
     def document(self):
-        document = transform_to_document(self.node)
-        document['body']['request'] = json.dumps(document['body']['request'], sort_keys=False, ensure_ascii=False)
-        if isinstance(document['body']['repertoire'], dict):
-            for key in list(document['body']['repertoire'].keys()):
-                if isinstance(document['body']['repertoire'][key], dict):
-                    document['body']['repertoire'][key] = list(document['body']['repertoire'][key].values())
-        return document
+        node = transform_to_document(self.node)
+        if 'request' in node['body']:
+            if 'query' in node['body']['request']:
+                node['body']['request']['query'] = json.dumps(node['body']['request']['query'], sort_keys=False, ensure_ascii=False)
+
+        if 'repertoire' in node['body']:
+            for key in list(node['body']['repertoire'].keys()):
+                node['body']['repertoire'][key] = list(node['body']['repertoire'][key].values())
+
+        return node
 
     @property
     def count(self):
@@ -2940,35 +2967,37 @@ class Study(object):
 
     def index_sample(self, sample):
         self.count += 1
-        for axis in self.rotate:
+        for pivot in self.rotate:
             for observation in sample.observation:
-                if observation[axis] not in self.repertoire[axis]:
-                    name = observation[axis]
-                    if axis in ['VH', 'DH', 'JH'] and name in self.request['repertoire']:
-                        node = deepcopy(self.request['repertoire'][name])
-                    else:
-                        node = {}
-                    node['name'] = name
-                    node['weight'] = 0.0
-                    self.repertoire[axis][name] = node
-                self.repertoire[axis][observation[axis]]['weight'] += observation['weight']
+                if observation[pivot] not in self.repertoire[pivot]:
+                    self.repertoire[pivot][observation[pivot]] = {
+                        'key': observation[pivot],
+                        'name': observation[pivot],
+                        'weight': 0.0,
+                    }
+                self.repertoire[pivot][observation[pivot]]['weight'] += observation['weight']
 
     def add_sample(self, sample):
         taken = True
         if sample.observable:
-            if self.ambiguous or len(sample.observation) == 1:
+            if not self.unique or len(sample.observation) == 1:
                 # check the observations
                 for observation in sample.observation:
-                    for axis in self.rotate:
-                        if axis not in observation:
-                            self.log.debug('ignoring sample %s with missing axis %s', sample.id, axis)
+                    for pivot in self.rotate:
+                        if pivot not in observation:
+                            self.log.debug('ignoring sample %s with missing pivot %s', sample.id, pivot)
                             taken = False
                             break
+
+                    if not taken:
+                        break
+
                     for feature in self.row:
                         if feature['key'] not in observation:
                             self.log.debug('ignoring sample %s with missing feature %s', sample.id, feature['key'])
                             taken = False
                             break
+
                     if not taken:
                         break
 
@@ -2984,31 +3013,35 @@ class Study(object):
     def finalize(self):
         self.pivot.finalize()
 
-    def collect(self, template={}, buffer=[]):
-        if 'depth' not in template or template['depth'] is None:
-            template['depth'] = len(self.rotate)
-        template['depth'] = min(template['depth'], len(self.rotate))
+    def collect(self, template, buffer=[]):
         buffer = self.pivot.collect({ 'depth': template['depth'] })
-
-        if 'sort' in template:
-            for sort in template['sort']:
-                buffer = sorted(buffer, key=lambda x: x['sort'], reverse=True)
-
         return buffer
 
-    def to_csv(self, preset=None):
-        def to_header(template, buffer=[]):
-            header = self.rotate[:template['depth']] + [ 'weight' , 'portion' ]
+    def table(self, preset=None):
+        def construct(template):
+            row = self.rotate[:template['depth']] + [ 'weight' , 'portion' ]
             for feature in template['row']:
                 for column in feature['column']:
-                    header.append('{} {}'.format(feature['key'], column['key']))
-            buffer.append(header)
+                    row.append('{} {}'.format(feature['key'], column['key']))
+            structure = {
+                'head': row,
+                'index': {},
+                'name': {},
+            }
+            for index,name in enumerate(row):
+                structure['index'][index] = name
+                structure['name'][name] = index
+            return structure
+
+        def sort(template, structure, buffer):
+            for sort in template['sort']:
+                if sort['column'] in structure['name']:
+                    index = structure['name'][sort['column']]
+                buffer = sorted(buffer, key=lambda x: x[index], reverse=sort['reverse'])
             return buffer
 
-        def to_table(template, buffer=[]):
-            collection = self.collect(template)
+        def table(template, collection, buffer=[]):
             weight = float(self.count)
-
             for record in collection:
                 row = record['rotate'] + [ record['weight'], record['weight'] / weight ]
                 for feature in template['row']:
@@ -3020,29 +3053,43 @@ class Study(object):
                 buffer.append(row)
             return buffer
 
+        def stringify(template, buffer):
+            result = []
+            for row in buffer:
+                result.append([str(column) for column in row])
+            return result
+
         template = {
             'row': deepcopy(self.row),
+            'sort': deepcopy(self.preset['sort'])
         }
-        if preset: template.update(preset)
+
+        if preset:
+            template.update(preset)
+
         if 'depth' not in template or template['depth'] is None:
             template['depth'] = len(self.rotate)
         template['depth'] = min(template['depth'], len(self.rotate))
 
-        buffer = []
-        to_header(template, buffer)
-        to_table(template, buffer)
-        for row in buffer:
-            print(','.join([str(column) for column in row]))
+        structure = construct(template)
+        collection = self.collect(template)
 
-    def tiled_rotation_intensity(self, name, interval):
-        scale = [ p for p in self.request['repertoire'].values() if p['pivot'] == name ]
-        scale = sorted(scale, key=lambda x: x['start'])
+        buffer = table(template, collection)
+        buffer = sort(template, structure, buffer)
+        buffer = stringify(template, buffer)
+
+        print(','.join(structure['head']))
+        for row in buffer:
+            print(','.join(row))
+
+    def tiled_pivot_expression(self, name, interval):
+        pivot = sorted(list(self.repertoire[name].values()), key=lambda x: x['start'])
         intensity = {
-            'max name length': max([len(pivot['name']) for pivot in scale]),
-            'pivot count': len(scale),
+            'max name length': max([len(predicate['name']) for predicate in pivot]),
+            'pivot count': len(pivot),
             'tile length': interval,
-            'start': scale[0]['start'],
-            'end': scale[-1]['end'],
+            'start': pivot[0]['start'],
+            'end': pivot[-1]['end'],
             'tiles': [],
         }
         intensity['length'] = intensity['end'] - intensity['start']
@@ -3061,25 +3108,25 @@ class Study(object):
                 }
             )
 
-        for pivot in self.repertoire[name].values():
+        for predicate in pivot:
             tile = None
-            left = math.floor(float(pivot['start'] - intensity['tiled start']) / float(intensity['tile length']))
-            right = math.floor(float(pivot['end'] - intensity['tiled start']) / float(intensity['tile length']))
+            left = math.floor(float(predicate['start'] - intensity['tiled start']) / float(intensity['tile length']))
+            right = math.floor(float(predicate['end'] - intensity['tiled start']) / float(intensity['tile length']))
             if left == right:
                 tile = intensity['tiles'][left]
             else:
                 split = intensity['tiled start'] + ( right * intensity['tile length'] )
-                left_part = float(split - pivot['start']) / float(pivot['length'])
-                right_part = float(pivot['end'] - split) / float(pivot['length'])
+                left_part = float(split - predicate['start']) / float(predicate['length'])
+                right_part = float(predicate['end'] - split) / float(predicate['length'])
                 if left_part > right_part:
                     tile = intensity['tiles'][left]
                 else:
                     tile = intensity['tiles'][right]
-            tile['intensity'] += pivot['weight']
-            tile['pivot'].append(pivot)
+            tile['intensity'] += predicate['weight']
+            tile['pivot'].append(predicate)
         return intensity
 
-    def to_tiled_density(self, buffer):
+    def tiled_expression(self, buffer):
         density = {
             'VH': {
                 'order': 3,
@@ -3095,7 +3142,7 @@ class Study(object):
             }
         }
         for pivot, node in density.items():
-            node['intensity'] = self.tiled_rotation_intensity(pivot, node['interval'])
+            node['intensity'] = self.tiled_pivot_expression(pivot, node['interval'])
             node['total'] = float(sum([tile['intensity'] for tile in node['intensity']['tiles']]))
             node['factor'] = float(node['intensity']['pivot count']) / node['total']
             for tile in node['intensity']['tiles']:
@@ -3829,35 +3876,34 @@ class Resolver(object):
             self.log.error('unknown reference %s', name)
         return reference
 
-    def study_find(self, name):
+    def study_find(self, keyword):
         study = None
-        if name is not None:
-            document = self.database['study'].find_one({'head.name': name})
+        if keyword is not None:
+            document = self.database['study'].find_one({'head.name': keyword})
+            if document is None and re.match('^[0-9a-f]{40}$', keyword):
+                document = self.database['study'].find_one({'head.id': keyword})
             if document:
                 study = Study(self.pipeline, document)
         return study
 
-    def study_fetch(self, id):
-        study = None
-        document = self.database['study'].find_one({'head.id': id})
-        if document:
-            study = Study(self.pipeline, document)
-        return study
-
-    def study_drop(self, id):
-        study = study_fetch(id)
+    def study_drop(self, keyword):
+        study = self.study_find(keyword)
         if study:
-            result = self.database['study'].delete({ 'head.id': id })
+            study.delete()
+            result = self.database['study'].delete_one({ 'head.id': study.id })
             if result:
-                self.log.info('dropped study record for\n%s', study.query)
+                self.log.info('dropped study record for\n%s', id)
 
     def study_save(self, study):
         if study is not None:
-            existing = self.study_fetch(study.id)
+            document = study.document
+            document['body']['pivot'] = None
+            existing = self.database['study'].find_one({'head.id': study.id})
             if existing:
                 self.log.debug('existing study found for %s', study.id)
-                study.node['_id'] = existing.node['_id']
-            self.database['study'].save(study.document)
+                document['_id'] = existing['_id']
+            self.database['study'].save(document)
+            study.persist()
 
     def library_store(self, node):
         if node is not None:
@@ -3927,11 +3973,14 @@ class Resolver(object):
         }
         cursor = self.database['gene'].find(query)
         for node in cursor:
-            record = {}
+            record = { 'key': node['head']['gene'] }
             for k,v in template.items():
                 if k in node['body']:
                     record[v] = node['body'][k]
-            repertoire[record['name']] = record
+
+            if record['pivot'] not in repertoire:
+                repertoire[record['pivot']] = []
+            repertoire[record['pivot']].append(record)
         return repertoire
 
     def gene_fetch(self, id):
@@ -4107,15 +4156,15 @@ class Resolver(object):
 
         def fetch(url):
             content = None
-            request = Request(url, None, { 'Accept': 'application/xml' })
+            request = urllib.request.Request(url, None, { 'Accept': 'application/xml' })
             
             try:
-                response = urlopen(request)
-            except BadStatusLine as e:
+                response = urllib.request.urlopen(request)
+            except http.client.BadStatusLine as e:
                 log.warning('Bad http status error when requesting %s', url)
-            except HTTPError as e:
+            except urllib.error.HTTPError as e:
                 log.warning('Server returned an error when requesting %s: %s', url, e.code)
-            except URLError as e:
+            except urllib.error.URLError as e:
                 log.warning('Could not reach server when requesting %s: %s', url, e.reason)
             else:
                 content = StringIO(response.read().decode('utf8'))
@@ -4141,18 +4190,213 @@ class Resolver(object):
                 assembled['head.{}'.format(key)] = value
         return assembled
 
-    def make_cursor(self, collection, query, limit=None, skip=None):
-        q = self.assemble_query(query)
+    def make_cursor(self, collection, request):
+        q = self.assemble_query(request.query)
         cursor = self.database[collection].find(q)
-        if limit is not None:
-            cursor.limit(limit)
-        if skip is not None:
-            cursor.skip(skip)
+        if request.limit is not None:
+            cursor.limit(request.limit)
+        if request.skip is not None:
+            cursor.skip(request.skip)
         return cursor
 
     def count(self, collection, query):
         q = self.assemble_query(query)
         return self.database[collection].count(q)
+
+
+class Request(object):
+    def __init__(self, pipeline, instruction):
+        self.log = logging.getLogger('Request')
+        self.pipeline = pipeline
+        self.node = {
+            'instruction': {
+                'kind': None,
+                'limit': None,
+                'skip': None,
+                'action': None,
+                'preset': None,
+                'profile': None,
+            },
+            'query': None,
+            'profile': None,
+            'preset': None,
+            'repertoire': None,
+            'hash': None
+        }
+        if instruction is not None:
+            for k,v in instruction.items():
+                if v is not None or v not in self.node['instruction']:
+                    self.node['instruction'][k] = v
+
+    def reset(self):
+        self.node['profile'] = None
+        self.node['query'] = None
+        self.node['preset'] = None
+        self.node['repertoire'] = None
+        self.node['hash'] = None
+
+    @property
+    def document(self):
+        return {
+            'skip': self.skip,
+            'limit': self.limit,
+            'query': self.query,
+            'preset': self.preset,
+            'repertoire': self.repertoire,
+            # 'instruction': self.instruction,
+            # 'profile': self.profile,
+        }
+
+    @property
+    def configuration(self):
+        return self.pipeline.configuration
+
+    @property
+    def resolver(self):
+        return self.pipeline.resolver
+
+    @property
+    def instruction(self):
+        return self.node['instruction']
+
+    @property
+    def action(self):
+        return self.instruction['action']
+
+    @property
+    def query(self):
+        if self.node['query'] is None:
+            self.node['query'] = {}
+
+            if self.profile is not None:
+                for key,value in self.profile.items():
+                    self.node['query'][key] = value
+
+            for k in [
+                'names',
+                'library',
+                'id',
+                'region',
+                'format',
+                'strain',
+                'functionality',
+            ]:
+                if k in self.instruction and self.instruction[k] is not None:
+                    self.node['query'][k] = self.instruction[k]
+
+            for k in [
+                'gapped',
+                'valid',
+                'framed',
+                'in frame',
+                'premature',
+                'productive',
+            ]:
+                if k in self.instruction and self.instruction[k] is not None:
+                    if self.instruction[k] == 'Y':
+                        self.node['query'][k] = True
+                    elif self.instruction[k] == 'N':
+                        self.node['query'][k] = False
+
+            if 'library' in self.node['query']:
+                library = self.resolver.library_fetch(self.node['query']['library'])
+                if library:
+                    if library.reference:
+                        self.node['query'][ '$or' ] = [ ]
+                        for reference in library.reference:
+                            self.node['query'][ '$or' ].append({ 'library': reference })
+                        del self.node['query']['library']
+                else:
+                    raise ValueError('library {} does not exist'.format(self.node['query']['library']))
+        return self.node['query']
+
+    @property
+    def hash(self):
+        if self.node['hash'] is None:
+            o = {
+                'limit': self.limit,
+                'skip': self.skip,
+                'query': self.query,
+                'preset': self.preset,
+                'repertoire': self.repertoire,
+            }
+            o = json.loads(json.dumps(o, sort_keys=True, ensure_ascii=False))
+            self.node['hash'] = hashlib.sha1(to_json(o).encode('utf8')).hexdigest()
+        return self.node['hash']
+
+    @property
+    def kind(self):
+        return self.instruction['kind']
+
+    @kind.setter
+    def kind(self, value):
+        if value != self.instruction['kind']:
+            self.instruction['kind'] = value
+            self.reset()
+
+    @property
+    def limit(self):
+        return self.instruction['limit']
+
+    @property
+    def skip(self):
+        return self.instruction['skip']
+
+    @property
+    def profile(self):
+        if self.node['profile'] is None and self.kind is not None:
+            if self.instruction['profile'] in self.configuration['profile']:
+                if self.kind in self.configuration['profile'][self.instruction['profile']]:
+                    self.node['profile'] = deepcopy(self.configuration['profile'][self.instruction['profile']][self.kind])
+                else:
+                    raise ValueError('profile {} is undefined for {}'.format(self.instruction['profile'], self.kind))
+            else:
+                raise ValueError('profile {} is undefined'.format(self.instruction['profile']))
+        return self.node['profile']
+
+    @property
+    def preset(self):
+        if self.node['preset'] is None and self.node['instruction']['preset'] is not None:
+            if self.node['instruction']['preset'] in self.configuration['study']['preset']:
+                self.node['preset'] = deepcopy(self.configuration['study']['preset'][self.node['instruction']['preset']])
+                if 'unique' in self.node['instruction']:
+                    self.node['preset']['unique'] = self.node['instruction']['unique']
+            else:
+                raise ValueError('preset {} is undefined'.format(self.node['instruction']['preset']))
+        return self.node['preset']
+
+    @property
+    def repertoire(self):
+        if self.node['repertoire'] is None and self.preset is not None:
+            self.node['repertoire'] = {}
+            template = {
+                'region': 'pivot',
+                'family': 'family',
+                'gene': 'name',
+                'functionality': 'functionality',
+                'reference end': 'end',
+                'reference start': 'start',
+                'reference strand': 'strand',
+                'length': 'length',
+            }
+
+            cursor = self.resolver.database['gene'].find (
+                {
+                    'head.organism name': self.preset['organism name'],
+                    'head.strain': self.preset['strain'],
+                }
+            )
+
+            for node in cursor:
+                record = { 'key': node['head']['gene'] }
+                for k,v in template.items():
+                    if k in node['body']:
+                        record[v] = node['body'][k]
+
+                if record['pivot'] not in self.node['repertoire']:
+                    self.node['repertoire'][record['pivot']] = []
+                self.node['repertoire'][record['pivot']].append(record)
+        return self.node['repertoire']
 
 
 class Pipeline(object):
@@ -4176,246 +4420,101 @@ class Pipeline(object):
         if not os.path.exists(path):
             os.makedirs(path)
 
-    def build_query(self, override, profile, kind):
-        def normalize_query(node):
-            return json.loads(json.dumps(node, sort_keys=True, ensure_ascii=False))
-
-        query = { }
-
-        # potentially load a profile query
-        if profile is not None:
-            if profile in self.configuration['profile']:
-                if kind in self.configuration['profile'][profile]:
-                    for key,value in self.configuration['profile'][profile][kind].items():
-                        query[key] = value
-                else:
-                    raise ValueError('profile {} is undefined for {}'.format(profile, kind))
-            else:
-                raise ValueError('profile {} is undefined'.format(profile))
-
-        # potentially override the profile query
-        if override:
-            for key,value in override.items():
-                if key == 'library':
-                    library = self.resolver.library_fetch(value)
-                    if library:
-                        if library.reference:
-                            query[ '$or' ] = [ ]
-                            for reference in library.reference:
-                                query[ '$or' ].append({ 'library': reference })
-                        else:
-                            query[ 'library' ] = value
-                    else:
-                        raise ValueError('library {} does not exist'.format(value))
-                else:
-                    query[key] = value
-
-        if query: query = normalize_query(query)
-        return query
-
-    def build_request(self, override, profile, kind, preset, limit, skip):
-        request = {
-            'limit': limit,
-            'skip': skip,
-        }
-        if preset is not None:
-            if preset in self.configuration['study']['preset']:
-                request['preset'] = self.configuration['study']['preset'][preset]
-                request['repertoire'] = self.resolver.make_repertoire(request)
-            else:
-                raise ValueError('preset {} is undefined'.format(preset))
-
-        request['query'] = self.build_query(override, profile, kind)
-        self.log.debug('request is:\n{}'.format(to_simple_json(request)))
-        return request
-
-    def execute(self, cmd):
-        if cmd.action == 'samplePopulate':
-            self.sample_populate(
-                cmd.instruction['library'],
-                cmd.instruction['strain'],
-                cmd.instruction['drop'])
+    def execute(self, instruction):
+        request = Request(self, instruction)
+        if request.action == 'samplePopulate':
+            self.sample_populate(request)
                 
-        elif cmd.action == 'sampleDrop':
-            self.sample_drop(cmd.instruction['library'])
+        elif request.action == 'sampleDrop':
+            self.sample_drop(request)
             
-        elif cmd.action == 'sampleView':
-            self.sample_view(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
+        elif request.action == 'sampleView':
+            self.sample_view(request)
 
-        elif cmd.action == 'sampleEntropy':
-            self.sample_entropy(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
-
-        elif cmd.action == 'sampleAnalyze':
-            self.sample_analyze(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
+        elif request.action == 'sampleAnalyze':
+            self.sample_analyze(request)
                 
-        elif cmd.action == 'sampleCount':
-            self.sample_count(
-                cmd.query,
-                cmd.instruction['profile'])
+        elif request.action == 'sampleCount':
+            self.sample_count(request)
             
-        elif cmd.action == 'sampleFasta':
-            self.sample_fasta(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
+        elif request.action == 'sampleFasta':
+            self.sample_fasta(request)
                 
-        elif cmd.action == 'sampleFastq':
-            self.sample_fastq(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
+        elif request.action == 'sampleFastq':
+            self.sample_fastq(request)
                 
-        elif cmd.action == 'sampleInfo':
-            self.sample_info(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
+        elif request.action == 'sampleInfo':
+            self.sample_info(request)
                 
-        elif cmd.action == 'analyzedSampelDrop':
-            self.analyzed_sample_drop(cmd.instruction['library'])
+        elif request.action == 'analyzedSampelDrop':
+            self.analyzed_sample_drop(request)
 
-        elif cmd.action == 'study':
-            study = self.study_make(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'],
-                cmd.instruction['preset'],
-                cmd.instruction['name'])
+        elif request.action == 'studyInfo':
+            study = self.study_info(request)
 
-        elif cmd.action == 'studyInfo':
-            study = self.study_info(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
+        elif request.action == 'studyList':
+            study = self.study_list(request)
 
-        elif cmd.action == 'studyList':
-            study = self.study_list(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'])
+        elif request.action == 'studyCSV':
+            study = self.study_csv(request)
 
-        elif cmd.action == 'studyCSV':
-            study = self.study_csv(
-                cmd.query,
-                cmd.instruction['limit'],
-                cmd.instruction['skip'],
-                cmd.instruction['profile'],
-                cmd.instruction['preset'],
-                cmd.instruction['name'],
-                cmd.instruction['depth'])
+        elif request.action == 'expression':
+            self.study_expression(request)
 
-        elif cmd.action == 'studyDensity':
-            self.study_density(cmd.instruction['names'])
-
-        elif cmd.action == 'libraryPopulate':
-            for path in cmd.instruction['path']:
-                self.library_populate(path)
+        elif request.action == 'libraryPopulate':
+            self.library_populate(request)
                 
-        elif cmd.action == 'libraryInfo':
-            self.library_info(
-                cmd.query,
-                cmd.instruction['profile'])
+        elif request.action == 'libraryInfo':
+            self.library_info(request)
 
-        elif cmd.action == 'libraryList':
-            self.library_list(
-                cmd.query,
-                cmd.instruction['profile'],
-                cmd.instruction['drop'])
+        elif request.action == 'libraryList':
+            self.library_list(request)
 
-        elif cmd.action == 'genePopulate':
-            for path in cmd.instruction['path']:
-                self.gene_populate(path)
+        elif request.action == 'genePopulate':
+            self.gene_populate(request)
                 
-        elif cmd.action == 'geneInfo':
-            self.gene_info(
-                cmd.query,
-                cmd.instruction['profile'])
+        elif request.action == 'geneInfo':
+            self.gene_info(request)
 
-        elif cmd.action == 'geneList':
-            self.gene_list(
-                cmd.query,
-                cmd.instruction['profile'])
+        elif request.action == 'geneList':
+            self.gene_list(request)
 
-        elif cmd.action == 'geneHtml':
-            self.gene_html(
-                cmd.query,
-                cmd.instruction['profile'],
-                cmd.instruction['title'])
+        elif request.action == 'geneHtml':
+            self.gene_html(request)
 
-        elif cmd.action == 'geneRss':
-            self.gene_rss(
-                cmd.query, 
-                cmd.instruction['profile'],
-                cmd.instruction['flanking'],
-                cmd.instruction['distance'])
+        elif request.action == 'geneRss':
+            self.gene_rss(request)
 
-        elif cmd.action == 'geneCount':
-            self.gene_count(
-                cmd.query,
-                cmd.instruction['profile'])
+        elif request.action == 'geneCount':
+            self.gene_count(request)
 
-        elif cmd.action == 'geneAlign':
-            self.gene_align(
-                cmd.query, 
-                cmd.instruction['profile'],
-                cmd.instruction['flanking'])
+        elif request.action == 'geneAlign':
+            self.gene_align(request)
 
-        elif cmd.action == 'geneFasta':
-            self.gene_fasta(
-                cmd.query,
-                cmd.instruction['profile'],
-                cmd.instruction['flanking'],
-                cmd.instruction['limit'])
+        elif request.action == 'geneFasta':
+            self.gene_fasta(request)
             
-        elif cmd.action == 'geneIgblastAux':
-            self.gene_igblast_auxiliary(
-                cmd.query, 
-                cmd.instruction['profile'])
+        elif request.action == 'geneIgblastAux':
+            self.gene_igblast_auxiliary(request)
             
-        elif cmd.action == 'accessionFasta':
-            self.accession_fasta(cmd.query, cmd.instruction['profile'])
+        elif request.action == 'accessionFasta':
+            self.accession_fasta(request)
             
-        elif cmd.action == 'rebuild':
-            self.rebuild(cmd.instruction['table'])
-
-        elif cmd.action == 'simulate':
-            self.simulate(
-                cmd.instruction['library'],
-                cmd.instruction['strain'],
-                cmd.instruction['json'],
-                cmd.instruction['alignment'],
-                cmd.instruction['profile'])
+        elif request.action == 'rebuild':
+            self.rebuild(request)
 
     # sample
-    def sample_populate(self, library, strain, drop):
+    def sample_populate(self, request):
         count = 0
-        if not library:
+        if not request.instruction['library']:
             raise ValueError('must specify a library to populate')
         block = Block(self)
         collection = self.resolver.database['sample']
-        if drop:
-            self.resolver.sample_drop(library)
-            self.resolver.analyzed_sample_drop(library)
+        if request.instruction['drop']:
+            self.resolver.sample_drop(request.instruction['library'])
+            self.resolver.analyzed_sample_drop(request.instruction['library'])
 
-        while block.fill(library, strain):
+        while block.fill(request.instruction['library'], request.instruction['strain']):
             bulk = pymongo.bulk.BulkOperationBuilder(collection)
             for sample in block.buffer:
                 document = sample.document
@@ -4431,18 +4530,18 @@ class Pipeline(object):
             count += block.size
             self.log.info('%s so far', count)
 
-    def sample_drop(self, library):
-        self.resolver.sample_drop(library)
+    def sample_drop(self, request):
+        self.resolver.sample_drop(request.instruction['library'])
 
-    def sample_view(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
+    def sample_view(self, request):
+        request.kind = 'sample'
+        cursor = self.resolver.make_cursor('analyzed_sample', request)
         for node in cursor:
             sample = Sample(self, node)
-            sample.view(profile)
+            sample.view(request.instruction['profile'])
         cursor.close()
 
-    def sample_analyze(self, query, limit, skip, profile):
+    def sample_analyze(self, request):
         def flush(buffer, collection):
             if buffer:
                 bulk = pymongo.bulk.BulkOperationBuilder(collection)
@@ -4457,9 +4556,9 @@ class Pipeline(object):
             else:
                 return 0
 
+        request.kind = 'sample'
         collection = self.resolver.database['analyzed_sample']
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+        cursor = self.resolver.make_cursor('sample', request)
         count = 0
         buffer = []
         for node in cursor:
@@ -4473,157 +4572,90 @@ class Pipeline(object):
         cursor.close()
         flush(buffer, collection)
 
-    def sample_count(self, query, profile):
-        q = self.build_query(query, profile, 'sample')
-        print(self.resolver.count('analyzed_sample', q))
+    def sample_count(self, request):
+        request.kind = 'sample'
+        print(self.resolver.count('analyzed_sample', request.query))
 
-    def sample_fasta(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+    def sample_fasta(self, request):
+        request.kind = 'sample'
+        cursor = self.resolver.make_cursor('sample', request)
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fasta)
         cursor.close()
 
-    def sample_fastq(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('sample', q, limit, skip)
+    def sample_fastq(self, request):
+        request.kind = 'sample'
+        cursor = self.resolver.make_cursor('sample', request)
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fastq)
         cursor.close()
 
-    def sample_info(self, query, limit, skip, profile):
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
+    def sample_info(self, request):
+        request.kind = 'sample'
+        cursor = self.resolver.make_cursor('analyzed_sample', request)
         for node in cursor:
             sample = Sample(self, node)
             sample.info(profile)
         cursor.close()
 
-    def sample_entropy(self, query, limit, skip, profile):
-        def make_k_mer(distribution, k):
-            node = {
-                'frequency': {},
-                'normalized': {},
-                'histogram': []
-            }
-            for sample in distribution['sample'].values():
-                for position in range(len(sample['codon']) - k + 1):
-                    mer = sample['codon'][position:position + k]
-                    if mer not in node['frequency']:
-                        node['frequency'][mer] = 0
-                    node['frequency'][mer] += sample['count']
-            node['count'] = len(node['frequency'])
-            node['coverage'] = float(node['count']) / float(pow(20,k))
-            total = float(sum(list(node['frequency'].values())))
-            for key,value in node['frequency'].items():
-                node['normalized'][key] = float(value) / total
-            distribution['kmer'][str(k)] = node
-
-        q = self.build_query(query, profile, 'sample')
-        cursor = self.resolver.make_cursor('analyzed_sample', q, limit, skip)
-        distribution = {
-            'ambiguous count': 0,
-            'sample count': 0,
-            'ambiguous': {},
-            'sample': {},
-            'kmer': {},
-        }
-
-        for node in cursor:
-            sample = Sample(self, node)
-            if sample.cdr3_sequence:
-                if sample.cdr3_sequence['query'].codon and len(sample.cdr3_sequence['query'].codon) > 2:
-                    # vh = [v['gene'] for v in sample.hit if v['picked'] and v['region'] == 'VH' ]
-                    # dh = [d['gene'] for d in sample.hit if d['picked'] and d['region'] == 'DH' ]
-                    # jh = [j['gene'] for j in sample.hit if j['picked'] and j['region'] == 'JH' ]
-                    # if (('J558.50.143'  in vh and 'DFL16.1' in dh and 'IGHJ1' in jh) or 
-                    #    ('J558.6.96'     in vh and 'DFL16.1' in dh and 'IGHJ2' in jh) or
-                    #    ('7183.7.10'     in vh and 'DFL16.1' in dh and 'IGHJ2' in jh)):
-                    nucleotide = sample.cdr3_sequence['query'].nucleotide[3:-3]
-                    codon = sample.cdr3_sequence['query'].codon[1:-1]
-                    if codon not in distribution['sample']:
-                        distribution['sample'][codon] = {
-                            'codon': codon,
-                            'count': 0,
-                            'nucleotide': {}
-                        }
-                    distribution['sample'][codon]['count'] += 1
-                    if nucleotide not in distribution['sample'][codon]['nucleotide']:
-                        distribution['sample'][codon]['nucleotide'][nucleotide] = 0
-                    distribution['sample'][codon]['nucleotide'][nucleotide] += 1
-            cursor.close()
-
-            for codon in list(distribution['sample'].keys()):
-                if 'X' in distribution['sample'][codon]['codon']:
-                    distribution['ambiguous'][codon] = distribution['sample'][codon]
-                    del distribution['sample'][codon]
-            distribution['sample count'] = len(distribution['sample'])
-            distribution['ambiguous count'] = len(distribution['ambiguous'])
-
-            make_k_mer(distribution, 1)
-            make_k_mer(distribution, 2)
-            print(to_simple_json(distribution))
-
-    def analyzed_sample_drop(self, library):
-        self.resolver.analyzed_sample_drop(library)
+    def analyzed_sample_drop(self, request):
+        self.resolver.analyzed_sample_drop(request.instruction['library'])
 
     # study
-    def study_make(self, query, limit, skip, profile, preset, name=None):
+    def study_resolve(self, request):
+        request.kind = 'sample'
         study = None
-        request = self.build_request(query, profile, 'sample', preset, limit, skip)
-        id = hashlib.sha1(to_json(request).encode('utf8')).hexdigest()
-        # try by name
-        if name is not None:
-            study = self.resolver.study_find(name)
-            if study is not None and study.id != id:
-                study = None
 
-        # try by id
+        print(request.hash)
+        # if a name was given first try by name
+        if request.instruction['name'] is not None:
+            if request.instruction['drop']: self.resolver.study_drop(request.instruction['name'])
+            study = self.resolver.study_find(request.instruction['name'])
+
+        # if no study located by name try by hashed ID
         if study is None:
-            study = self.resolver.study_fetch(id)
-            if study is None:
-                study = Study(self, None, request, name)
-                cursor = self.resolver.make_cursor('analyzed_sample', request['query'], request['limit'], request['skip'])
-                self.log.debug('collecting samples for study %s', study.name)
-                for node in cursor:
-                    sample = Sample(self, node)
-                    study.add_sample(sample)
-                cursor.close()
-                study.finalize()
-                self.resolver.study_save(study)
+            if request.instruction['drop']: self.resolver.study_drop(request.hash)
+            study = self.resolver.study_find(request.hash)
+
+        # if no cached study found make a new one
+        if study is None:
+            study = Study(self, None, request, request.instruction['name'])
+
+            # potentially check for an undocumented cached study
+
+            self.log.debug('collecting samples for study %s', study.name)
+            cursor = self.resolver.make_cursor('analyzed_sample', request)
+            for node in cursor:
+                sample = Sample(self, node)
+                study.add_sample(sample)
+            cursor.close()
+            study.finalize()
+            self.resolver.study_save(study)
         return study
 
-    def study_info(self, query, limit, skip, profile):
-        request = {
-            'limit': limit,
-            'skip': skip,
-            'query': self.build_query(query, profile, 'study')
-        }
-        cursor = self.resolver.make_cursor('study', request['query'], request['limit'], request['skip'])
+    def study_info(self, request):
+        request.kind = 'study'
+        cursor = self.resolver.make_cursor('study', request)
         for node in cursor:
             study = Study(self, node)
             study.info()
         cursor.close()
 
-    def study_list(self, query, limit, skip, profile):
-        request = {
-            'limit': limit,
-            'skip': skip,
-            'query': self.build_query(query, profile, 'study')
-        }
-        cursor = self.resolver.make_cursor('study', request['query'], request['limit'], request['skip'])
+    def study_list(self, request):
+        request.kind = 'study'
+        cursor = self.resolver.make_cursor('study', request)
         for node in cursor:
             study = Study(self, node)
             print(str(study))
         cursor.close()
 
-    def study_csv(self, query, limit, skip, profile, preset, name, depth):
-        study = self.study_make(query, limit, skip, profile, preset, name)
-        study.to_csv({ 'depth': depth })
+    def study_csv(self, request):
+        study = self.study_resolve(request)
+        study.table({ 'depth': request.instruction['depth'] })
 
-    def study_density(self, names):
+    def study_expression(self, request):
         pattern = {
             'row': '{index},{pivot},{study},{start},{intensity},{adjusted},{element}',
             'head': {
@@ -4647,13 +4679,12 @@ class Pipeline(object):
         buffer = []
 
         position = 0
-        for name in names:
+        for name in request.instructions['names']:
             position += 1
             order['study'][name] = position
             study = self.resolver.study_find(name)
             if study:
-                print(to_simple_json(study.request))
-                study.to_tiled_density(buffer)
+                study.tiled_expression(buffer)
 
         buffer = sorted(buffer, key=lambda x: -order['pivot'][x['pivot']])
         buffer = sorted(buffer, key=lambda x: -order['study'][x['study']])
@@ -4672,19 +4703,20 @@ class Pipeline(object):
             print(pattern['row'].format(**row))
 
     # library
-    def library_populate(self, path):
-        count = 0
-        with io.open(path, 'rb') as file:
-            content = StringIO(file.read().decode('utf8'))
-            document = json.loads(content.getvalue())
-            for node in document:
-                self.resolver.library_store(node)
-                count += 1
-        self.log.info('populated %d libraries', count)
+    def library_populate(self, request):
+        for path in request.instruction['path']:
+            count = 0
+            with io.open(path, 'rb') as file:
+                content = StringIO(file.read().decode('utf8'))
+                document = json.loads(content.getvalue())
+                for node in document:
+                    self.resolver.library_store(node)
+                    count += 1
+            self.log.info('populated %d libraries', count)
 
-    def library_info(self, query, profile):
-        q = self.build_query(query, profile, 'library')
-        cursor = self.resolver.make_cursor('library', q)
+    def library_info(self, request):
+        request.kind = 'library'
+        cursor = self.resolver.make_cursor('library', request)
         buffer = []
         for node in cursor:
             buffer.append(node)
@@ -4695,14 +4727,14 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'exposure' not in x else x['head']['exposure'])
         print(to_json(buffer))
 
-    def library_update_count(self, library, profile, drop):
-        if library.count is None or drop:
-            library.count = self.resolver.count('sample', self.build_query({'library': library.id}, 'all', 'sample'))
-            library.productive_count = self.resolver.count('analyzed_sample', self.build_query({'library': library.id, 'valid': True, 'productive': True}, 'all', 'sample'))
-            library.valid_count = self.resolver.count('analyzed_sample', self.build_query({'library': library.id, 'valid': True}, 'all', 'sample'))
-            self.resolver.library_save(library)
-
     def library_list(self, query, profile, drop):
+        def library_update_count(library, drop):
+            if library.count is None or drop:
+                library.count = self.resolver.count('sample', self.build_query({'library': library.id}, 'all', 'sample'))
+                library.productive_count = self.resolver.count('analyzed_sample', self.build_query({'library': library.id, 'valid': True, 'productive': True}, 'all', 'sample'))
+                library.valid_count = self.resolver.count('analyzed_sample', self.build_query({'library': library.id, 'valid': True}, 'all', 'sample'))
+                self.resolver.library_save(library)
+
         title = ' | '.join (
             ['{:<9}', '{:<3}', '{:<2}', '{:<2}', '{:<30}', '{:12}', '{:8}', '{:8}', '{:<25}', '{}']
         ).format (
@@ -4719,8 +4751,8 @@ class Pipeline(object):
 
         buffer = {}
         order = []
-        q = self.build_query(query, profile, 'library')
-        cursor = self.resolver.make_cursor('library', q)
+        request.kind = 'library'
+        cursor = self.resolver.make_cursor('library', request)
         cursor.sort (
             [
                 ('head.exposure', pymongo.DESCENDING),
@@ -4733,14 +4765,14 @@ class Pipeline(object):
         for node in cursor:
             library = Library(self, node)
             if library.reference is None:
-                self.library_update_count(library, profile, drop)
+                library_update_count(library, request.instruction['drop'])
             buffer[library.id] = library
             order.append(library)
         cursor.close()
 
         for library in buffer.values():
             if library.reference is not None:
-                if library.count is None or drop:
+                if library.count is None or request.instruction['drop']:
                     library.count = 0
                     library.productive_count = 0
                     library.valid_count = 0
@@ -4755,18 +4787,19 @@ class Pipeline(object):
             print(str(library))
 
     # gene
-    def gene_populate(self, path):
-        count = 0
-        with io.open(path, 'rb') as file:
-            document = json.loads(file.read().decode('utf8'))
-            for node in document:
-                self.resolver.gene_store(node)
-                count += 1
-        self.log.info('populated %d genes', count)
+    def gene_populate(self, request):
+        for path in request.instruction['path']:
+            count = 0
+            with io.open(path, 'rb') as file:
+                document = json.loads(file.read().decode('utf8'))
+                for node in document:
+                    self.resolver.gene_store(node)
+                    count += 1
+            self.log.info('populated %d genes', count)
 
-    def gene_info(self, query, profile):
-        q = self.build_query(query, profile, 'gene')
-        cursor = self.resolver.make_cursor('gene', q)
+    def gene_info(self, request):
+        request.kind = 'gene'
+        cursor = self.resolver.make_cursor('gene', request)
         buffer = []
         for node in cursor:
             document = node['body'].copy()
@@ -4779,9 +4812,9 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['strain'])
         print(to_json(buffer))
 
-    def gene_list(self, query, profile):
-        q = self.build_query(query, profile, 'gene')
-        cursor = self.resolver.make_cursor('gene', q)
+    def gene_list(self, request):
+        request.kind = 'gene'
+        cursor = self.resolver.make_cursor('gene', request)
         cursor.sort ([('body.reference start', pymongo.DESCENDING)])
         buffer = []
         for node in cursor:
@@ -4817,9 +4850,9 @@ class Pipeline(object):
                 '' if gene['gap'] is None else str(gene['gap']), 
             ))
 
-    def gene_html(self, query, profile, title):
-        q = self.build_query(query, profile, 'gene')
-        cursor = self.resolver.make_cursor('gene', q)
+    def gene_html(self, request):
+        request.kind = 'gene'
+        cursor = self.resolver.make_cursor('gene', request)
         buffer = []
         for node in cursor:
             buffer.append(Gene(self, node))
@@ -4835,7 +4868,7 @@ class Pipeline(object):
             <head>
             <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />""")
 
-        if title is not None: print('<title>{}</title>'.format(title))
+        if request.instruction['title'] is not None: print('<title>{}</title>'.format(request.instruction['title']))
 
         print("""<style type="text/css">
                 html {
@@ -4946,31 +4979,29 @@ class Pipeline(object):
         for gene in buffer: gene.html()
         print("""</div></body></html>""")
 
-    def gene_rss(self, query, profile, flank=0, distance=0):
-        # load the gene sequences
-        q = self.build_query(query, profile, 'gene')
-        cursor = self.resolver.make_cursor('gene', q)
+    def gene_rss(self, request):
+        request.kind = 'gene'
+        cursor = self.resolver.make_cursor('gene', request)
         for node in cursor:
             gene = Gene(self, node)
-            gene.check_rss(flank, distance)
+            gene.check_rss(request.instruction['flanking'], request.instruction['distance'])
             self.resolver.gene_save(gene)
         cursor.close()
 
-    def gene_count(self, query, profile):
-        q = self.build_query(query, profile, 'gene')
-        print(self.resolver.count('gene', q))
+    def gene_count(self, request):
+        request.kind = 'gene'
+        print(self.resolver.count('gene', request.query))
 
-    def gene_align(self, query, profile, flank=0):
+    def gene_align(self, request):
         instruction = {
             'record': {}, 
             'total': 0, 
-            'flank': flank,
+            'flank': request.instruction['flanking'],
             'target path': self.configuration['reference']['mouse chromosome 12']
         }
         
-        # load the gene sequences
-        q = self.build_query(query, profile, 'gene')
-        cursor = self.resolver.make_cursor('gene', q)
+        request.kind = 'gene'
+        cursor = self.resolver.make_cursor('gene', request)
         for node in cursor:
             gene = Gene(self, node)
             instruction['record'][gene.id] = { 'gene': gene }
@@ -4993,10 +5024,9 @@ class Pipeline(object):
             else:
                 self.log.error('no satisfactory alignment found for gene %s',  gene.id)
 
-    def gene_fasta(self, query, profile, flanking, limit):
-        limit = limit if limit is not None else self.configuration['constant']['fasta line length']
-        q = self.build_query(query, profile, 'gene')
-        cursor = self.resolver.make_cursor('gene', q)
+    def gene_fasta(self, request):
+        request.kind = 'gene'
+        cursor = self.resolver.make_cursor('gene', request)
         buffer = []
         for node in cursor:
             buffer.append(node)
@@ -5007,12 +5037,12 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'strain' not in x else x['body']['strain'])
         for node in buffer:
             gene = Gene(self, node)
-            print(gene.to_fasta(flanking, limit))
+            print(gene.to_fasta(request.instruction['flanking'], self.configuration['constant']['fasta line length']))
         cursor.close()
 
-    def gene_igblast_auxiliary(self, query, profile):
-        q = self.build_query(query, profile, 'gene')
-        cursor = self.resolver.make_cursor('gene', q)
+    def gene_igblast_auxiliary(self, request):
+        request.kind = 'gene'
+        cursor = self.resolver.make_cursor('gene', request)
         buffer = StringIO()
         for node in cursor:
             gene = Gene(self, node)
@@ -5027,22 +5057,16 @@ class Pipeline(object):
         print(buffer.read())
 
     # accession
-    def accession_fasta(self, query, profile):
-        q = self.build_query(query, profile, 'accession')
-        cursor = self.resolver.make_cursor('accession', q)
+    def accession_fasta(self, request):
+        request.kind = 'accession'
+        cursor = self.resolver.make_cursor('accession', request)
         for node in cursor:
             accession = Accession(self, node)
             print(accession.fasta)
         cursor.close()
 
-    def rebuild(self, table):
-        self.resolver.rebuild(table)
-
-    def simulate(self, library, strain, json, alignment, profile):
-        block = Block(self)
-        while block.fill(library, strain):
-            block.simulate(json, alignment, profile)
-
+    def rebuild(self, request):
+        self.resolver.rebuild(request.instruction['table'])
 
 def main():
     logging.basicConfig()
@@ -5056,7 +5080,7 @@ def main():
         logging.getLogger().setLevel(log_levels[cmd.instruction['verbosity']])
         pipeline = Pipeline(configuration)
         try:
-            pipeline.execute(cmd)
+            pipeline.execute(cmd.instruction)
         except ValueError as e:
             logging.getLogger('main').critical(e)
             sys.exit(1)
