@@ -60,6 +60,10 @@ log_levels = {
     'critical': logging.CRITICAL
 }
 
+def verify_directory(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
 def to_simple_json(node):
     def handler(o):
         result = None
@@ -2753,6 +2757,10 @@ class Pivot(object):
         return self.node['pivot']
 
     @property
+    def empty(self):
+        return not self.count > 0
+
+    @property
     def count(self):
         return self.node['count']
 
@@ -2824,40 +2832,32 @@ class Study(object):
     def __init__(self, pipeline, node=None, request=None):
         self.log = logging.getLogger('Study')
         self.pipeline = pipeline
-        self.node = self.load(node, request)
+        self.node = node
+        self.load(request)
 
-    def load(self, node, request=None):
-        # potentially more tests
-        if node is not None:
-            if 'body' in node:
-                if 'repertoire' in node['body']:
-                    for key in list(node['body']['repertoire'].keys()):
-                        node['body']['repertoire'][key] = dict([(x['key'], x) for x in node['body']['repertoire'][key]])
+    def load(self, request=None):
+        if self.node is not None:
+            if 'body' in self.node:
+                if 'repertoire' in self.body:
+                    for key in list(self.repertoire.keys()):
+                        self.body['repertoire'][key] = dict([(x['key'], x) for x in self.repertoire[key]])
+
+                if 'pivot' in self.body and self.body['pivot'] is not None:
+                    self.body['pivot'] = Pivot(self, self.body['pivot'], None, self.rotate)
 
         elif request is not None and request.preset:
-            node = {
+            self.node = {
                 'head' :{
                     'id': request.hash,
-                    'hash': request.hash,
                     'name': request.name,
-                    'count': 0,
                 },
                 'body': {
                     'request': request.document,
-                    'repertoire': dict([(pivot, {}) for pivot in request.preset['rotate']]),
                 }
             }
-
-            if request.repertoire:
-                for pivot in request.repertoire.values():
-                    for predicate in pivot:
-                        if predicate['pivot'] in node['body']['repertoire']:
-                            node['body']['repertoire'][predicate['pivot']][predicate['key']] = deepcopy(predicate)
-                            node['body']['repertoire'][predicate['pivot']][predicate['key']]['weight'] = 0.0
+            self.reset()
         else:
             raise ValueError('insufficient information to create study')
-
-        return node
 
     def delete(self):
         path = os.path.join(self.configuration['cache']['path'], self.id)
@@ -2867,7 +2867,7 @@ class Study(object):
     def persist(self):
         path = os.path.join(self.configuration['cache']['path'], self.id)
         try:
-            self.pipeline.verify_directory(self.configuration['cache']['path'])
+            verify_directory(self.configuration['cache']['path'])
             with io.open(path, 'wb') as file:
                 pickle.dump(self.document, file)
             self.log.debug('pickled study %s to %s', self.id, path)
@@ -2879,8 +2879,18 @@ class Study(object):
         path = os.path.join(self.configuration['cache']['path'], self.id)
         if os.path.exists(path):
             with io.open(path, 'rb') as file:
-                self.node = self.load(pickle.load(file))
-                self.body['pivot'] = Pivot(self, self.body['pivot'], None, self.rotate)
+                self.node = pickle.load(file)
+                self.load()
+
+    def reset(self):
+        self.count = 0
+        self.body['repertoire'] = dict([(pivot, {}) for pivot in self.rotate])
+        if self.request['repertoire']:
+            for pivot in self.request['repertoire'].values():
+                for predicate in pivot:
+                    if predicate['pivot'] in self.repertoire:
+                        self.repertoire[predicate['pivot']][predicate['key']] = deepcopy(predicate)
+                        self.repertoire[predicate['pivot']][predicate['key']]['weight'] = 0.0
 
     def __str__(self):
         return '\t'.join([self.id, self.name, str(self.count)])
@@ -2896,10 +2906,6 @@ class Study(object):
     @property
     def body(self):
         return self.node['body']
-
-    @property
-    def hash(self):
-        return self.head['hash']
 
     @property
     def id(self):
@@ -2954,6 +2960,10 @@ class Study(object):
             for key in list(node['body']['repertoire'].keys()):
                 node['body']['repertoire'][key] = list(node['body']['repertoire'][key].values())
         return node
+
+    @property
+    def empty(self):
+        return not self.count > 0
 
     @property
     def count(self):
@@ -3875,6 +3885,37 @@ class Resolver(object):
             self.log.error('unknown reference %s', name)
         return reference
 
+    def study_resolve(self, request):
+        request.kind = 'sample'
+        study = None
+
+        # explicit name resolution
+        if request.instruction['name'] is not None:
+            study = self.study_find(request.instruction['name'])
+
+        # request hash resolution
+        if study is None:
+            study = self.study_find(request.hash)
+
+        # if the drop flag was specified and a record exists, drop the record and reset the pointer 
+        if study is not None and request.instruction['drop']:
+            self.study_drop(study.id)
+            study = None
+
+        # if still no study record exists, populate a new one
+        if study is None:
+            study = Study(self.pipeline, None, request)
+            self.log.debug('populating study %s', study.name)
+            cursor = request.cursor('analyzed_sample')
+            for node in cursor:
+                sample = Sample(self.pipeline, node)
+                study.add_sample(sample)
+            cursor.close()
+            study.finalize()
+            self.study_save(study)
+
+        return study
+
     def study_find(self, keyword):
         study = None
         if keyword is not None:
@@ -3891,7 +3932,7 @@ class Resolver(object):
             study.delete()
             result = self.database['study'].delete_one({ 'head.id': study.id })
             if result:
-                self.log.info('dropped study record for\n%s', id)
+                self.log.info('dropped study record for %s', study.name)
 
     def study_save(self, study):
         if study is not None:
@@ -3899,7 +3940,7 @@ class Resolver(object):
             document['body']['pivot'] = None
             existing = self.database['study'].find_one({'head.id': study.id})
             if existing:
-                self.log.debug('existing study found for %s', study.id)
+                self.log.debug('existing study found for %s', study.name)
                 document['_id'] = existing['_id']
             self.database['study'].save(document)
             study.persist()
@@ -4455,10 +4496,6 @@ class Pipeline(object):
         else:
             raise ValueError('action {} is not implemented'.format(request.action))
 
-    def verify_directory(self, path):
-        if not os.path.exists(path):
-            os.makedirs(path)
-
     # sample
     def sample_populate(self, request):
         count = 0
@@ -4561,39 +4598,6 @@ class Pipeline(object):
         self.resolver.analyzed_sample_drop(request.instruction['library'])
 
     # study
-    def study_resolve(self, request):
-        request.kind = 'sample'
-        study = None
-
-        # explicit name resolution
-        if request.instruction['name'] is not None:
-            study = self.resolver.study_find(request.instruction['name'])
-
-        # request hash resolution
-        if study is None:
-            study = self.resolver.study_find(request.hash)
-
-        # if the drop flag was specified and a record exists, drop the record and reset the pointer 
-        if study is not None and request.instruction['drop']:
-            self.resolver.study_drop(study.hash)
-            study = None
-
-        # if still no study record exists, create a new one
-        if study is None:
-            study = Study(self, None, request)
-
-            # potentially check for an undocumented cached study
-
-            self.log.debug('populating study %s', study.name)
-            cursor = request.cursor('analyzed_sample')
-            for node in cursor:
-                sample = Sample(self, node)
-                study.add_sample(sample)
-            cursor.close()
-            study.finalize()
-            self.resolver.study_save(study)
-        return study
-
     def study_info(self, request):
         request.kind = 'study'
         cursor = request.cursor('study')
@@ -4611,8 +4615,11 @@ class Pipeline(object):
         cursor.close()
 
     def study_csv(self, request):
-        study = self.study_resolve(request)
-        study.table({ 'depth': request.instruction['depth'] })
+        study = self.resolver.study_resolve(request)
+        if study.pivot is not None:
+            study.table({ 'depth': request.instruction['depth'] })
+        else:
+            self.log.error('missing study cache for %s', study.name)
 
     def study_expression(self, request):
         pattern = {
