@@ -416,6 +416,10 @@ def load_configuration():
     # load collection of codons possibly encoding a stop codon
     configuration['stop codon repertoire'] = possibly_stop_codon(configuration)
 
+    configuration['interface']['implementation'] = {}
+    for action in configuration['interface']['section']['action']:
+        configuration['interface']['implementation'][action['instruction']['name']] = action['implementation']
+
     return configuration
 
 def possibly_stop_codon(configuration):
@@ -2817,28 +2821,26 @@ class Pivot(object):
 
 
 class Study(object):
-    def __init__(self, pipeline, node=None, request=None, name=None):
+    def __init__(self, pipeline, node=None, request=None):
         self.log = logging.getLogger('Study')
         self.pipeline = pipeline
-        self.node = self.load(node, request, name)
+        self.node = self.load(node, request)
 
-    def load(self, node, request=None, name=None):
+    def load(self, node, request=None):
         # potentially more tests
         if node is not None:
             if 'body' in node:
-                if 'request' in node['body']:
-                    if 'query' in node['body']['request']:
-                        node['body']['request']['query'] = json.loads(node['body']['request']['query'])
-
                 if 'repertoire' in node['body']:
                     for key in list(node['body']['repertoire'].keys()):
                         node['body']['repertoire'][key] = dict([(x['key'], x) for x in node['body']['repertoire'][key]])
 
-        elif request is not None:
+        elif request is not None and request.preset:
             node = {
                 'head' :{
                     'id': request.hash,
-                    'count': 0
+                    'hash': request.hash,
+                    'name': request.name,
+                    'count': 0,
                 },
                 'body': {
                     'request': request.document,
@@ -2846,17 +2848,14 @@ class Study(object):
                 }
             }
 
-            if name is not None:
-                node['head']['name'] = name
-            else:
-                node['head']['name'] = node['head']['id']
-
             if request.repertoire:
                 for pivot in request.repertoire.values():
                     for predicate in pivot:
                         if predicate['pivot'] in node['body']['repertoire']:
                             node['body']['repertoire'][predicate['pivot']][predicate['key']] = deepcopy(predicate)
                             node['body']['repertoire'][predicate['pivot']][predicate['key']]['weight'] = 0.0
+        else:
+            raise ValueError('insufficient information to create study')
 
         return node
 
@@ -2897,6 +2896,10 @@ class Study(object):
     @property
     def body(self):
         return self.node['body']
+
+    @property
+    def hash(self):
+        return self.head['hash']
 
     @property
     def id(self):
@@ -2947,14 +2950,9 @@ class Study(object):
     @property
     def document(self):
         node = transform_to_document(self.node)
-        if 'request' in node['body']:
-            if 'query' in node['body']['request']:
-                node['body']['request']['query'] = json.dumps(node['body']['request']['query'], sort_keys=False, ensure_ascii=False)
-
         if 'repertoire' in node['body']:
             for key in list(node['body']['repertoire'].keys()):
                 node['body']['repertoire'][key] = list(node['body']['repertoire'][key].values())
-
         return node
 
     @property
@@ -3142,20 +3140,21 @@ class Study(object):
             }
         }
         for pivot, node in density.items():
-            node['intensity'] = self.tiled_pivot_expression(pivot, node['interval'])
-            node['total'] = float(sum([tile['intensity'] for tile in node['intensity']['tiles']]))
-            node['factor'] = float(node['intensity']['pivot count']) / node['total']
-            for tile in node['intensity']['tiles']:
-                row = {
-                    'study': self.name,
-                    'pivot': pivot,
-                    'start': tile['start'],
-                    'end': tile['end'],
-                    'intensity': tile['intensity'],
-                    'adjusted': float(tile['intensity'] * node['factor']),
-                    'element': ';'.join([e['name'] for e in tile['pivot']])
-                }
-                buffer.append(row)
+            if pivot in self.rotate:
+                node['intensity'] = self.tiled_pivot_expression(pivot, node['interval'])
+                node['total'] = float(sum([tile['intensity'] for tile in node['intensity']['tiles']]))
+                node['factor'] = float(node['intensity']['pivot count']) / node['total']
+                for tile in node['intensity']['tiles']:
+                    row = {
+                        'study': self.name,
+                        'pivot': pivot,
+                        'start': tile['start'],
+                        'end': tile['end'],
+                        'intensity': tile['intensity'],
+                        'adjusted': float(tile['intensity'] * node['factor']),
+                        'element': ';'.join([e['name'] for e in tile['pivot']])
+                    }
+                    buffer.append(row)
 
     def info(self):
         print(to_simple_json(transform_to_document(self.node)))
@@ -4181,28 +4180,6 @@ class Resolver(object):
             document = node
         return document
 
-    def assemble_query(self, query):
-        assembled = {}
-        for key,value in query.items():
-            if key in [ '$or', '$and' ]:
-                assembled[key] = [ dict([ ('head.{}'.format(k),v) for k,v in e.items() ]) for e in value ]
-            else:
-                assembled['head.{}'.format(key)] = value
-        return assembled
-
-    def make_cursor(self, collection, request):
-        q = self.assemble_query(request.query)
-        cursor = self.database[collection].find(q)
-        if request.limit is not None:
-            cursor.limit(request.limit)
-        if request.skip is not None:
-            cursor.skip(request.skip)
-        return cursor
-
-    def count(self, collection, query):
-        q = self.assemble_query(query)
-        return self.database[collection].count(q)
-
 
 class Request(object):
     def __init__(self, pipeline, instruction):
@@ -4210,6 +4187,7 @@ class Request(object):
         self.pipeline = pipeline
         self.node = {
             'instruction': {
+                'name': None,
                 'kind': None,
                 'limit': None,
                 'skip': None,
@@ -4224,9 +4202,9 @@ class Request(object):
             'hash': None
         }
         if instruction is not None:
-            for k,v in instruction.items():
-                if v is not None or v not in self.node['instruction']:
-                    self.node['instruction'][k] = v
+            for key,value in instruction.items():
+                if value is not None or value not in self.node['instruction']:
+                    self.node['instruction'][key] = value
 
     def reset(self):
         self.node['profile'] = None
@@ -4238,13 +4216,12 @@ class Request(object):
     @property
     def document(self):
         return {
+            'name': self.name,
             'skip': self.skip,
             'limit': self.limit,
             'query': self.query,
             'preset': self.preset,
             'repertoire': self.repertoire,
-            # 'instruction': self.instruction,
-            # 'profile': self.profile,
         }
 
     @property
@@ -4268,46 +4245,52 @@ class Request(object):
         if self.node['query'] is None:
             self.node['query'] = {}
 
+            # load a query profile
             if self.profile is not None:
                 for key,value in self.profile.items():
                     self.node['query'][key] = value
 
-            for k in [
-                'names',
-                'library',
+            # numeric and string instruction parameters that go into the query
+            for key in [
                 'id',
+                'names',
                 'region',
                 'format',
                 'strain',
+                'library',
                 'functionality',
             ]:
-                if k in self.instruction and self.instruction[k] is not None:
-                    self.node['query'][k] = self.instruction[k]
+                if key in self.instruction and self.instruction[key] is not None:
+                    self.node['query'][key] = self.instruction[key]
 
-            for k in [
-                'gapped',
+            # boolean instruction parameters that go into the query
+            for key in [
                 'valid',
+                'gapped',
                 'framed',
                 'in frame',
                 'premature',
                 'productive',
             ]:
-                if k in self.instruction and self.instruction[k] is not None:
-                    if self.instruction[k] == 'Y':
-                        self.node['query'][k] = True
-                    elif self.instruction[k] == 'N':
-                        self.node['query'][k] = False
+                if key in self.instruction and self.instruction[key] is not None:
+                    if self.instruction[key] == 'Y':
+                        self.node['query'][key] = True
 
+                    elif self.instruction[key] == 'N':
+                        self.node['query'][key] = False
+
+            # expand library query parameter
             if 'library' in self.node['query']:
                 library = self.resolver.library_fetch(self.node['query']['library'])
                 if library:
                     if library.reference:
-                        self.node['query'][ '$or' ] = [ ]
+                        self.node['query'][ '__or__' ] = [ ]
                         for reference in library.reference:
-                            self.node['query'][ '$or' ].append({ 'library': reference })
+                            self.node['query'][ '__or__' ].append({ 'library': reference })
                         del self.node['query']['library']
                 else:
                     raise ValueError('library {} does not exist'.format(self.node['query']['library']))
+
         return self.node['query']
 
     @property
@@ -4317,12 +4300,23 @@ class Request(object):
                 'limit': self.limit,
                 'skip': self.skip,
                 'query': self.query,
-                'preset': self.preset,
+                'preset': deepcopy(self.preset),
                 'repertoire': self.repertoire,
             }
+
+            if o['preset'] and 'sort' in o['preset']:
+                del o['preset']['sort']  
+
             o = json.loads(json.dumps(o, sort_keys=True, ensure_ascii=False))
             self.node['hash'] = hashlib.sha1(to_json(o).encode('utf8')).hexdigest()
         return self.node['hash']
+
+    @property
+    def name(self):
+        if self.instruction['name'] is not None:
+            return self.instruction['name']
+        else:
+            return self.hash
 
     @property
     def kind(self):
@@ -4398,6 +4392,40 @@ class Request(object):
                 self.node['repertoire'][record['pivot']].append(record)
         return self.node['repertoire']
 
+    @property
+    def mongodb_query(self):
+        def assemble(node):
+            if node is not None:
+                if isinstance(node, dict):
+                    for key in list(node.keys()):
+                        assemble(node[key])
+                        if re.match('^__([a-zA-Z]+)__$',key):
+                            node['${}'.format(key[2:-2])] = node[key]
+                        else:
+                            node['head.{}'.format(key)] = node[key]
+                        del node[key]
+                elif isinstance(node, list):
+                    for element in node:
+                        assemble(element)
+            return node
+        return assemble(deepcopy(self.query))
+
+    def cursor(self, collection):
+        cursor = None
+        if collection:
+            cursor = self.resolver.database[collection].find(self.mongodb_query)
+
+            if self.limit is not None:
+                cursor.limit(self.limit)
+
+            if self.skip is not None:
+                cursor.skip(self.skip)
+
+        return cursor
+
+    def count(self, collection):
+        return self.resolver.database[collection].count(self.mongodb_query)
+
 
 class Pipeline(object):
     def __init__(self, configuration):
@@ -4416,92 +4444,20 @@ class Pipeline(object):
     def close(self):
         self.resolver.close()
 
+    def execute(self, instruction):
+        request = Request(self, instruction)
+        if request.action in self.configuration['interface']['implementation']:
+            action = getattr(self, self.configuration['interface']['implementation'][request.action], None)
+            if action is not None:
+                action(request)
+            else:
+                raise ValueError('action {} is not implemented'.format(request.action))
+        else:
+            raise ValueError('action {} is not implemented'.format(request.action))
+
     def verify_directory(self, path):
         if not os.path.exists(path):
             os.makedirs(path)
-
-    def execute(self, instruction):
-        request = Request(self, instruction)
-        if request.action == 'samplePopulate':
-            self.sample_populate(request)
-                
-        elif request.action == 'sampleDrop':
-            self.sample_drop(request)
-            
-        elif request.action == 'sampleView':
-            self.sample_view(request)
-
-        elif request.action == 'sampleAnalyze':
-            self.sample_analyze(request)
-                
-        elif request.action == 'sampleCount':
-            self.sample_count(request)
-            
-        elif request.action == 'sampleFasta':
-            self.sample_fasta(request)
-                
-        elif request.action == 'sampleFastq':
-            self.sample_fastq(request)
-                
-        elif request.action == 'sampleInfo':
-            self.sample_info(request)
-                
-        elif request.action == 'analyzedSampelDrop':
-            self.analyzed_sample_drop(request)
-
-        elif request.action == 'studyInfo':
-            study = self.study_info(request)
-
-        elif request.action == 'studyList':
-            study = self.study_list(request)
-
-        elif request.action == 'studyCSV':
-            study = self.study_csv(request)
-
-        elif request.action == 'expression':
-            self.study_expression(request)
-
-        elif request.action == 'libraryPopulate':
-            self.library_populate(request)
-                
-        elif request.action == 'libraryInfo':
-            self.library_info(request)
-
-        elif request.action == 'libraryList':
-            self.library_list(request)
-
-        elif request.action == 'genePopulate':
-            self.gene_populate(request)
-                
-        elif request.action == 'geneInfo':
-            self.gene_info(request)
-
-        elif request.action == 'geneList':
-            self.gene_list(request)
-
-        elif request.action == 'geneHtml':
-            self.gene_html(request)
-
-        elif request.action == 'geneRss':
-            self.gene_rss(request)
-
-        elif request.action == 'geneCount':
-            self.gene_count(request)
-
-        elif request.action == 'geneAlign':
-            self.gene_align(request)
-
-        elif request.action == 'geneFasta':
-            self.gene_fasta(request)
-            
-        elif request.action == 'geneIgblastAux':
-            self.gene_igblast_auxiliary(request)
-            
-        elif request.action == 'accessionFasta':
-            self.accession_fasta(request)
-            
-        elif request.action == 'rebuild':
-            self.rebuild(request)
 
     # sample
     def sample_populate(self, request):
@@ -4535,7 +4491,7 @@ class Pipeline(object):
 
     def sample_view(self, request):
         request.kind = 'sample'
-        cursor = self.resolver.make_cursor('analyzed_sample', request)
+        cursor = request.cursor('analyzed_sample')
         for node in cursor:
             sample = Sample(self, node)
             sample.view(request.instruction['profile'])
@@ -4557,8 +4513,9 @@ class Pipeline(object):
                 return 0
 
         request.kind = 'sample'
+        cursor = request.cursor('sample')
         collection = self.resolver.database['analyzed_sample']
-        cursor = self.resolver.make_cursor('sample', request)
+
         count = 0
         buffer = []
         for node in cursor:
@@ -4574,11 +4531,11 @@ class Pipeline(object):
 
     def sample_count(self, request):
         request.kind = 'sample'
-        print(self.resolver.count('analyzed_sample', request.query))
+        print(request.count('analyzed_sample'))
 
     def sample_fasta(self, request):
         request.kind = 'sample'
-        cursor = self.resolver.make_cursor('sample', request)
+        cursor = request.cursor('sample')
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fasta)
@@ -4586,7 +4543,7 @@ class Pipeline(object):
 
     def sample_fastq(self, request):
         request.kind = 'sample'
-        cursor = self.resolver.make_cursor('sample', request)
+        cursor = request.cursor('sample')
         for node in cursor:
             sample = Sample(self, node)
             print(sample.fastq)
@@ -4594,7 +4551,7 @@ class Pipeline(object):
 
     def sample_info(self, request):
         request.kind = 'sample'
-        cursor = self.resolver.make_cursor('analyzed_sample', request)
+        cursor = request.cursor('analyzed_sample')
         for node in cursor:
             sample = Sample(self, node)
             sample.info(profile)
@@ -4608,25 +4565,27 @@ class Pipeline(object):
         request.kind = 'sample'
         study = None
 
-        print(request.hash)
-        # if a name was given first try by name
+        # explicit name resolution
         if request.instruction['name'] is not None:
-            if request.instruction['drop']: self.resolver.study_drop(request.instruction['name'])
             study = self.resolver.study_find(request.instruction['name'])
 
-        # if no study located by name try by hashed ID
+        # request hash resolution
         if study is None:
-            if request.instruction['drop']: self.resolver.study_drop(request.hash)
             study = self.resolver.study_find(request.hash)
 
-        # if no cached study found make a new one
+        # if the drop flag was specified and a record exists, drop the record and reset the pointer 
+        if study is not None and request.instruction['drop']:
+            self.resolver.study_drop(study.hash)
+            study = None
+
+        # if still no study record exists, create a new one
         if study is None:
-            study = Study(self, None, request, request.instruction['name'])
+            study = Study(self, None, request)
 
             # potentially check for an undocumented cached study
 
-            self.log.debug('collecting samples for study %s', study.name)
-            cursor = self.resolver.make_cursor('analyzed_sample', request)
+            self.log.debug('populating study %s', study.name)
+            cursor = request.cursor('analyzed_sample')
             for node in cursor:
                 sample = Sample(self, node)
                 study.add_sample(sample)
@@ -4637,7 +4596,7 @@ class Pipeline(object):
 
     def study_info(self, request):
         request.kind = 'study'
-        cursor = self.resolver.make_cursor('study', request)
+        cursor = request.cursor('study')
         for node in cursor:
             study = Study(self, node)
             study.info()
@@ -4645,7 +4604,7 @@ class Pipeline(object):
 
     def study_list(self, request):
         request.kind = 'study'
-        cursor = self.resolver.make_cursor('study', request)
+        cursor = request.cursor('study')
         for node in cursor:
             study = Study(self, node)
             print(str(study))
@@ -4679,7 +4638,7 @@ class Pipeline(object):
         buffer = []
 
         position = 0
-        for name in request.instructions['names']:
+        for name in request.instruction['names']:
             position += 1
             order['study'][name] = position
             study = self.resolver.study_find(name)
@@ -4716,7 +4675,7 @@ class Pipeline(object):
 
     def library_info(self, request):
         request.kind = 'library'
-        cursor = self.resolver.make_cursor('library', request)
+        cursor = request.cursor('library')
         buffer = []
         for node in cursor:
             buffer.append(node)
@@ -4727,14 +4686,7 @@ class Pipeline(object):
         buffer = sorted(buffer, key=lambda x: '' if 'exposure' not in x else x['head']['exposure'])
         print(to_json(buffer))
 
-    def library_list(self, query, profile, drop):
-        def library_update_count(library, drop):
-            if library.count is None or drop:
-                library.count = self.resolver.count('sample', self.build_query({'library': library.id}, 'all', 'sample'))
-                library.productive_count = self.resolver.count('analyzed_sample', self.build_query({'library': library.id, 'valid': True, 'productive': True}, 'all', 'sample'))
-                library.valid_count = self.resolver.count('analyzed_sample', self.build_query({'library': library.id, 'valid': True}, 'all', 'sample'))
-                self.resolver.library_save(library)
-
+    def library_list(self, request):
         title = ' | '.join (
             ['{:<9}', '{:<3}', '{:<2}', '{:<2}', '{:<30}', '{:12}', '{:8}', '{:8}', '{:<25}', '{}']
         ).format (
@@ -4752,7 +4704,7 @@ class Pipeline(object):
         buffer = {}
         order = []
         request.kind = 'library'
-        cursor = self.resolver.make_cursor('library', request)
+        cursor = request.cursor('library')
         cursor.sort (
             [
                 ('head.exposure', pymongo.DESCENDING),
@@ -4765,7 +4717,18 @@ class Pipeline(object):
         for node in cursor:
             library = Library(self, node)
             if library.reference is None:
-                library_update_count(library, request.instruction['drop'])
+                if library.count is None or request.instruction['drop']:
+                    request = Request(self, {'library': library.id, 'profile': 'all', 'kind': 'sample'})
+                    library.count = request.count('sample')
+
+                    request = Request(self, {'library': library.id, 'profile': 'p', 'kind': 'sample'})
+                    library.productive_count = request.count('analyzed_sample')
+
+                    request = Request(self, {'library': library.id, 'profile': 'valid', 'kind': 'sample'})
+                    library.valid_count = request.count('analyzed_sample')
+
+                    self.resolver.library_save(library)
+
             buffer[library.id] = library
             order.append(library)
         cursor.close()
@@ -4799,7 +4762,7 @@ class Pipeline(object):
 
     def gene_info(self, request):
         request.kind = 'gene'
-        cursor = self.resolver.make_cursor('gene', request)
+        cursor = request.cursor('gene')
         buffer = []
         for node in cursor:
             document = node['body'].copy()
@@ -4814,7 +4777,7 @@ class Pipeline(object):
 
     def gene_list(self, request):
         request.kind = 'gene'
-        cursor = self.resolver.make_cursor('gene', request)
+        cursor = request.cursor('gene')
         cursor.sort ([('body.reference start', pymongo.DESCENDING)])
         buffer = []
         for node in cursor:
@@ -4852,7 +4815,7 @@ class Pipeline(object):
 
     def gene_html(self, request):
         request.kind = 'gene'
-        cursor = self.resolver.make_cursor('gene', request)
+        cursor = request.cursor('gene')
         buffer = []
         for node in cursor:
             buffer.append(Gene(self, node))
@@ -4981,7 +4944,7 @@ class Pipeline(object):
 
     def gene_rss(self, request):
         request.kind = 'gene'
-        cursor = self.resolver.make_cursor('gene', request)
+        cursor = request.cursor('gene')
         for node in cursor:
             gene = Gene(self, node)
             gene.check_rss(request.instruction['flanking'], request.instruction['distance'])
@@ -4990,7 +4953,7 @@ class Pipeline(object):
 
     def gene_count(self, request):
         request.kind = 'gene'
-        print(self.resolver.count('gene', request.query))
+        print(request.count('gene'))
 
     def gene_align(self, request):
         instruction = {
@@ -5001,7 +4964,7 @@ class Pipeline(object):
         }
         
         request.kind = 'gene'
-        cursor = self.resolver.make_cursor('gene', request)
+        cursor = request.cursor('gene')
         for node in cursor:
             gene = Gene(self, node)
             instruction['record'][gene.id] = { 'gene': gene }
@@ -5026,7 +4989,7 @@ class Pipeline(object):
 
     def gene_fasta(self, request):
         request.kind = 'gene'
-        cursor = self.resolver.make_cursor('gene', request)
+        cursor = request.cursor('gene')
         buffer = []
         for node in cursor:
             buffer.append(node)
@@ -5042,7 +5005,7 @@ class Pipeline(object):
 
     def gene_igblast_auxiliary(self, request):
         request.kind = 'gene'
-        cursor = self.resolver.make_cursor('gene', request)
+        cursor = request.cursor('gene')
         buffer = StringIO()
         for node in cursor:
             gene = Gene(self, node)
@@ -5059,7 +5022,7 @@ class Pipeline(object):
     # accession
     def accession_fasta(self, request):
         request.kind = 'accession'
-        cursor = self.resolver.make_cursor('accession', request)
+        cursor = request.cursor('accession')
         for node in cursor:
             accession = Accession(self, node)
             print(accession.fasta)
@@ -5068,26 +5031,32 @@ class Pipeline(object):
     def rebuild(self, request):
         self.resolver.rebuild(request.instruction['table'])
 
+
 def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
     
     configuration = load_configuration()    
-    cmd = CommandLineParser(configuration['interface'])
-    if cmd.sectioned and cmd.action is None:
-        cmd.help()
+    command = CommandLineParser(configuration['interface'])
+    if command.sectioned and command.action is None:
+        command.help()
+
     else:
-        logging.getLogger().setLevel(log_levels[cmd.instruction['verbosity']])
+        logging.getLogger().setLevel(log_levels[command.instruction['verbosity']])
         pipeline = Pipeline(configuration)
         try:
-            pipeline.execute(cmd.instruction)
+            pipeline.execute(command.instruction)
+
         except ValueError as e:
             logging.getLogger('main').critical(e)
             sys.exit(1)
+
         except(KeyboardInterrupt, SystemExit) as e:
             pipeline.close()
             sys.exit(1)
+
         pipeline.close()
+
     sys.exit(0)
 
 if __name__ == '__main__':

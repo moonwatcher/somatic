@@ -613,12 +613,12 @@
         "section": {
             "action": [
                 {
-                    "implementation": "sample_populate",
                     "argument": [
                         "library", 
                         "strain", 
                         "drop"
                     ], 
+                    "implementation": "sample_populate", 
                     "instruction": {
                         "description": "match each read in file to regions with igblast and store results in the library. takes data from stdin", 
                         "help": "populate samples for library", 
@@ -629,6 +629,7 @@
                     "argument": [
                         "library"
                     ], 
+                    "implementation": "sample_drop", 
                     "instruction": {
                         "description": "remove all samples for the provided library name", 
                         "help": "drop samples of a given library", 
@@ -648,27 +649,10 @@
                         "skip", 
                         "productive"
                     ], 
+                    "implementation": "sample_view", 
                     "instruction": {
                         "help": "view sample alignment", 
                         "name": "sampleView"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "profile", 
-                        "library", 
-                        "id", 
-                        "gapped", 
-                        "valid", 
-                        "in frame", 
-                        "premature", 
-                        "limit", 
-                        "skip", 
-                        "productive"
-                    ], 
-                    "instruction": {
-                        "help": "view sample entropy", 
-                        "name": "sampleEntropy"
                     }
                 }, 
                 {
@@ -681,6 +665,7 @@
                         "skip", 
                         "id"
                     ], 
+                    "implementation": "sample_analyze", 
                     "instruction": {
                         "help": "analyze samples", 
                         "name": "sampleAnalyze"
@@ -697,6 +682,7 @@
                         "premature", 
                         "productive"
                     ], 
+                    "implementation": "sample_count", 
                     "instruction": {
                         "help": "count sample alignment", 
                         "name": "sampleCount"
@@ -715,6 +701,7 @@
                         "skip", 
                         "productive"
                     ], 
+                    "implementation": "sample_fasta", 
                     "instruction": {
                         "help": "print sample fasta stream", 
                         "name": "sampleFasta"
@@ -733,6 +720,7 @@
                         "skip", 
                         "productive"
                     ], 
+                    "implementation": "sample_fastq", 
                     "instruction": {
                         "help": "print sample fastq stream", 
                         "name": "sampleFastq"
@@ -751,6 +739,7 @@
                         "skip", 
                         "productive"
                     ], 
+                    "implementation": "sample_info", 
                     "instruction": {
                         "help": "view JSON sample record", 
                         "name": "sampleInfo"
@@ -760,6 +749,7 @@
                     "argument": [
                         "library"
                     ], 
+                    "implementation": "analyzed_sample_drop", 
                     "instruction": {
                         "description": "remove all analyzed samples for the provided library name", 
                         "help": "drop analyzed samples of a given library", 
@@ -770,6 +760,7 @@
                     "argument": [
                         "names"
                     ], 
+                    "implementation": "study_expression", 
                     "instruction": {
                         "help": "gene expression for multiple studies", 
                         "name": "expression"
@@ -782,6 +773,7 @@
                         "limit", 
                         "skip"
                     ], 
+                    "implementation": "study_info", 
                     "instruction": {
                         "help": "get cached studies", 
                         "name": "studyInfo"
@@ -794,6 +786,7 @@
                         "limit", 
                         "skip"
                     ], 
+                    "implementation": "study_list", 
                     "instruction": {
                         "help": "list cached studies", 
                         "name": "studyList"
@@ -811,6 +804,7 @@
                         "depth", 
                         "drop"
                     ], 
+                    "implementation": "study_csv", 
                     "instruction": {
                         "help": "make a study in CSV", 
                         "name": "studyCSV"
@@ -820,6 +814,7 @@
                     "argument": [
                         "path"
                     ], 
+                    "implementation": "library_populate", 
                     "instruction": {
                         "help": "load library definition from JSON file", 
                         "name": "libraryPopulate"
@@ -831,6 +826,7 @@
                         "profile", 
                         "id"
                     ], 
+                    "implementation": "library_info", 
                     "instruction": {
                         "help": "view JSON library records", 
                         "name": "libraryInfo"
@@ -843,6 +839,7 @@
                         "drop", 
                         "id"
                     ], 
+                    "implementation": "library_list", 
                     "instruction": {
                         "help": "list library records", 
                         "name": "libraryList"
@@ -852,6 +849,7 @@
                     "argument": [
                         "path"
                     ], 
+                    "implementation": "gene_populate", 
                     "instruction": {
                         "help": "load gene sequences from JSON file", 
                         "name": "genePopulate"
@@ -864,6 +862,7 @@
                         "profile", 
                         "id"
                     ], 
+                    "implementation": "gene_info", 
                     "instruction": {
                         "help": "view JSON gene records", 
                         "name": "geneInfo"
@@ -876,6 +875,7 @@
                         "profile", 
                         "id"
                     ], 
+                    "implementation": "gene_list", 
                     "instruction": {
                         "help": "list gene records", 
                         "name": "geneList"
@@ -890,6 +890,7 @@
                         "title", 
                         "functionality"
                     ], 
+                    "implementation": "gene_html", 
                     "instruction": {
                         "help": "print genes html diagram", 
                         "name": "geneHtml"
@@ -904,6 +905,7 @@
                         "flanking", 
                         "distance"
                     ], 
+                    "implementation": "gene_rss", 
                     "instruction": {
                         "help": "verify gene RSS", 
                         "name": "geneRss"
@@ -916,6 +918,7 @@
                         "profile", 
                         "id"
                     ], 
+                    "implementation": "gene_count", 
                     "instruction": {
                         "help": "count gene records", 
                         "name": "geneCount"
@@ -929,6 +932,7 @@
                         "id", 
                         "flanking"
                     ], 
+                    "implementation": "gene_align", 
                     "instruction": {
                         "help": "align gene sequences to genome", 
                         "name": "geneAlign"
@@ -944,6 +948,7 @@
                         "limit", 
                         "functionality"
                     ], 
+                    "implementation": "gene_fasta", 
                     "instruction": {
                         "help": "dump gene sequences to fasta", 
                         "name": "geneFasta"
@@ -956,6 +961,7 @@
                         "profile", 
                         "id"
                     ], 
+                    "implementation": "gene_igblast_auxiliary", 
                     "instruction": {
                         "help": "dump gene sequences to igblast auxiliary file", 
                         "name": "geneIgblastAux"
@@ -968,6 +974,7 @@
                         "strain", 
                         "id"
                     ], 
+                    "implementation": "accession_fasta", 
                     "instruction": {
                         "help": "dump accession sequences to fasta", 
                         "name": "accessionFasta"
@@ -977,22 +984,10 @@
                     "argument": [
                         "table"
                     ], 
+                    "implementation": "rebuild", 
                     "instruction": {
                         "help": "rebuild database indexes", 
                         "name": "rebuild"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "profile", 
-                        "library", 
-                        "strain", 
-                        "json", 
-                        "alignment"
-                    ], 
-                    "instruction": {
-                        "help": "process alignment without updating the database", 
-                        "name": "simulate"
                     }
                 }
             ], 
@@ -1452,7 +1447,7 @@
             }, 
             "gene": {
                 "functionality": {
-                    "$ne": "F"
+                    "__ne__": "F"
                 }
             }, 
             "sample": {
@@ -1475,7 +1470,7 @@
             }, 
             "sample": {
                 "average phred": {
-                    "$gt": 33
+                    "__gt__": 33
                 }, 
                 "productive": false, 
                 "valid": true
@@ -1496,7 +1491,7 @@
             }, 
             "sample": {
                 "average phred": {
-                    "$gt": 38
+                    "__gt__": 38
                 }, 
                 "n count": 0, 
                 "productive": false, 
@@ -1518,10 +1513,10 @@
             }, 
             "sample": {
                 "average phred": {
-                    "$gt": 38
+                    "__gt__": 38
                 }, 
                 "n count": {
-                    "$gte": 1
+                    "__gte__": 1
                 }, 
                 "productive": false, 
                 "valid": true
@@ -1562,7 +1557,7 @@
             }, 
             "sample": {
                 "average phred": {
-                    "$gt": 33
+                    "__gt__": 33
                 }, 
                 "productive": true
             }
@@ -1602,7 +1597,7 @@
             }, 
             "sample": {
                 "average phred": {
-                    "$gt": 38
+                    "__gt__": 38
                 }, 
                 "n count": 0, 
                 "productive": true
@@ -1623,10 +1618,10 @@
             }, 
             "sample": {
                 "average phred": {
-                    "$gt": 38
+                    "__gt__": 38
                 }, 
                 "n count": {
-                    "$gte": 1
+                    "__gte__": 1
                 }, 
                 "productive": true
             }
@@ -1945,6 +1940,140 @@
             "vj p count": null
         }, 
         "preset": {
+            "C3V": {
+                "feature": {
+                    "cdr3 charge": {
+                        "column": {
+                            "max": {
+                                "enabled": false
+                            }, 
+                            "min": {
+                                "enabled": false
+                            }, 
+                            "std": {
+                                "enabled": false
+                            }
+                        }
+                    }, 
+                    "cdr3 length": {
+                        "column": {
+                            "max": {
+                                "enabled": false
+                            }, 
+                            "min": {
+                                "enabled": false
+                            }, 
+                            "std": {
+                                "enabled": false
+                            }
+                        }
+                    }, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": {
+                        "column": {
+                            "max": {
+                                "enabled": false
+                            }, 
+                            "min": {
+                                "enabled": false
+                            }, 
+                            "std": {
+                                "enabled": false
+                            }
+                        }
+                    }, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon", 
+                    "VH"
+                ], 
+                "strain": "C57BL/6"
+            }, 
+            "C3VDJ": {
+                "feature": {
+                    "cdr3 charge": {
+                        "column": {
+                            "max": {
+                                "enabled": false
+                            }, 
+                            "min": {
+                                "enabled": false
+                            }, 
+                            "std": {
+                                "enabled": false
+                            }
+                        }
+                    }, 
+                    "cdr3 length": {
+                        "column": {
+                            "max": {
+                                "enabled": false
+                            }, 
+                            "min": {
+                                "enabled": false
+                            }, 
+                            "std": {
+                                "enabled": false
+                            }
+                        }
+                    }, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": {
+                        "column": {
+                            "max": {
+                                "enabled": false
+                            }, 
+                            "min": {
+                                "enabled": false
+                            }, 
+                            "std": {
+                                "enabled": false
+                            }
+                        }
+                    }, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon", 
+                    "VH", 
+                    "DH", 
+                    "JH"
+                ], 
+                "strain": "C57BL/6"
+            }, 
             "CN3": {
                 "feature": {
                     "cdr3 charge": {
@@ -2141,140 +2270,6 @@
                 "rotate": [
                     "cdr3 codon", 
                     "cdr3 nucleotide", 
-                    "VH", 
-                    "DH", 
-                    "JH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "C3V": {
-                "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon", 
-                    "VH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "C3VDJ": {
-                "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon", 
                     "VH", 
                     "DH", 
                     "JH"
@@ -2723,6 +2718,29 @@
                 ], 
                 "strain": "C57BL/6"
             }, 
+            "VJnD": {
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "v3 chew": null, 
+                    "vj length": null, 
+                    "vj n count": null, 
+                    "vj p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "VH", 
+                    "JH"
+                ], 
+                "strain": "C57BL/6"
+            }, 
             "Vf": {
                 "feature": {
                     "cdr3 charge": {
@@ -2977,29 +2995,6 @@
                 "organism name": "mus musculus", 
                 "rotate": [
                     "vh family"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "VJnD": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "v3 chew": null, 
-                    "vj length": null, 
-                    "vj n count": null, 
-                    "vj p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "VH", 
-                    "JH"
                 ], 
                 "strain": "C57BL/6"
             }
