@@ -114,6 +114,9 @@ def to_fasta(id, sequence, description, limit):
     else:
         raise ValueError('FASTA sequence must have an id and sequence')
 
+def to_csv(row):
+    return ','.join([str(column) for column in row])
+
 def transform_to_document(node):
     if isinstance(node, set):
         return [ transform_to_document(v) for v in node ]
@@ -1837,8 +1840,8 @@ class Sample(object):
             if sequence in self.body:
                 if isinstance(self.body[sequence], dict):
                     self.body[sequence] = Sequence(self.pipeline, self.body[sequence])
-                else:
-                    self.body[sequence] = Sequence(self.pipeline)
+            else:
+                self.body[sequence] = Sequence(self.pipeline)
             
         for hit in self.hit:
             self._load_hit(hit)
@@ -2776,10 +2779,6 @@ class Pivot(object):
     def residual(self):
         return self.node['residual']
 
-    @property
-    def mean(self):
-        return self.node['residual']
-
     def add_observation(self, observation):
         self.count += 1
         self.weight.append(observation['weight'])
@@ -2807,7 +2806,7 @@ class Pivot(object):
             for pivot in self.pivot.values():
                 pivot.finalize()
 
-    def collect(self, template={}, buffer=[]):
+    def collect(self, template, buffer):
         if 'depth' not in template:
             template['depth'] = 0
 
@@ -2837,23 +2836,20 @@ class Study(object):
 
     def load(self, request=None):
         if self.node is not None:
-            if 'body' in self.node:
-                if 'repertoire' in self.body:
-                    for key in list(self.repertoire.keys()):
-                        self.body['repertoire'][key] = dict([(x['key'], x) for x in self.repertoire[key]])
+            if 'body' not in self.node:
+                self.node['body'] = {}
 
-                if 'pivot' in self.body and self.body['pivot'] is not None:
-                    self.body['pivot'] = Pivot(self, self.body['pivot'], None, self.rotate)
+            if 'pivot' in self.body:
+                self.body['pivot'] = Pivot(self, self.body['pivot'], None, self.rotate)
 
         elif request is not None and request.preset:
             self.node = {
                 'head' :{
                     'id': request.hash,
                     'name': request.name,
-                },
-                'body': {
                     'request': request.document,
-                }
+                },
+                'body': { }
             }
             self.reset()
         else:
@@ -2896,6 +2892,10 @@ class Study(object):
         return '\t'.join([self.id, self.name, str(self.count)])
 
     @property
+    def persisted(self):
+        return '_id' in self.node and self.node['_id']
+
+    @property
     def configuration(self):
         return self.pipeline.configuration
 
@@ -2917,7 +2917,7 @@ class Study(object):
 
     @property
     def request(self):
-        return self.body['request']
+        return self.head['request']
 
     @property
     def preset(self):
@@ -2942,24 +2942,23 @@ class Study(object):
     @property
     def pivot(self):
         if 'pivot' not in self.body:
-            self.body['pivot'] = Pivot(self, None, None, self.rotate)
-
-        if self.body['pivot'] is None:
-            self.restore()
+            if self.persisted:
+                self.restore()
+            else:
+                self.body['pivot'] = Pivot(self, None, None, self.rotate)
 
         return self.body['pivot']
 
     @property
     def repertoire(self):
+        if 'repertoire' not in self.body:
+            if self.persisted:
+                self.restore()
         return self.body['repertoire']
 
     @property
     def document(self):
-        node = transform_to_document(self.node)
-        if 'repertoire' in node['body']:
-            for key in list(node['body']['repertoire'].keys()):
-                node['body']['repertoire'][key] = list(node['body']['repertoire'][key].values())
-        return node
+        return transform_to_document(self.node)
 
     @property
     def empty(self):
@@ -3021,13 +3020,42 @@ class Study(object):
     def finalize(self):
         self.pivot.finalize()
 
-    def collect(self, template, buffer=[]):
-        buffer = self.pivot.collect({ 'depth': template['depth'] })
-        return buffer
+    def csv(self, request):
+        if self.pivot is not None:
+            buffer = []
+            preset = { 'depth': request.instruction['depth'] }
+            print(to_csv(self.encode_csv_head(preset)))
 
-    def table(self, preset=None):
+            self.encode_csv(preset, buffer)
+            for row in buffer:
+                print(to_csv(row))
+
+    def json(self, request):
+        self.pivot
+        print(to_simple_json(transform_to_document(self.node)))
+
+    def collect(self, template, buffer):
+        return self.pivot.collect({ 'depth': template['depth'] }, buffer)
+
+    def encode_csv_head(self, preset=None):
+        template = { 'row': deepcopy(self.row) }
+        if preset:
+            template.update(preset)
+
+        if 'depth' not in template or template['depth'] is None:
+            template['depth'] = len(self.rotate)
+
+        template['depth'] = min(template['depth'], len(self.rotate))
+
+        head = self.rotate[:template['depth']] + [ 'study', 'weight', 'portion' ]
+        for feature in template['row']:
+            for column in feature['column']:
+                head.append('{} {}'.format(feature['key'], column['key']))
+        return head
+
+    def encode_csv(self, preset, buffer):
         def construct(template):
-            row = self.rotate[:template['depth']] + [ 'weight' , 'portion' ]
+            row = self.rotate[:template['depth']] + [ 'study', 'weight', 'portion' ]
             for feature in template['row']:
                 for column in feature['column']:
                     row.append('{} {}'.format(feature['key'], column['key']))
@@ -3041,17 +3069,10 @@ class Study(object):
                 structure['name'][name] = index
             return structure
 
-        def sort(template, structure, buffer):
-            for sort in template['sort']:
-                if sort['column'] in structure['name']:
-                    index = structure['name'][sort['column']]
-                buffer = sorted(buffer, key=lambda x: x[index], reverse=sort['reverse'])
-            return buffer
-
-        def table(template, collection, buffer=[]):
+        def table(template, collection, buffer):
             weight = float(self.count)
             for record in collection:
-                row = record['rotate'] + [ record['weight'], record['weight'] / weight ]
+                row = record['rotate'] + [ self.name, record['weight'], record['weight'] / weight ]
                 for feature in template['row']:
                     for column in feature['column']:
                         if feature['key'] in record['residual'] and column['key'] in record['residual'][feature['key']]:
@@ -3059,13 +3080,12 @@ class Study(object):
                         else:
                             row.append(None)
                 buffer.append(row)
-            return buffer
 
-        def stringify(template, buffer):
-            result = []
-            for row in buffer:
-                result.append([str(column) for column in row])
-            return result
+        def sort(template, structure, buffer):
+            for sort in template['sort']:
+                if sort['column'] in structure['name']:
+                    index = structure['name'][sort['column']]
+                buffer.sort(key=lambda x: x[index], reverse=sort['reverse'])
 
         template = {
             'row': deepcopy(self.row),
@@ -3080,15 +3100,11 @@ class Study(object):
         template['depth'] = min(template['depth'], len(self.rotate))
 
         structure = construct(template)
-        collection = self.collect(template)
+        collection = self.collect(template, [])
+        table(template, collection, buffer)
+        sort(template, structure, buffer)
 
-        buffer = table(template, collection)
-        buffer = sort(template, structure, buffer)
-        buffer = stringify(template, buffer)
-
-        print(','.join(structure['head']))
-        for row in buffer:
-            print(','.join(row))
+        return buffer
 
     def tiled_pivot_expression(self, name, interval):
         pivot = sorted(list(self.repertoire[name].values()), key=lambda x: x['start'])
@@ -3905,7 +3921,7 @@ class Resolver(object):
         # if still no study record exists, populate a new one
         if study is None:
             study = Study(self.pipeline, None, request)
-            self.log.debug('populating study %s', study.name)
+            self.log.debug('generating new study %s\n%s', study.name, to_simple_json(study.request))
             cursor = request.cursor('analyzed_sample')
             for node in cursor:
                 sample = Sample(self.pipeline, node)
@@ -3936,8 +3952,7 @@ class Resolver(object):
 
     def study_save(self, study):
         if study is not None:
-            document = study.document
-            document['body']['pivot'] = None
+            document = transform_to_document({ 'head': study.head })
             existing = self.database['study'].find_one({'head.id': study.id})
             if existing:
                 self.log.debug('existing study found for %s', study.name)
@@ -4294,9 +4309,9 @@ class Request(object):
             # numeric and string instruction parameters that go into the query
             for key in [
                 'id',
-                'names',
+                'keys',
                 'region',
-                'format',
+                # 'format',
                 'strain',
                 'library',
                 'functionality',
@@ -4351,6 +4366,13 @@ class Request(object):
             o = json.loads(json.dumps(o, sort_keys=True, ensure_ascii=False))
             self.node['hash'] = hashlib.sha1(to_json(o).encode('utf8')).hexdigest()
         return self.node['hash']
+
+    @property
+    def format(self):
+        if 'format' in self.instruction:
+            return self.instruction['format']
+        else:
+            return None
 
     @property
     def name(self):
@@ -4598,13 +4620,41 @@ class Pipeline(object):
         self.resolver.analyzed_sample_drop(request.instruction['library'])
 
     # study
-    def study_info(self, request):
-        request.kind = 'study'
-        cursor = request.cursor('study')
-        for node in cursor:
-            study = Study(self, node)
-            study.info()
-        cursor.close()
+    def study_collect(self, request):
+        if request.format == 'json':
+            for key in request.instruction['keys']:
+                study = self.resolver.study_find(key)
+                study.json(request)
+
+        if request.format == 'csv':
+            collection = {
+                'study': [],
+                'head': [],
+                'row': [],
+            }
+
+            for key in request.instruction['keys']:
+                study = self.resolver.study_find(key)
+                if study:
+                    collection['study'].append(study)
+                    collection['head'].append(study.encode_csv_head(deepcopy(request.preset)))
+
+            if all([collection['head'][0] == h for h in collection['head']]):
+                for study in collection['study']:
+                    study.encode_csv(request.preset, collection['row'])
+
+                print(to_csv(collection['head'][0]))
+                for row in collection['row']:
+                    print(to_csv(row))
+
+    def study(self, request):
+        study = self.resolver.study_resolve(request)
+        if request.format is not None:
+            if request.format == 'csv':
+                study.csv(request)
+
+            elif request.format == 'json':
+                study.json(request)
 
     def study_list(self, request):
         request.kind = 'study'
@@ -4613,13 +4663,6 @@ class Pipeline(object):
             study = Study(self, node)
             print(str(study))
         cursor.close()
-
-    def study_csv(self, request):
-        study = self.resolver.study_resolve(request)
-        if study.pivot is not None:
-            study.table({ 'depth': request.instruction['depth'] })
-        else:
-            self.log.error('missing study cache for %s', study.name)
 
     def study_expression(self, request):
         pattern = {
@@ -4645,7 +4688,7 @@ class Pipeline(object):
         buffer = []
 
         position = 0
-        for name in request.instruction['names']:
+        for name in request.instruction['keys']:
             position += 1
             order['study'][name] = position
             study = self.resolver.study_find(name)

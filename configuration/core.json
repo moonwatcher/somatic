@@ -327,11 +327,12 @@
                 ], 
                 "parameter": {
                     "choices": [
-                        "imgt", 
-                        "ncbi"
+                        "json", 
+                        "csv"
                     ], 
+                    "default": null,
                     "dest": "format", 
-                    "help": "fasta header format"
+                    "help": "output format"
                 }
             }, 
             "functionality": {
@@ -420,6 +421,27 @@
                     "type": "int"
                 }
             }, 
+            "key": {
+                "flag": [
+                    "-k",
+                    "--key"
+                ], 
+                "parameter": {
+                    "dest": "key", 
+                    "help": "unique identifier", 
+                    "metavar": "KEY"
+                }
+            }, 
+            "keys": {
+                "flag": [
+                    "keys"
+                ], 
+                "parameter": {
+                    "help": "list of unique identifiers", 
+                    "metavar": "KEYS", 
+                    "nargs": "*"
+                }
+            }, 
             "name": {
                 "flag": [
                     "--name"
@@ -430,13 +452,12 @@
                     "metavar": "NAME"
                 }
             }, 
-            "names": {
+            "keys": {
                 "flag": [
-                    "names"
+                    "keys"
                 ], 
                 "parameter": {
-                    "help": "study name or uuid", 
-                    "metavar": "NAMES", 
+                    "help": "name or uuid", 
                     "nargs": "*"
                 }
             }, 
@@ -758,25 +779,12 @@
                 }, 
                 {
                     "argument": [
-                        "names"
+                        "keys"
                     ], 
                     "implementation": "study_expression", 
                     "instruction": {
                         "help": "gene expression for multiple studies", 
                         "name": "expression"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "id", 
-                        "profile", 
-                        "limit", 
-                        "skip"
-                    ], 
-                    "implementation": "study_info", 
-                    "instruction": {
-                        "help": "get cached studies", 
-                        "name": "studyInfo"
                     }
                 }, 
                 {
@@ -794,20 +802,33 @@
                 }, 
                 {
                     "argument": [
-                        "name", 
-                        "limit", 
-                        "skip", 
+                        "keys", 
+                        "depth", 
+                        "format"
+                    ], 
+                    "implementation": "study_collect", 
+                    "instruction": {
+                        "help": "collect", 
+                        "name": "collect"
+                    }
+                }, 
+                {
+                    "argument": [
                         "library", 
-                        "unique", 
                         "profile", 
                         "preset", 
+                        "name", 
                         "depth", 
+                        "unique", 
+                        "limit", 
+                        "skip",
+                        "format",
                         "drop"
                     ], 
-                    "implementation": "study_csv", 
+                    "implementation": "study", 
                     "instruction": {
-                        "help": "make a study in CSV", 
-                        "name": "studyCSV"
+                        "help": "make a study", 
+                        "name": "study"
                     }
                 }, 
                 {
@@ -969,7 +990,6 @@
                 }, 
                 {
                     "argument": [
-                        "format", 
                         "profile", 
                         "strain", 
                         "id"
@@ -1438,6 +1458,7 @@
                     "region", 
                     "phred", 
                     "name", 
+                    "picked",
                     "functionality"
                 ], 
                 "track": {
@@ -1528,6 +1549,7 @@
                     "region", 
                     "phred", 
                     "name", 
+                    "picked",
                     "functionality"
                 ], 
                 "track": {
@@ -1558,6 +1580,26 @@
             "sample": {
                 "average phred": {
                     "__gt__": 33
+                }, 
+                "productive": true
+            }
+        }, 
+        "p38": {
+            "diagram": {
+                "feature": [
+                    "region", 
+                    "phred", 
+                    "name", 
+                    "functionality"
+                ], 
+                "track": {
+                    "picked": true, 
+                    "valid": true
+                }
+            }, 
+            "sample": {
+                "average phred": {
+                    "__gt__": 38
                 }, 
                 "productive": true
             }
@@ -1597,7 +1639,7 @@
             }, 
             "sample": {
                 "average phred": {
-                    "__gt__": 38
+                    "__gte__": 33
                 }, 
                 "n count": 0, 
                 "productive": true
@@ -1618,7 +1660,7 @@
             }, 
             "sample": {
                 "average phred": {
-                    "__gt__": 38
+                    "__gte__": 33
                 }, 
                 "n count": {
                     "__gte__": 1
@@ -1863,12 +1905,14 @@
     "study": {
         "default": {
             "column": {
-                "enabled": true
+                "enabled": false
             }, 
             "feature": {
                 "column": {
                     "max": null, 
-                    "mean": null, 
+                    "mean": {
+                        "enabled": true
+                    }, 
                     "min": null, 
                     "std": null
                 }, 
@@ -1940,49 +1984,42 @@
             "vj p count": null
         }, 
         "preset": {
-            "C3V": {
+            "C3": {
                 "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
                     "cdr3 low 4 phred": null, 
                     "cdr3 min phred": null, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon"
+                ], 
+                "strain": "C57BL/6"
+            }, 
+            "C3V": {
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
                     "chew": null, 
                     "d3 chew": null, 
                     "d5 chew": null, 
@@ -2008,47 +2045,11 @@
             }, 
             "C3VDJ": {
                 "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
                     "cdr3 low 4 phred": null, 
                     "cdr3 min phred": null, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 weight": null, 
                     "chew": null, 
                     "d3 chew": null, 
                     "d5 chew": null, 
@@ -2076,47 +2077,11 @@
             }, 
             "CN3": {
                 "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
                     "cdr3 low 4 phred": null, 
                     "cdr3 min phred": null, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 weight": null, 
                     "chew": null, 
                     "d3 chew": null, 
                     "d5 chew": null, 
@@ -2142,47 +2107,11 @@
             }, 
             "CN3V": {
                 "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
                     "cdr3 low 4 phred": null, 
                     "cdr3 min phred": null, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 weight": null, 
                     "chew": null, 
                     "d3 chew": null, 
                     "d5 chew": null, 
@@ -2209,47 +2138,11 @@
             }, 
             "CN3VDJ": {
                 "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
                     "cdr3 low 4 phred": null, 
                     "cdr3 min phred": null, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 weight": null, 
                     "chew": null, 
                     "d3 chew": null, 
                     "d5 chew": null, 
@@ -2308,266 +2201,26 @@
             }, 
             "ID": {
                 "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 low 4 phred": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 min phred": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "d3 chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "d5 chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "dj length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "dj n count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "dj p count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "effective low 4 phred": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "effective min phred": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "j5 chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "n count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "p count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "v3 chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "vd length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "vd n count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "vd p count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
                 }, 
                 "organism name": "mus musculus", 
                 "rotate": [
@@ -2591,47 +2244,11 @@
             }, 
             "N3VDJ": {
                 "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
                     "cdr3 low 4 phred": null, 
                     "cdr3 min phred": null, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 weight": null, 
                     "chew": null, 
                     "d3 chew": null, 
                     "d5 chew": null, 
@@ -2664,7 +2281,16 @@
                     "cdr3 low 4 phred": null, 
                     "cdr3 min phred": null, 
                     "cdr3 weight": null, 
-                    "chew": null, 
+                    "chew": {
+                        "max": null, 
+                        "mean": {
+                            "enabled": true
+                        }, 
+                        "min": null, 
+                        "std": {
+                            "enabled": true
+                        }
+                    }, 
                     "d3 chew": null, 
                     "d5 chew": null, 
                     "dj length": null, 
@@ -2684,6 +2310,35 @@
                 "rotate": [
                     "VH", 
                     "DH", 
+                    "JH"
+                ], 
+                "strain": "C57BL/6"
+            }, 
+            "J": {
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
                     "JH"
                 ], 
                 "strain": "C57BL/6"
@@ -2743,258 +2398,66 @@
             }, 
             "Vf": {
                 "feature": {
-                    "cdr3 charge": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
+                    "cdr3 charge": null, 
                     "cdr3 length": null, 
-                    "cdr3 low 4 phred": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 min phred": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "cdr3 weight": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "d3 chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "d5 chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "dj length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "dj n count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "dj p count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "effective low 4 phred": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "effective min phred": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "j5 chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "n count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "p count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "v3 chew": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "vd length": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "vd n count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }, 
-                    "vd p count": {
-                        "column": {
-                            "max": {
-                                "enabled": false
-                            }, 
-                            "min": {
-                                "enabled": false
-                            }, 
-                            "std": {
-                                "enabled": false
-                            }
-                        }
-                    }
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
                 }, 
                 "organism name": "mus musculus", 
                 "rotate": [
                     "vh family"
+                ], 
+                "strain": "C57BL/6"
+            },
+            "VfC": {
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "vh family",
+                    "cdr3 codon"
+                ], 
+                "sort": [
+                    {
+                        "column": "vh family", 
+                        "reverse": true
+                    }
                 ], 
                 "strain": "C57BL/6"
             }
