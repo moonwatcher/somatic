@@ -144,7 +144,7 @@ class SequenceDenoiser(object):
     def write(self):
         for key, cluster in self.unique.items():
             id = '{} {}:{}'.format(cluster['id'], cluster['abundance'], 'Y' if cluster['ambiguous'] else 'N')
-            self.output.write(to_fastq(cluster['id'], cluster['key'],cluster['quality']))
+            self.output.write(to_fastq(id, cluster['key'],cluster['quality']))
 
     def denoise(self):
         self.consolidate_quality()
