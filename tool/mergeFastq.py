@@ -26,7 +26,12 @@ import math
 import copy
 
 def to_json(node):
-    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4)
+    def handler(o):
+        if isinstance(o, set):
+            return list(o)
+        else:
+            return o
+    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
 
 def phred_code_to_value(code):
     return ord(code) - 33
@@ -125,7 +130,7 @@ class SequenceDenoiser(object):
                     'abundance': 1,
                     'ambiguous': False,
                     'phred': [ ],
-                    'nucleotide': [ ],
+                    'nucleotide': set(),
                 }
                 self.unique[key] = cluster
                 for c in self.configuration['ambiguous code']:
@@ -134,8 +139,7 @@ class SequenceDenoiser(object):
                         break
 
             cluster['phred'].append(segment['quality'])
-            if segment['length'] > self.length:
-                cluster['nucleotide'].append(segment['nucleotide'])
+            cluster['nucleotide'].add(segment['nucleotide'])
 
     def write(self):
         for key, cluster in self.unique.items():
@@ -236,9 +240,6 @@ class SequenceDenoiser(object):
     def absorb(self, cluster, putative):
         self.report_absorb(cluster, putative)
 
-        putative['phred'].append(cluster['quality'])
-        putative['nucleotide'].append(cluster['nucleotide'])
-
         # correct quality
         quality = []
         for i in range(self.length):
@@ -247,6 +248,8 @@ class SequenceDenoiser(object):
         putative['quality'] = ''.join(quality)
 
         putative['abundance'] += 1
+        putative['phred'].append(cluster['quality'])
+        putative['nucleotide'] |= cluster['nucleotide']
         if putative['abundance'] >= self.configuration['abundance ratio']:
             putative['state'] = 'putative'
 
