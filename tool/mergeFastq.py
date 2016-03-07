@@ -142,7 +142,10 @@ class SequenceDenoiser(object):
             cluster['nucleotide'].add(segment['nucleotide'])
 
     def write(self):
-        for key, cluster in self.unique.items():
+        unique = list(self.unique.values())
+        unique.sort(key=lambda c: c['error'], reverse=True)
+        unique.sort(key=lambda c: c['abundance'], reverse=True)
+        for cluster in unique:
             id = '{} {}:{}'.format(cluster['id'], cluster['abundance'], 'Y' if cluster['ambiguous'] else 'N')
             self.output.write(to_fastq(id, cluster['key'],cluster['quality']))
 
