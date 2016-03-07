@@ -1113,6 +1113,7 @@ class FastqFilter(object):
 
             elif sample['reverse']['length'] >= self.configuration['minimum read length']:
                 picked = self.complement_segment(sample['reverse'])
+                # if we use the reverse read we need to directionally trim it again
                 self.trim_segment(picked)
         else:
             self.log.info('dropping unmerged read pair {}\n{}\n{}'.format(sample['id'], segment_to_fastq(sample['forward']), segment_to_fastq(sample['reverse'])))
