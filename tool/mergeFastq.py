@@ -67,6 +67,9 @@ def merge_base_quality(bi, bj, qi, qj):
 def to_fastq(id, nucleotide, quality):
     return '{}\n{}\n+\n{}\n'.format(id, nucleotide, quality)
 
+def segment_to_fastq(segment):
+    return '{}\n{}\n+\n{}\n'.format(segment['id'], segment['nucleotide'], segment['quality'])
+
 def hammig(one, two):
     distance = 0
     for i in range(len(one)):
@@ -81,7 +84,7 @@ class SequenceDenoiser(object):
             'output path': None,
             'iteration': 5,
             'abundance ratio': 10,
-            'read length': 145,
+            'read length': 133,
             'similarity threshold': 2,
             'ambiguous code': 'BDHKMNRSVWY',
         }
@@ -280,7 +283,7 @@ class FastqFilter(object):
             'merged path': None,
             'quota': 128,
             'limit': None,
-            'minimum read length': 145,
+            'minimum read length': 133,
             'trim start': False,
             'trim end': True,
             'trimming window': 6,
@@ -293,7 +296,9 @@ class FastqFilter(object):
                 'AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC',
                 'TACACTCTTTCCCTACACGACGCTCTTCCGATCT',
             ],
-            'retain unmerged': False,
+            'retain short': True,
+            'retain unmerged': True,
+            'error threshold': 2,
             'merge overlap threshold': 70,
             'merge score threshold': 400,
             'substitution quality correction': 28,
@@ -866,8 +871,8 @@ class FastqFilter(object):
                 rid = sample['reverse']['id'].split()[0]
                 if fid == rid:
                     sample['id'] = sample['forward']['id'].split()[0]
-                    sample['forward']['origin'] = ['forward']
-                    sample['reverse']['origin'] = ['reverse']
+                    sample['forward']['origin'] = 'forward'
+                    sample['reverse']['origin'] = 'reverse'
                     self.buffer.append(sample)
                 else:
                     raise ValueError('forward and reverse read don\'t match %s %s', fid, rid)
@@ -1102,54 +1107,65 @@ class FastqFilter(object):
         elif self.configuration['retain unmerged']:
             self.trim_segment(sample['forward'])
             self.trim_segment(sample['reverse'])
-            if sample['forward']['expected error'] < sample['forward']['expected error']:
+            if  sample['forward']['expected error'] < sample['reverse']['expected error'] and \
+                sample['forward']['length'] >= self.configuration['minimum read length']:
                 picked = copy.deepcopy(sample['forward'])
-                self.log.info('retaining forward read %s', sample['id'])
-            else:
+
+            elif sample['reverse']['length'] >= self.configuration['minimum read length']:
                 picked = self.complement_segment(sample['reverse'])
-                self.log.info('retaining reversed read %s', sample['id'])
+                self.trim_segment(picked)
         else:
-            self.log.info('dropping unmerged read pair %s', sample['id'])
+            self.log.info('dropping unmerged read pair {}\n{}\n{}'.format(sample['id'], segment_to_fastq(sample['forward']), segment_to_fastq(sample['reverse'])))
 
         # drop reads that are shorter than minimum
         if picked is not None and picked['length'] < self.configuration['minimum read length']:
-            self.log.info('dropping short read %s of length %d', picked['id'], picked['length'])
+            self.log.info('dropping short read {} of length {}\n{}'.format(picked['id'], picked['length'], segment_to_fastq(picked)))
             picked = None
 
         if picked is not None:
+            effective_error = expected_error(picked['quality'][:self.configuration['minimum read length']])
+            if effective_error > self.configuration['error threshold']:
+                self.log.info('dropping low quality {} read {} with expected error {:.3f}\n{}'.format(picked['origin'], sample['id'], effective_error, segment_to_fastq(picked)))
+                picked = None
+
+        if picked is not None:
             picked['id'] = sample['id']
+            for term in [
+                'effective length',
+                'effective start',
+                'effective end'
+            ]:
+                if term in picked:
+                    del picked[term]
             self.output.append(picked)
 
     def trim_segment(self, segment):
-        nucleotide = segment['nucleotide']
-        quality = segment['quality']
-        length = len(nucleotide)
-        window = self.configuration['trimming window']
+        length = segment['length']
+        width = self.configuration['trimming window']
         threshold = self.configuration['trimming error threshold']
 
         if self.configuration['trim end']:
-            while expected_error(quality[-window:]) > threshold and length >= self.configuration['minimum read length']:
-                nucleotide = nucleotide[:-1]
-                quality = quality[:-1]
+            window = segment['quality'][-width:]
+            position = 0
+            while expected_error(window) > threshold and length >= self.configuration['minimum read length']:
                 length -= 1
+                position -= 1
+                window = segment['quality'][-width + position:position]
+            segment['quality'] = segment['quality'][-position:]
+            segment['nucleotide'] = segment['nucleotide'][-position:]
 
         if self.configuration['trim start']:
-            while expected_error(quality[:window]) > threshold and length >= self.configuration['minimum read length']:
-                nucleotide = nucleotide[1:]
-                quality = quality[1:]
+            window = segment['quality'][:width]
+            position = 0
+            while expected_error(window) > threshold and length >= self.configuration['minimum read length']:
                 length -= 1
+                position += 1
+                window = segment['quality'][position:width + position]
+            segment['quality'] = segment['quality'][position:]
+            segment['nucleotide'] = segment['nucleotide'][position:]
 
-        segment['nucleotide'] = nucleotide
-        segment['quality'] = quality
-        segment['length'] = length
+        segment['length'] = len(segment['nucleotide'])
         segment['expected error'] = expected_error(segment['quality'])
-        for term in [
-            'effective length',
-            'effective start',
-            'effective end'
-        ]:
-            if term in segment:
-                del segment[term]
 
     def score_base_alignment(self, ni, nj, qi, qj):
         score = self.configuration['nucleotide substitution'][ni][nj]
@@ -1208,6 +1224,7 @@ class FastqFilter(object):
             'quality': segment['quality'][::-1],
             'length' : segment['length'],
             'expected error': segment['expected error'],
+            'origin': segment['origin'],
         }
 
         if 'effective start' in segment:
@@ -1227,6 +1244,7 @@ class FastqFilter(object):
 
     def complement_sequence(self, sequence):
         return ''.join([ self.configuration['reverse complement'][n] for n in sequence ][::-1])
+
 
 def process(configuration):
     fastqFilter = FastqFilter(
@@ -1254,6 +1272,7 @@ def process(configuration):
     sequenceDenoiser.denoise()
     sequenceDenoiser.write()
     sequenceDenoiser.close()
+    sys.stderr.write(to_json(fastqFilter.statitic))
 
 def main():
     logging.basicConfig()
