@@ -70,6 +70,7 @@
         }
     }, 
     "constant": {
+        "float accuracy": 3,
         "buffer size": 128, 
         "fasta line length": 80
     }, 
@@ -461,6 +462,26 @@
                     "nargs": "*"
                 }
             }, 
+            "forward": {
+                "flag": [
+                    "-F",
+                    "--forward"
+                ], 
+                "parameter": {
+                    "help": "forward read file path", 
+                    "dest": "forward path"
+                }
+            }, 
+            "reverse": {
+                "flag": [
+                    "-R",
+                    "--reverse"
+                ], 
+                "parameter": {
+                    "help": "reverse read file path", 
+                    "dest": "reverse path"
+                }
+            }, 
             "path": {
                 "flag": [
                     "path"
@@ -635,6 +656,31 @@
             "action": [
                 {
                     "argument": [
+                        "forward", 
+                        "reverse",
+                        "limit"
+                    ], 
+                    "implementation": "sample_merge", 
+                    "instruction": {
+                        "description": "merge forward and reverse read", 
+                        "help": "merge forward and reverse read", 
+                        "name": "merge"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "forward", 
+                        "limit"
+                    ], 
+                    "implementation": "sample_denoise", 
+                    "instruction": {
+                        "description": "denoise reads", 
+                        "help": "denoise reads", 
+                        "name": "denoise"
+                    }
+                }, 
+                {
+                    "argument": [
                         "library", 
                         "strain", 
                         "drop"
@@ -764,17 +810,6 @@
                     "instruction": {
                         "help": "view JSON sample record", 
                         "name": "sampleInfo"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "library"
-                    ], 
-                    "implementation": "analyzed_sample_drop", 
-                    "instruction": {
-                        "description": "remove all analyzed samples for the provided library name", 
-                        "help": "drop analyzed samples of a given library", 
-                        "name": "analyzedSampleDrop"
                     }
                 }, 
                 {
@@ -1326,6 +1361,263 @@
             "reverse": "R"
         }
     }, 
+    "nucleotide substitution": {
+        "A": {
+            "A": 5,
+            "B": -4,
+            "C": -4,
+            "D": -1,
+            "G": -4,
+            "H": -1,
+            "K": -4,
+            "M": 1,
+            "N": -2,
+            "R": 1,
+            "S": -4,
+            "T": -4,
+            "V": -1,
+            "W": 1,
+            "Y": -4
+        },
+        "B": {
+            "A": -4,
+            "B": -1,
+            "C": -1,
+            "D": -2,
+            "G": -1,
+            "H": -2,
+            "K": -1,
+            "M": -3,
+            "N": -1,
+            "R": -3,
+            "S": -1,
+            "T": -1,
+            "V": -2,
+            "W": -3,
+            "Y": -1
+        },
+        "C": {
+            "A": -4,
+            "B": -1,
+            "C": 5,
+            "D": -4,
+            "G": -4,
+            "H": -1,
+            "K": -4,
+            "M": 1,
+            "N": -2,
+            "R": -4,
+            "S": 1,
+            "T": -4,
+            "V": -1,
+            "W": -4,
+            "Y": 1
+        },
+        "D": {
+            "A": -1,
+            "B": -2,
+            "C": -4,
+            "D": -1,
+            "G": -1,
+            "H": -2,
+            "K": -1,
+            "M": -3,
+            "N": -1,
+            "R": -1,
+            "S": -3,
+            "T": -1,
+            "V": -2,
+            "W": -1,
+            "Y": -3
+        },
+        "G": {
+            "A": -4,
+            "B": -1,
+            "C": -4,
+            "D": -1,
+            "G": 5,
+            "H": -4,
+            "K": 1,
+            "M": -4,
+            "N": -2,
+            "R": 1,
+            "S": 1,
+            "T": -4,
+            "V": -1,
+            "W": -4,
+            "Y": -4
+        },
+        "H": {
+            "A": -1,
+            "B": -2,
+            "C": -1,
+            "D": -2,
+            "G": -4,
+            "H": -1,
+            "K": -3,
+            "M": -1,
+            "N": -1,
+            "R": -3,
+            "S": -3,
+            "T": -1,
+            "V": -2,
+            "W": -1,
+            "Y": -1
+        },
+        "K": {
+            "A": -4,
+            "B": -1,
+            "C": -4,
+            "D": -1,
+            "G": 1,
+            "H": -3,
+            "K": -1,
+            "M": -4,
+            "N": -1,
+            "R": -2,
+            "S": -2,
+            "T": 1,
+            "V": -3,
+            "W": -2,
+            "Y": -2
+        },
+        "M": {
+            "A": 1,
+            "B": -3,
+            "C": 1,
+            "D": -3,
+            "G": -4,
+            "H": -1,
+            "K": -4,
+            "M": -1,
+            "N": -1,
+            "R": -2,
+            "S": -2,
+            "T": -4,
+            "V": -1,
+            "W": -2,
+            "Y": -2
+        },
+        "N": {
+            "A": -2,
+            "B": -1,
+            "C": -2,
+            "D": -1,
+            "G": -2,
+            "H": -1,
+            "K": -1,
+            "M": -1,
+            "N": -1,
+            "R": -1,
+            "S": -1,
+            "T": -2,
+            "V": -1,
+            "W": -1,
+            "Y": -1
+        },
+        "R": {
+            "A": 1,
+            "B": -3,
+            "C": -4,
+            "D": -1,
+            "G": 1,
+            "H": -3,
+            "K": -2,
+            "M": -2,
+            "N": -1,
+            "R": -1,
+            "S": -2,
+            "T": -4,
+            "V": -1,
+            "W": -2,
+            "Y": -4
+        },
+        "S": {
+            "A": -4,
+            "B": -1,
+            "C": 1,
+            "D": -3,
+            "G": 1,
+            "H": -3,
+            "K": -2,
+            "M": -2,
+            "N": -1,
+            "R": -2,
+            "S": -1,
+            "T": -4,
+            "V": -1,
+            "W": -4,
+            "Y": -2
+        },
+        "T": {
+            "A": -4,
+            "B": -1,
+            "C": -4,
+            "D": -1,
+            "G": -4,
+            "H": -1,
+            "K": 1,
+            "M": -4,
+            "N": -2,
+            "R": -4,
+            "S": -4,
+            "T": 5,
+            "V": -4,
+            "W": 1,
+            "Y": 1
+        },
+        "V": {
+            "A": -1,
+            "B": -2,
+            "C": -1,
+            "D": -2,
+            "G": -1,
+            "H": -2,
+            "K": -3,
+            "M": -1,
+            "N": -1,
+            "R": -1,
+            "S": -1,
+            "T": -4,
+            "V": -1,
+            "W": -3,
+            "Y": -3
+        },
+        "W": {
+            "A": 1,
+            "B": -3,
+            "C": -4,
+            "D": -1,
+            "G": -4,
+            "H": -1,
+            "K": -2,
+            "M": -2,
+            "N": -1,
+            "R": -2,
+            "S": -4,
+            "T": 1,
+            "V": -3,
+            "W": -1,
+            "Y": -2
+        },
+        "Y": {
+            "A": -4,
+            "B": -1,
+            "C": 1,
+            "D": -3,
+            "G": -4,
+            "H": -1,
+            "K": -2,
+            "M": -2,
+            "N": -1,
+            "R": -4,
+            "S": -2,
+            "T": 1,
+            "V": -3,
+            "W": -2,
+            "Y": -1
+        }
+    },
     "nucleic to amino": {
         "AAA": "K", 
         "AAC": "N", 
@@ -1917,10 +2209,10 @@
                     "std": null
                 }, 
                 "order": [
-                    "min", 
-                    "max", 
                     "mean", 
-                    "std"
+                    "std",
+                    "min", 
+                    "max"
                 ]
             }, 
             "preset": {
@@ -1984,6 +2276,24 @@
             "vj p count": null
         }, 
         "preset": {
+            "RichC3": {
+                "feature": {
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon"
+                ], 
+                "strain": "C57BL/6"
+            }, 
+            "RichN3": {
+                "feature": {
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 nucleotide"
+                ], 
+                "strain": "C57BL/6"
+            }, 
             "C3": {
                 "feature": {
                     "cdr3 charge": null, 
@@ -2225,6 +2535,9 @@
                 "organism name": "mus musculus", 
                 "rotate": [
                     "id", 
+                    "VH",
+                    "DH",
+                    "JH",
                     "cdr3 codon", 
                     "cdr3 nucleotide", 
                     "effective codon", 
@@ -2509,139 +2822,6 @@
                 }
             ]
         }, 
-        "analyzed_sample": {
-            "collection": "analyzed_sample", 
-            "index": [
-                {
-                    "key": [
-                        [
-                            "head.id", 
-                            1
-                        ]
-                    ], 
-                    "name": "analyzed sample id", 
-                    "unique": false
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.valid", 
-                            1
-                        ]
-                    ], 
-                    "name": "analyzed sample valid", 
-                    "unique": false
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.gapped", 
-                            1
-                        ]
-                    ], 
-                    "name": "analyzed sample gapped", 
-                    "unique": false
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.library", 
-                            1
-                        ]
-                    ], 
-                    "name": "analyzed sample library", 
-                    "unique": false
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.conserved cdr3 c", 
-                            1
-                        ]
-                    ], 
-                    "name": "sample conserved cdr3 c", 
-                    "unique": false
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.conserved cdr3 w", 
-                            1
-                        ]
-                    ], 
-                    "name": "sample conserved cdr3 w", 
-                    "unique": false
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.id", 
-                            1
-                        ], 
-                        [
-                            "head.library", 
-                            1
-                        ]
-                    ], 
-                    "name": "unique analyzed sample in library", 
-                    "unique": true
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.valid", 
-                            1
-                        ], 
-                        [
-                            "head.library", 
-                            1
-                        ]
-                    ], 
-                    "name": "valid analyzed sample with library", 
-                    "unique": false
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.library", 
-                            1
-                        ], 
-                        [
-                            "head.valid", 
-                            1
-                        ], 
-                        [
-                            "head.productive", 
-                            1
-                        ]
-                    ], 
-                    "name": "valid productive analyzed sample with library", 
-                    "unique": false
-                }, 
-                {
-                    "key": [
-                        [
-                            "head.library", 
-                            1
-                        ], 
-                        [
-                            "head.valid", 
-                            1
-                        ], 
-                        [
-                            "head.productive", 
-                            1
-                        ], 
-                        [
-                            "head.average phred", 
-                            1
-                        ]
-                    ], 
-                    "name": "valid productive analyzed sample with phred and library", 
-                    "unique": false
-                }
-            ]
-        }, 
         "gene": {
             "collection": "gene", 
             "index": [
@@ -2920,6 +3100,30 @@
                     "unique": true
                 }
             ]
+        }
+    },
+    "filtering reader": {
+        "default": {
+            "quota": 128,
+            "minimum read length": 133,
+            "trim start": false,
+            "trim end": true,
+            "trimming window": 6,
+            "trimming error threshold": 1,
+            "adapter mismatch": 3,
+            "adapter overlap": 6,
+            "adapter score threshold": 40,
+            "reverse adapter scan": true,
+            "adapter": [
+                "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC",
+                "TACACTCTTTCCCTACACGACGCTCTTCCGATCT"
+            ],
+            "retain short": true,
+            "retain unmerged": true,
+            "error threshold": 2,
+            "merge overlap threshold": 70,
+            "merge score threshold": 400,
+            "substitution quality correction": 28
         }
     }
 }

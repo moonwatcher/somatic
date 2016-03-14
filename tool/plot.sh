@@ -1,5 +1,14 @@
 #!/bin/zsh
 
+somatic study -l spf_fo -p p33 --preset RichC3 -f csv --name c3_spf_fo -D|grep -v 'X'|pbzip2 -c > c3_spf_fo.bz2
+somatic study -l spf_b1a -p p33 --preset RichC3 -f csv --name c3_spf_b1a -D|grep -v 'X'|pbzip2 -c > c3_spf_b1a.bz2
+somatic study -l spf_preb -p p33 --preset RichC3 -f csv --name c3_spf_preb -D|grep -v 'X'|pbzip2 -c > c3_spf_preb.bz2
+
+somatic study -l spf_fo -p p33 --preset RichN3 -f csv --name n3_spf_fo|grep -v -E '[BDHKMNRSVWY]'|pbzip2 -c > n3_spf_fo.bz2
+somatic study -l spf_b1a -p p33 --preset RichN3 -f csv --name n3_spf_b1a|grep -v -E '[BDHKMNRSVWY]'|pbzip2 -c > n3_spf_b1a.bz2
+somatic study -l spf_preb -p p33 --preset RichN3 -f csv --name n3_spf_preb|grep -v -E '[BDHKMNRSVWY]'|pbzip2 -c > n3_spf_preb.bz2
+
+
 SESSION_NAME="somatic_plot"
 START_DIRECTORY="/Users/lg/thesis/plot"
 

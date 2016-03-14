@@ -42,16 +42,6 @@ from bson.binary import Binary
 from pymongo.errors import BulkWriteError
 from pymongo import MongoClient, DESCENDING, ASCENDING
 
-import xmltodict
-import urllib.request
-import urllib.parse
-import urllib.error
-import urllib.parse
-import urllib.request
-import urllib.error
-import http.client
-
-
 log_levels = {
     'debug': logging.DEBUG,
     'info': logging.INFO,
@@ -63,16 +53,6 @@ log_levels = {
 def verify_directory(path):
     if not os.path.exists(path):
         os.makedirs(path)
-
-def to_simple_json(node):
-    def handler(o):
-        result = None
-        if isinstance(o, datetime):
-            result = o.isoformat()
-        if isinstance(o, ObjectId):
-            result = str(o)
-        return result
-    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
 
 def parse_match(match):
     if match is not None:
@@ -114,17 +94,50 @@ def to_fasta(id, sequence, description, limit):
     else:
         raise ValueError('FASTA sequence must have an id and sequence')
 
+def merge_base_quality(bi, bj, qi, qj):
+    pi = phred_to_probability(qi)
+    pj = phred_to_probability(qj)
+    if bi == bj:
+        pij = (pi * pj / 3.0) / (1.0 - pi - pj + ((4.0 * pi * pj) / 3.0))
+    else:
+        if qi > qj:
+            pij = (pi * (1.0 - (pj / 3.0))) / (pi + pj - ((4.0 * pi * pj) / 3.0))
+        else:
+            pij = (pj * (1.0 - (pi / 3.0))) / (pj + pi - ((4.0 * pj * pi) / 3.0))
+
+    qij = probability_to_phred(pij)
+    if qij > 'I': qij = 'I'
+    elif qij < '#': qij = '#'
+    return qij
+
+def phred_code_to_value(code):
+    return ord(code) - 33
+
+def phred_value_to_code(value):
+    return chr(round(value) + 33)
+
+def phred_to_probability(score):
+    return pow(10, -(ord(score) - 33) / 10)
+
+def probability_to_phred(probability):
+    return chr(round(-10 * math.log(probability, 10)) + 33)
+
+def expected_error(quality):
+    return sum([ phred_to_probability(q) for q in quality ])
+
 def to_csv(row):
     return ','.join([str(column) for column in row])
 
-def transform_to_document(node):
+def to_document(node):
     if isinstance(node, set):
-        return [ transform_to_document(v) for v in node ]
+        return [ to_document(v) for v in node ]
     if isinstance(node, list):
-        return [ transform_to_document(v) for v in node ]
+        return [ to_document(v) for v in node ]
     elif isinstance(node, dict):
-        return dict([ (k,transform_to_document(v)) for k,v in node.items() ])
+        return dict([ (k,to_document(v)) for k,v in node.items() ])
     elif isinstance(node, Sample):
+        return node.document
+    elif isinstance(node, Artifact):
         return node.document
     elif isinstance(node, Gene):
         return node.document
@@ -135,6 +148,8 @@ def transform_to_document(node):
     elif isinstance(node, Study):
         return node.document
     elif isinstance(node, Pivot):
+        return node.document
+    elif isinstance(node, Request):
         return node.document
     elif isinstance(node, numpy.ndarray):
         if node.dtype == numpy.float:
@@ -154,8 +169,10 @@ def to_json(node):
         if isinstance(o, ObjectId):
             result = str(o)
         return result
-    document = transform_to_document(node)
-    return json.dumps(document, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
+    return json.dumps(node, sort_keys=True, ensure_ascii=False, indent=4, default=handler)
+
+def to_json_document(node):
+    return to_json(to_document(node))
 
 def simplify(value):
     if value: return value.lower()
@@ -416,9 +433,9 @@ def load_configuration():
         }
 
     # load a reverse complement table for ambiguity code
-    configuration['complement'] = {}
+    configuration['reverse complement'] = {}
     for k,v in configuration['iupac nucleic acid notation'].items():
-        configuration['complement'][k] = v['reverse']
+        configuration['reverse complement'][k] = v['reverse']
 
     # load collection of codons possibly encoding a stop codon
     configuration['stop codon repertoire'] = possibly_stop_codon(configuration)
@@ -459,6 +476,19 @@ def possibly_stop_codon(configuration):
         feature['space'] |= set(codon['possible'])
     return feature['space']
 
+def hamming(one, two):
+    distance = 0
+    for o, t in zip(one, two):
+      if o != t:
+          distance += 1
+    return distance
+
+def sequence_diff(one, two):
+    diff = []
+    for o, t in zip(one, two):
+        if o == t: diff.append('-')
+        else: diff.append('*')
+    return ''.join(diff)
 
 class InvalidSampleError(Exception):
     def __init__(self, message):
@@ -814,7 +844,7 @@ class Sequence(object):
 
     @property
     def document(self):
-        document = transform_to_document(self.node)
+        document = to_document(self.node)
         for key in [
             'codon',
             'phred',
@@ -975,7 +1005,7 @@ class Sequence(object):
     def reversed(self):
         if self._reversed is None and self.nucleotide:
             reversed = {
-                'nucleotide': ''.join([ self.configuration['complement'][b] for b in list(self.nucleotide) ][::-1]),
+                'nucleotide': ''.join([ self.configuration['reverse complement'][b] for b in list(self.nucleotide) ][::-1]),
                 'read frame': (self.length - self.read_frame) % 3,
                 'strand': not self.strand
             }
@@ -1016,7 +1046,7 @@ class Accession(object):
 
     @property
     def document(self):
-        return transform_to_document(self.node)
+        return to_document(self.node)
 
     @property
     def fasta(self):
@@ -1121,11 +1151,7 @@ class Artifact(object):
 
     @property
     def document(self):
-        return transform_to_document(self.node)
-
-    @property
-    def json(self):
-        return to_json(self.node)
+        return to_document(self.node)
 
     @property
     def fasta(self):
@@ -2181,7 +2207,7 @@ class Sample(object):
                     mirror = -(i + 1)
                     nucleotide = junction['query'].nucleotide[i]
                     palindrome = left.nucleotide[mirror]
-                    if self.configuration['complement'][nucleotide] == palindrome:
+                    if self.configuration['reverse complement'][nucleotide] == palindrome:
                         junction['palindrome'][i] = 'P'
                         i += 1
                     else:
@@ -2191,7 +2217,7 @@ class Sample(object):
                     mirror = -(i + 1)
                     nucleotide = right.nucleotide[i]
                     palindrome = junction['query'].nucleotide[mirror]
-                    if self.configuration['complement'][nucleotide] == palindrome:
+                    if self.configuration['reverse complement'][nucleotide] == palindrome:
                         junction['palindrome'][mirror] = 'P'
                         i += 1
                     else:
@@ -2394,7 +2420,19 @@ class Sample(object):
         print(diagram.draw())
 
     def info(self, profile):
-        print(self.json)
+        print(to_json_document(self))
+
+    @property
+    def abundance(self):
+        if 'abundance' not in self.head:
+            self.head['abundance'] = 1
+            fragment = self.id.split(' ')
+            if len(fragment) > 1:
+                try:
+                    self.head['abundance'] = int(fragment[1].split(':')[0])
+                except ValueError:
+                    pass
+        return self.head['abundance']
 
     @property
     def has_dh(self):
@@ -2421,6 +2459,7 @@ class Sample(object):
                     }
                 }
 
+                breakdown['feature']['abundance'] = self.abundance
                 breakdown['feature']['cdr3 nucleotide'] = self.cdr3_sequence['query'].nucleotide
                 breakdown['feature']['cdr3 codon'] = self.cdr3_sequence['query'].codon
                 breakdown['feature']['effective nucleotide'] = self.effective.nucleotide
@@ -2582,11 +2621,7 @@ class Sample(object):
 
     @property
     def document(self):
-        return transform_to_document(self.node)
-
-    @property
-    def json(self):
-        return to_json(self.node)
+        return to_document(self.node)
 
     @property
     def fasta(self):
@@ -2725,12 +2760,16 @@ class Pivot(object):
                 self.node['pivot'] = dict([(node['name'], Pivot(self.study, node)) for node in self.node['pivot']])
 
     @property
+    def configuration(self):
+        return self.study.configuration
+
+    @property
     def empty(self):
         return not self.count > 0
 
     @property
     def document(self):
-        document = transform_to_document(self.node)
+        document = to_document(self.node)
         if isinstance(document['pivot'], dict):
             document['pivot'] = list(document['pivot'].values())
         return document
@@ -2780,8 +2819,8 @@ class Pivot(object):
         return self.node['residual']
 
     def add_observation(self, observation):
-        self.count += 1
-        self.weight.append(observation['weight'])
+        self.count += observation['weight']
+        self.weight.append(observation['weight'] * observation['abundance'])
         for key,value in self.residual.items():
             value['value'].append(observation[key])
 
@@ -2821,7 +2860,8 @@ class Pivot(object):
                 }
                 pivot.collect(iteration, buffer)
         else:
-            template['weight'] = numpy.sum(self.weight)
+            template['count'] = round(self.count, self.configuration['constant']['float accuracy'])
+            template['weight'] = round(numpy.sum(self.weight), self.configuration['constant']['float accuracy'])
             template['residual'] = self.residual
             buffer.append(template)
         return buffer
@@ -2892,6 +2932,10 @@ class Study(object):
         return '\t'.join([self.id, self.name, str(self.count)])
 
     @property
+    def document(self):
+        return to_document(self.node)
+
+    @property
     def persisted(self):
         return '_id' in self.node and self.node['_id']
 
@@ -2957,10 +3001,6 @@ class Study(object):
         return self.body['repertoire']
 
     @property
-    def document(self):
-        return transform_to_document(self.node)
-
-    @property
     def empty(self):
         return not self.count > 0
 
@@ -3023,7 +3063,11 @@ class Study(object):
     def csv(self, request):
         if self.pivot is not None:
             buffer = []
-            preset = { 'depth': request.instruction['depth'] }
+            preset = { 
+                'depth': request.instruction['depth'],
+            }
+            if request.preset:
+                preset['row'] = request.preset['row']
             print(to_csv(self.encode_csv_head(preset)))
 
             self.encode_csv(preset, buffer)
@@ -3032,12 +3076,17 @@ class Study(object):
 
     def json(self, request):
         self.pivot
-        print(to_simple_json(transform_to_document(self.node)))
+        print(to_json_document(self))
 
     def collect(self, template, buffer):
         return self.pivot.collect({ 'depth': template['depth'] }, buffer)
 
     def encode_csv_head(self, preset=None):
+        # if preset is not None and 'row' in preset:
+        #     template = { 'row': deepcopy(preset['row']) }
+        # else:
+        #     template = { 'row': deepcopy(self.row) }
+
         template = { 'row': deepcopy(self.row) }
         if preset:
             template.update(preset)
@@ -3047,15 +3096,15 @@ class Study(object):
 
         template['depth'] = min(template['depth'], len(self.rotate))
 
-        head = self.rotate[:template['depth']] + [ 'study', 'weight', 'portion' ]
+        head = self.rotate[:template['depth']] + [ 'study', 'weight', 'count']
         for feature in template['row']:
             for column in feature['column']:
-                head.append('{} {}'.format(feature['key'], column['key']))
+                head.append('{}_{}'.format(feature['key'].replace(' ', '_'), column['key'].replace(' ', '_')))
         return head
 
     def encode_csv(self, preset, buffer):
         def construct(template):
-            row = self.rotate[:template['depth']] + [ 'study', 'weight', 'portion' ]
+            row = self.rotate[:template['depth']] + [ 'study', 'weight', 'count' ]
             for feature in template['row']:
                 for column in feature['column']:
                     row.append('{} {}'.format(feature['key'], column['key']))
@@ -3072,11 +3121,11 @@ class Study(object):
         def table(template, collection, buffer):
             weight = float(self.count)
             for record in collection:
-                row = record['rotate'] + [ self.name, record['weight'], record['weight'] / weight ]
+                row = record['rotate'] + [ self.name, record['weight'], record['count'] ]
                 for feature in template['row']:
                     for column in feature['column']:
                         if feature['key'] in record['residual'] and column['key'] in record['residual'][feature['key']]:
-                            row.append(record['residual'][feature['key']][column['key']])
+                            row.append(round(record['residual'][feature['key']][column['key']], self.configuration['constant']['float accuracy']))
                         else:
                             row.append(None)
                 buffer.append(row)
@@ -3146,6 +3195,7 @@ class Study(object):
                     tile = intensity['tiles'][left]
                 else:
                     tile = intensity['tiles'][right]
+            # tile['intensity'] += 1
             tile['intensity'] += predicate['weight']
             tile['pivot'].append(predicate)
         return intensity
@@ -3183,7 +3233,7 @@ class Study(object):
                     buffer.append(row)
 
     def info(self):
-        print(to_simple_json(transform_to_document(self.node)))
+        print(to_json_document(self))
 
 
 class Diagram(object):
@@ -3286,6 +3336,7 @@ class Diagram(object):
     def _draw_summary(self, buffer):
         b = []
         b.append(self.sample.library)
+        b.append(str(self.sample.abundance))
         b.append(self.sample.id)
         if 'VH' in self.sample.primary:
             vh = self.sample.primary['VH']
@@ -3370,8 +3421,7 @@ class Diagram(object):
     def _draw_track_without_subject(self, buffer, track):
         offset = self.node['track offset'][track['uuid']]
         if 'subject' not in track and 'query' in track:
-            if offset > 0:
-                buffer.write(' ' * offset)
+            if offset > 0: buffer.write(' ' * offset)
             if track['query'].read_frame > 0:
                 buffer.write('-' * min(track['query'].read_frame, track['query'].length))
                 # buffer.write(track['query'].nucleotide[0:track['query'].read_frame])
@@ -3413,7 +3463,6 @@ class Diagram(object):
         if 'subject' in track and 'query' in track:
             subject = track['subject'].clone()
             subject.read_frame = track['query'].read_frame
-            
             mask = []
             for index,n in enumerate(subject.nucleotide):
                 mask.append('-' if n == track['query'].nucleotide[index] else n)
@@ -3716,18 +3765,21 @@ class Library(object):
         self.node = node
 
     def __str__(self):
-        return '| ' + ' | '.join(['{:<9}', '{:<3}', '{:<2}', '{:<2}', '{:<30}', '{:12}', '{:8}', '{:8}', '{:<25}', '{}']).format(
+        return '| ' + ' | '.join(['{:<9}', '{:<3}', '{:<2}', '{:<2}', '{:<30}', '{:12}', '{:8}', '{:8}', '{:<25}']).format(
             '' if 'strain' not in self.head else str(self.head['strain']), 
             '' if 'exposure' not in self.head else str(self.head['exposure']), 
             '' if 'biological repetition' not in self.body else str(self.body['biological repetition']), 
             '' if 'technical repetition' not in self.body else str(self.body['technical repetition']), 
             '' if 'tissue' not in self.head else str(self.head['tissue']),
             str(self.count), 
-            '0' if self.count == 0 else '{:.4}'.format(self.valid_count/self.count * 100.0), 
+            str(self.valid_count), 
             '0' if self.valid_count == 0 else '{:.4}'.format(self.productive_count / self.valid_count * 100.0), 
-            self.id, 
-            '' if self.path is None else self.path
+            self.id
         )
+
+    @property
+    def document(self):
+        return to_document(self.node)
 
     @property
     def configuration(self):
@@ -3748,13 +3800,6 @@ class Library(object):
     @property
     def strain(self):
         return None if 'strain' not in self.head else self.head['strain']
-
-    @property
-    def path(self):
-        if 'path' in self.body:
-            return self.body['path']
-        else:
-            return None
 
     @property
     def reference(self):
@@ -3805,9 +3850,800 @@ class Library(object):
         else:
             self.body['count productive'] = value
 
+
+class FastqFilteringReader(object):
+    def __init__(self, pipeline, request=None):
+        self.log = logging.getLogger('Filter')
+        self.pipeline = pipeline
+        self.input = None
+        self.output = None
+        self.forward = None
+        self.reverse = None
+        self.merged = None
+        self.node = {
+            'eof': False,
+            'limit': None,
+            'trim start': False,
+            'trim end': True,
+            'forward path': None,
+            'reverse path': None,
+            'trimming window': 3,
+            'trimming error threshold': 0.5,
+            'adapter mismatch': 3,
+            'adapter overlap': 6,
+            'adapter score threshold': 40,
+            'minimum read length': 130,
+            'error threshold': 1,
+            'merge overlap threshold': 70,
+            'merge score threshold': 450,
+            'quota': 32,
+            'paired': False,
+            'filtering': True,
+            'reverse adapter scan': True,
+            'adapter': [
+                'AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC',
+                'TACACTCTTTCCCTACACGACGCTCTTCCGATCT',
+            ],
+            'retain short': True,
+            'retain unmerged': True,
+            'substitution quality correction': 28,
+            'statistic': {
+                'total': 0,
+                'matched adapter': 0,
+                'adapter mismatch': {},
+                'adapter overlap': {},
+                'adapter score': {},
+                'merged': 0,
+                'merged mismatch': {},
+                'merged overlap': {},
+                'merged score': {},
+                'merged offset': {},
+            }
+        }
+
+        # load parameters from request
+        if request is not None:
+            for term in [
+                'limit',
+                'forward path',
+                'reverse path',
+            ]:
+                if term in request.instruction:
+                    self.node[term] = request.instruction[term]
+
+        self.node['substitution quality correction'] = float(self.node['substitution quality correction']) * 2.0
+
+        # make sure all reverse complements of adapters are present
+        adapter = set()
+        for sequence in self.node['adapter']:
+            adapter.add(sequence)
+            adapter.add(complement(sequence))
+        self.node['adapter'] = list(adapter)
+
     @property
-    def document(self):
-        return transform_to_document(self.node)
+    def configuration(self):
+        return self.pipeline.configuration
+
+    @property
+    def limit(self):
+        return self.node['limit']
+
+    @property
+    def quota(self):
+        return self.node['quota']
+
+    @property
+    def paired(self):
+        return self.node['paired']
+
+    @property
+    def ambiguity(self):
+        if 'ambiguity' not in self.node:
+            self.node['ambiguity'] = {}
+            for i in self.configuration['iupac nucleic acid notation'].keys():
+                for j in self.configuration['iupac nucleic acid notation'].keys():
+                    if i not in self.node['ambiguity']:
+                        self.node['ambiguity'][i] = {}
+                    self.node['ambiguity'][i][j] = set(self.configuration['iupac nucleic acid notation'][i]['option']).union(set(self.configuration['iupac nucleic acid notation'][j]['option']))
+            for i in self.configuration['iupac nucleic acid notation'].keys():
+                for j in self.configuration['iupac nucleic acid notation'].keys():
+                    c = self.node['ambiguity'][i][j]
+                    for k,v in self.configuration['iupac nucleic acid notation'].items():
+                        o = set(v['option'])
+                        if o == c:
+                            self.node['ambiguity'][i][j] = k
+        return self.node['ambiguity']
+
+    @property
+    def filtering(self):
+        return self.node['filtering']
+
+    @property
+    def statistic(self):
+        return self.node['statistic']
+
+    @property
+    def count(self):
+        return self.statistic['total']
+
+    @property
+    def size(self):
+        return len(self.input)
+
+    @property
+    def enough(self):
+        return not (self.limit is None or self.count < self.limit)
+
+    @property
+    def empty(self):
+        return not self.size > 0
+
+    @property
+    def full(self):
+        return self.size >= self.quota
+
+    @property
+    def adapter(self):
+        return self.node['adapter']
+
+    def open(self):
+        self.input = []
+        self.output = []
+        if self.node['forward path'] is not None:
+            self.forward = io.open(self.node['forward path'], 'r')
+        else:
+            self.forward = sys.stdin
+
+        if self.node['reverse path'] is not None:
+            self.reverse = io.open(self.node['reverse path'], 'r')
+
+        if self.forward is not None and self.reverse is not None:
+            self.node['paired'] = True
+
+        self.merged = sys.stdout
+
+    def close(self):
+        if self.node['forward path'] is not None:
+            self.forward.close()
+
+        if self.node['reverse path'] is not None:
+            self.reverse.close()
+
+        self.input = None
+        self.output = None
+
+    def read(self, file):
+        state = 0
+        segment = None
+        for line in file:
+            if not line:
+                break
+
+            else:
+                line = line.strip()
+                if line:
+                    if state == 0 and line[0] == '@':
+                        segment = { 'id': line }
+                        state = 1
+
+                    elif state == 1:
+                        segment['nucleotide'] = line
+                        state = 2
+
+                    elif state == 2:
+                        state = 3
+
+                    elif state == 3:
+                        segment['quality'] = line
+                        state = 4
+                        break
+
+        if  state == 4 and \
+            segment is not None and \
+            len(segment['nucleotide']) == len(segment['quality']):
+                segment['length'] = len(segment['nucleotide'])
+                segment['expected error'] = expected_error(segment['quality'])
+                segment['effective start'] = 0
+                segment['effective end'] = segment['length']
+                segment['effective length'] = segment['length']
+        else:
+            segment = None
+            self.node['eof'] = True
+
+        return segment
+
+    def write(self):
+        self.merged.write('\n'.join([ to_fastq(s['id'], s['nucleotide'],s['quality']) for s in self.output ]))
+        self.merged.write('\n')
+
+    def fill(self):
+        self.input = []
+        self.output = []
+        while not self.full and not self.node['eof']:
+            sample = None
+            forward = self.read(self.forward)
+            if forward:
+                forward['origin'] = 'forward'
+                sample =  {
+                    'forward': forward,
+                    'id': forward['id'].split()[0],
+                }
+
+                if self.paired:
+                    reverse = self.read(self.reverse)
+                    if reverse:
+                        reverse['origin'] = 'reverse'
+                        sample['reverse'] = reverse
+                        if forward['id'].split()[0] != reverse['id'].split()[0]:
+                            raise ValueError('forward and reverse read don\'t match {} {}'.format(forward['id'], reverse['id']))
+                    else:
+                        raise ValueError('missing matching reverse read for {}'.format(forward['id']))
+
+            if sample is not None:
+                self.input.append(sample)
+
+        if self.filtering:
+            for sample in self.input:
+                self.locate_adapter(sample['forward'])
+                if self.paired:
+                    self.locate_adapter(sample['reverse'])
+                    self.merge_sample(sample)
+                self.pick_sample(sample)
+        else:
+            for sample in self.input:
+                self.place_in_output(sample['forward'])
+
+        self.statistic['total'] += len(self.input)
+        return not self.empty
+
+    def locate_adapter(self, segment):
+        taken = False
+        for index, adapter in enumerate(self.adapter):
+            if self.find_adapter(segment, adapter):
+                self.promote_adapter(index)
+                taken = True
+                break
+
+    def find_adapter(self, segment, adapter):
+        taken = False
+        if self.node['reverse adapter scan']:
+            right = segment['length']
+            left = right - len(adapter)
+            while left >= 0:
+                if self.match_adapter(segment, adapter, left, right):
+                    taken = True
+                    break
+                right -= 1
+                left -= 1
+        else:
+            left = 0
+            right = len(adapter)
+            while right <= len(segment['nucleotide']):
+                if self.match_adapter(segment, adapter, left, right):
+                    taken = True
+                    break
+                right += 1
+                left += 1
+
+        if not taken:
+            taken = self.locate_partial_adapter(segment, adapter)
+
+        return taken
+
+    def promote_adapter(self, index):
+        if index > 0 and index < len(self.adapter):
+            adapter = self.adapter.pop(index)
+            self.adapter.insert(0, adapter)
+
+    def locate_partial_adapter(self, segment, adapter):
+        taken = False
+        end = len(segment['nucleotide'])
+        right = min(end, len(adapter))
+        left = end - right
+        while end - left >= self.node['adapter overlap']:
+            if self.match_adapter(segment, adapter[:right], left, end):
+                taken = True
+                break
+            right -= 1
+            left += 1
+        return taken
+
+    def match_adapter(self, segment, adapter, left, right):
+        result = False
+        if len(adapter) == (right - left):
+            distance = 0
+            score = 0
+            length = len(adapter)
+            sequence = segment['nucleotide'][left:right]
+            quality = segment['quality'][left:right]
+            if length >= self.node['adapter overlap']:
+                for i in range(length):
+                    score += self.score_base_alignment(adapter[i], sequence[i], quality[i], quality[i])
+                    if adapter[i] != sequence[i]:
+                        distance += 1
+                        if distance > self.node['adapter mismatch']:
+                            break
+
+                if  distance <= self.node['adapter mismatch'] and \
+                    score >= self.node['adapter score threshold']:
+                    segment['adapter'] = {
+                        'start': left,
+                        'end': right,
+                        'distance': distance,
+                        'score': score,
+                        'length': right - left,
+                        'nucleotide': sequence,
+                    }
+                    self.report_adapter(segment, segment['adapter'])
+                    segment['effective start'] = 0
+                    segment['effective end'] = left
+                    segment['effective length'] = left
+                    result = True
+        else:
+            raise ValueError('compared sequences must be of equal length')
+
+        return result
+
+    def report_adapter(self, segment, adapter):
+        self.statistic['matched adapter'] += 1
+
+        if adapter['score'] not in self.statistic['adapter score']:
+            self.statistic['adapter score'][adapter['score']] = 0
+        self.statistic['adapter score'][adapter['score']] += 1
+
+        if adapter['distance'] not in self.statistic['adapter mismatch']:
+            self.statistic['adapter mismatch'][adapter['distance']] = 0
+        self.statistic['adapter mismatch'][adapter['distance']] += 1
+
+        if adapter['length'] not in self.statistic['adapter overlap']:
+            self.statistic['adapter overlap'][adapter['length']] = 0
+        self.statistic['adapter overlap'][adapter['length']] += 1
+
+        self.log.debug('%s found adapter %s at position %s with %s mismatch', segment['id'], adapter['nucleotide'], adapter['start'], adapter['distance'])
+
+    def report_merge(self, sample):
+        self.statistic['merged'] += 1
+
+        score = round(sample['merged']['score'] / 10) * 10
+        if score not in self.statistic['merged score']:
+            self.statistic['merged score'][score] = 0
+        self.statistic['merged score'][score] += 1
+
+        mismatch = round(sample['merged']['mismatch'] / 10) * 10
+        if mismatch not in self.statistic['merged mismatch']:
+            self.statistic['merged mismatch'][mismatch] = 0
+        self.statistic['merged mismatch'][mismatch] += 1
+
+        overlap = round(sample['merged']['overlap'] / 10) * 10
+        if overlap not in self.statistic['merged overlap']:
+            self.statistic['merged overlap'][overlap] = 0
+        self.statistic['merged overlap'][overlap] += 1
+
+        offset = round(sample['merged']['offset'] / 10) * 10
+        if offset not in self.statistic['merged offset']:
+            self.statistic['merged offset'][offset] = 0
+        self.statistic['merged offset'][offset] += 1
+
+        self.log.debug('%s merged at offset %s with score %s', sample['merged']['id'], sample['merged']['offset'], sample['merged']['score'])
+
+    def merge_sample(self, sample):
+        forward = sample['forward']
+        reverse = self.complement_segment(sample['reverse'])
+        left = self.align(forward, reverse)
+        right = self.align(reverse, forward)
+        picked = None
+        if left is not None or right is not None:
+            if left is None or right['score'] > left['score']:
+                picked = right
+                picked['direction'] = 'right'
+            else:
+                picked = left
+                picked['direction'] = 'left'
+
+        if picked is not None and picked['score'] >= self.node['merge score threshold']:
+            top = picked['top']
+            bottom = picked['bottom']
+            merged = {
+                'id': sample['id'],
+                'nucleotide': [],
+                'quality': [],
+                'offset': picked['offset'],
+                'score': picked['score'],
+                'overlap':0,
+                'mismatch': 0,
+                'origin': 'merged',
+            }
+            if picked['direction'] == 'right':
+                t = top['effective start'] + picked['offset']
+                b = bottom['effective start']
+            else:
+                t = top['effective start']
+                b = bottom['effective start'] - picked['offset']
+
+            while t < top['effective end'] or b < bottom['effective end']:
+                te = None
+                be = None
+                if t >= top['effective start'] and t < top['effective end']:
+                    te = t
+
+                if b >= bottom['effective start'] and b < bottom['effective end']:
+                    be = b
+
+                if te is None and be is not None:
+                    merged['nucleotide'].append(bottom['nucleotide'][be])
+                    merged['quality'].append(bottom['quality'][be])
+                elif te is not None and be is None:
+                    merged['nucleotide'].append(top['nucleotide'][te])
+                    merged['quality'].append(top['quality'][te])
+                elif te is not None and be is not None:
+                    merged['overlap'] += 1
+                    if top['nucleotide'][te] != bottom['nucleotide'][be]:
+                        merged['mismatch'] += 1
+
+                    if top['quality'][te] > bottom['quality'][be]:
+                        merged['nucleotide'].append(top['nucleotide'][te])
+                    elif top['quality'][te] < bottom['quality'][be]:
+                        merged['nucleotide'].append(bottom['nucleotide'][be])
+                    else:
+                        nucleotide = self.ambiguate(top['nucleotide'][te], bottom['nucleotide'][be])
+                        merged['nucleotide'].append(nucleotide)
+
+                    merged['quality'].append(
+                        merge_base_quality(
+                            top['nucleotide'][te],
+                            bottom['nucleotide'][be],
+                            top['quality'][te],
+                            bottom['quality'][be]
+                        )
+                    )
+                t += 1
+                b += 1
+
+            merged['nucleotide'] = ''.join(merged['nucleotide'])
+            merged['quality'] = ''.join(merged['quality'])
+            merged['length'] = len(merged['nucleotide'])
+            merged['expected error'] = expected_error(merged['quality'])
+            sample['merged'] = merged
+            self.report_merge(sample)
+
+    def pick_sample(self, sample):
+        def segment_to_fastq(segment):
+            return to_fastq(segment['id'], segment['nucleotide'], segment['quality'])
+
+        picked = None
+        if self.paired:
+            if 'merged' in sample:
+                self.trim_segment(sample['merged'])
+                picked = sample['merged']
+
+            elif self.node['retain unmerged']:
+                self.trim_segment(sample['forward'])
+                self.trim_segment(sample['reverse'])
+                if  sample['forward']['expected error'] < sample['reverse']['expected error'] and \
+                    sample['forward']['length'] >= self.node['minimum read length']:
+                    picked = sample['forward']
+
+                elif sample['reverse']['length'] >= self.node['minimum read length']:
+                    picked = self.complement_segment(sample['reverse'])
+                    # if we use the reverse read we need to directionally trim it again
+                    self.trim_segment(picked)
+            else:
+                self.log.info('dropping unmerged read pair {}\n{}\n{}'.format(sample['id'], segment_to_fastq(sample['forward']), segment_to_fastq(sample['reverse'])))
+        else:
+            self.trim_segment(sample['forward'])
+            picked = deepcopy(sample['forward'])
+
+        # drop reads that are shorter than minimum
+        if picked is not None and picked['length'] < self.node['minimum read length']:
+            self.log.info('dropping short read {} of length {}\n{}'.format(picked['id'], picked['length'], segment_to_fastq(picked)))
+            picked = None
+
+        # drop reads with expected error above the threshold on the minimal length
+        if picked is not None:
+            effective_error = expected_error(picked['quality'][:self.node['minimum read length']])
+            if effective_error > self.node['error threshold']:
+                self.log.info('dropping low quality {} read {} with expected error {:.3f}\n{}'.format(picked['origin'], sample['id'], effective_error, segment_to_fastq(picked)))
+                picked = None
+
+        if picked is not None:
+            picked['id'] = sample['id']
+            self.place_in_output(picked)
+
+    def place_in_output(self, segment):
+        for term in [
+            'effective length',
+            'effective start',
+            'effective end'
+        ]:
+            if term in segment:
+                del segment[term]
+        self.output.append(segment)
+
+    def trim_segment(self, segment):
+        length = segment['length']
+        width = self.node['trimming window']
+        threshold = self.node['trimming error threshold']
+
+        if self.node['trim end']:
+            window = segment['quality'][-width:]
+            position = 0
+            while expected_error(window) > threshold and length >= self.node['minimum read length']:
+                length -= 1
+                position -= 1
+                window = segment['quality'][-width + position:position]
+
+            if position < 0:
+                segment['quality'] = segment['quality'][:position]
+                segment['nucleotide'] = segment['nucleotide'][:position]
+
+        if self.node['trim start']:
+            window = segment['quality'][:width]
+            position = 0
+            while expected_error(window) > threshold and length >= self.node['minimum read length']:
+                length -= 1
+                position += 1
+                window = segment['quality'][position:width + position]
+
+            if position > 0:
+                segment['quality'] = segment['quality'][position:]
+                segment['nucleotide'] = segment['nucleotide'][position:]
+
+        segment['length'] = len(segment['nucleotide'])
+        segment['expected error'] = expected_error(segment['quality'])
+
+    def score_base_alignment(self, ni, nj, qi, qj):
+        score = self.configuration['nucleotide substitution'][ni][nj]
+
+        # if qualities were supplied correct the score
+        if qi is not None and qj is not None:
+            correction =  (phred_code_to_value(qi) + phred_code_to_value(qj)) / self.node['substitution quality correction']
+            score = math.floor(correction * score)
+
+        return score
+
+    def align(self, top, bottom):
+        best = None
+        for offset in range(top['effective length']):
+            score = 0
+            mismatch = 0
+            t = top['effective start'] + offset
+            b = bottom['effective start']
+            length = min(top['effective end'] - t, bottom['effective end'] - b)
+            if length < self.node['merge overlap threshold']:
+                break
+
+            while t < top['effective end'] and b < bottom['effective end']:
+                score += self.score_base_alignment(top['nucleotide'][t], bottom['nucleotide'][b], top['quality'][t], bottom['quality'][b])
+                if top['nucleotide'][t] != bottom['nucleotide'][b]:
+                    mismatch += 1
+                t += 1
+                b += 1
+
+            if best is None:
+                best = {
+                    'mismatch': mismatch,
+                    'score': score,
+                    'offset': offset,
+                    'length': length,
+                }
+            elif score > best['score']:
+                best['mismatch'] = mismatch
+                best['score'] = score
+                best['offset'] = offset
+                best['length'] = length
+
+        if best is not None:
+            best['top'] = top
+            best['bottom'] = bottom
+
+        return best
+
+    def ambiguate(self, i, j):
+        return self.ambiguity[i][j]
+
+    def complement_segment(self, segment):
+        reversed = {
+            'id': segment['id'],
+            'nucleotide': ''.join([ self.configuration['reverse complement'][n] for n in segment['nucleotide'] ][::-1]),
+            'quality': segment['quality'][::-1],
+            'length' : segment['length'],
+            'expected error': segment['expected error'],
+            'origin': segment['origin'],
+        }
+
+        if 'effective start' in segment:
+            reversed['effective start'] = segment['length'] - segment['effective end']
+        if 'effective end' in segment:
+            reversed['effective end'] = segment['length'] - segment['effective start']
+        if 'effective length' in segment:
+            reversed['effective length'] = segment['effective length']
+        if 'adapter' in segment:
+            reversed['adapter'] = {
+                'distance': segment['adapter']['distance'],
+                'start': segment['length'] - segment['adapter']['end'],
+                'end': segment['length'] - segment['adapter']['start'],
+                'length':  segment['adapter']['length']
+            }
+        return reversed
+
+
+class SequenceDenoiser(object):
+    def __init__(self, pipeline, request=None):
+        self.log = logging.getLogger('Noise')
+        self.node = {
+            'output path': None,
+            'iteration': 5,
+            'abundance ratio': 10,
+            'read length': 133,
+            'similarity threshold': 2,
+            'ambiguous code': 'BDHKMNRSVWY',
+            'statistic': {
+                'count': 0
+            }
+        }
+        self.output = None
+        self.cache = {}
+        if request is not None:
+            for term in [
+                'limit',
+            ]:
+                if term in request.instruction:
+                    self.node[term] = request.instruction[term]
+
+    def open(self):
+        if self.node['output path'] is not None:
+            self.output = io.open(self.node['output path'], 'w')
+        else:
+            self.output = sys.stdout
+
+    def close(self):
+        if self.node['output path'] is not None:
+            self.output.close()
+
+    @property
+    def statistic(self):
+        return self.node['statistic']
+
+    @property
+    def length(self):
+        return self.node['read length']
+
+    def sort(self):
+        self.log.info('sorting %s reads in queue', len(self.queue))
+        self.queue.sort(key=lambda c: c['error'], reverse=False)
+        self.queue.sort(key=lambda c: c['abundance'], reverse=True)
+
+    def add(self, segment):
+        if len(segment['nucleotide']) >= self.length:
+            self.statistic['count'] += 1
+            key = segment['nucleotide'][:self.length]
+            abundance = 1
+            id = segment['id']
+
+            if ' ' in segment['id']:
+                id, comment = segment['id'].split(' ')
+                if ':' in comment:
+                    abundance, ambiguous = comment.split(':')
+                    if abundance is not None:
+                        try:
+                            abundance = int(abundance)
+                        except ValueError:
+                            pass
+
+            if key in self.cache:
+                cluster = self.cache[key]
+                cluster['abundance'] += abundance
+            else:
+                cluster = {
+                    'key': key,
+                    'id': id,
+                    'abundance': abundance,
+                    'ambiguous': False,
+                    'quality': [ ],
+                    'nucleotide': set(),
+                }
+                self.cache[key] = cluster
+                for c in self.node['ambiguous code']:
+                    if c in key:
+                        cluster['ambiguous'] = True
+                        break
+            cluster['quality'].append(segment['quality'])
+            cluster['nucleotide'].add(segment['nucleotide'])
+
+    def write(self):
+        self.sort()
+        for cluster in self.queue:
+            id = '{} {}:{}'.format(cluster['id'], cluster['abundance'], 'Y' if cluster['ambiguous'] else 'N')
+            self.output.write(to_fastq(id, cluster['key'],cluster['quality']))
+            self.output.write('\n')
+
+    def denoise(self):
+        self.prepare()
+        iteration = 1
+        before = len(self.queue) + 1
+        while iteration <= self.node['iteration'] and before > len(self.queue):
+            before = len(self.queue)
+            self.log.info('absorption iteration %d started with %s sequences in queue', iteration, len(self.queue))
+            self.bubble()
+            iteration += 1
+        self.log.info(to_json(self.queue))
+
+    def prepare(self):
+        self.queue = list(self.cache.values())
+        for cluster in self.queue:
+            # consolidate quality
+            if cluster['abundance'] > 1:
+                quality = []
+                count = len(cluster['quality'])
+                for i in range(self.length):
+                    q = sum([phred_code_to_value(j[i]) for j in cluster['quality']])
+                    quality.append(phred_value_to_code(q / count))
+                cluster['quality'] = ''.join(quality)
+            else:
+                cluster['quality'] = cluster['quality'][0][:self.length]
+            cluster['error'] = expected_error(cluster['quality'])
+
+            if cluster['abundance'] == 1:
+                cluster['state'] = 'singleton'
+            elif cluster['abundance'] >= self.node['abundance ratio']:
+                cluster['state'] = 'putative'
+            else: 
+                cluster['state'] = 'pending'
+        self.sort()
+
+    def bubble(self):
+        pending = []
+        while self.queue and self.queue[-1]['state'] != 'putative':
+            cluster = self.queue.pop()
+            self.log.debug('pop %s', cluster['id'])
+            if self.classify(cluster):
+                self.sort()
+            else:
+                pending.append(cluster)
+        self.queue.extend(pending)
+        self.sort()
+
+    def report_absorb(self, cluster, putative):
+        report = []
+        report.append('absorbing {} into {}'.format(cluster['id'], putative['id']))
+        report.append('{:<4} {}'.format(putative['abundance'], putative['key']))
+        report.append('{:<4} {}'.format('', putative['quality']))
+        report.append('{:<4} {}'.format(cluster['abundance'], cluster['key']))
+        report.append('{:<4} {}'.format('', cluster['quality']))
+        report.append('{:<4} {}'.format('', sequence_diff(putative['key'], cluster['key'])))
+        self.log.info('\n'.join(report))
+
+    def absorb(self, cluster, putative):
+        self.report_absorb(cluster, putative)
+
+        quality = []
+        pa = putative['abundance']
+        ca = cluster['abundance']
+        for p, c in zip(putative['quality'], cluster['quality']):
+            quality.append(phred_value_to_code((phred_code_to_value(p) * pa + phred_code_to_value(c) * ca) / (pa + ca)))
+        putative['quality'] = ''.join(quality)
+
+        putative['abundance'] += 1
+        putative['nucleotide'] |= cluster['nucleotide']
+        if putative['abundance'] >= self.node['abundance ratio']:
+            putative['state'] = 'putative'
+
+    def classify(self, cluster):
+        result = False
+        factor = cluster['abundance'] * self.node['abundance ratio']
+        for threshold in range(self.node['similarity threshold']):
+            for putative in self.queue:
+                if putative['abundance'] < factor:
+                    break
+                else:
+                    distance = hamming(cluster['key'], putative['key'])
+                    if putative['abundance'] >= factor and distance <= threshold + 1:
+                        self.absorb(cluster, putative)
+                        result = True
+                        break
+            if result:
+                break
+        return result
 
 
 class Resolver(object):
@@ -3920,9 +4756,9 @@ class Resolver(object):
 
         # if still no study record exists, populate a new one
         if study is None:
+            self.log.debug('generating new study %s\n%s', request.name, to_json_document(request))
             study = Study(self.pipeline, None, request)
-            self.log.debug('generating new study %s\n%s', study.name, to_simple_json(study.request))
-            cursor = request.cursor('analyzed_sample')
+            cursor = request.cursor('sample')
             for node in cursor:
                 sample = Sample(self.pipeline, node)
                 study.add_sample(sample)
@@ -3952,7 +4788,7 @@ class Resolver(object):
 
     def study_save(self, study):
         if study is not None:
-            document = transform_to_document({ 'head': study.head })
+            document = to_document({ 'head': study.head })
             existing = self.database['study'].find_one({'head.id': study.id})
             if existing:
                 self.log.debug('existing study found for %s', study.name)
@@ -3990,16 +4826,6 @@ class Resolver(object):
     def sample_drop(self, library):
         if library:
             collection = self.database['sample']
-            try:
-                result = collection.delete_many({ 'head.library': library })
-                if result:
-                    self.log.info('dropped %d samples from %s', result.deleted_count, library)
-            except BulkWriteError as e:
-                self.log.critical(e.details)
-
-    def analyzed_sample_drop(self, library):
-        if library:
-            collection = self.database['analyzed_sample']
             try:
                 result = collection.delete_many({ 'head.library': library })
                 if result:
@@ -4170,6 +4996,15 @@ class Resolver(object):
         return result
 
     def accession_fetch_ncbi(self, id):
+        import urllib.request
+        import urllib.parse
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+        import urllib.error
+        import http.client
+        import xmltodict
+
         def normalize_document(document, transform):
             if isinstance(document, dict):
                 transformed = {}
@@ -4519,6 +5354,36 @@ class Pipeline(object):
             raise ValueError('action {} is not implemented'.format(request.action))
 
     # sample
+    def sample_merge(self, request):
+        reader = FastqFilteringReader(self, request)
+        reader.open()
+
+        while reader.fill() and not reader.enough:
+            reader.write()
+
+        reader.close()
+        self.log.debug(to_json(reader.statistic))
+
+    def sample_denoise(self, request):
+        request.instruction['filtering'] = False
+        reader = FastqFilteringReader(self, request)
+        denoiser = SequenceDenoiser(self, request)
+
+        denoiser.open()
+        reader.open()
+
+        while reader.fill() and not reader.enough:
+            for sample in reader.output:
+                denoiser.add(sample)
+
+        reader.close()
+        self.log.debug(to_json(reader.statistic))
+        reader = None
+
+        denoiser.denoise()
+        denoiser.write()
+        denoiser.close()
+
     def sample_populate(self, request):
         count = 0
         if not request.instruction['library']:
@@ -4527,7 +5392,6 @@ class Pipeline(object):
         collection = self.resolver.database['sample']
         if request.instruction['drop']:
             self.resolver.sample_drop(request.instruction['library'])
-            self.resolver.analyzed_sample_drop(request.instruction['library'])
 
         while block.fill(request.instruction['library'], request.instruction['strain']):
             bulk = pymongo.bulk.BulkOperationBuilder(collection)
@@ -4550,7 +5414,7 @@ class Pipeline(object):
 
     def sample_view(self, request):
         request.kind = 'sample'
-        cursor = request.cursor('analyzed_sample')
+        cursor = request.cursor('sample')
         for node in cursor:
             sample = Sample(self, node)
             sample.view(request.instruction['profile'])
@@ -4590,7 +5454,7 @@ class Pipeline(object):
 
     def sample_count(self, request):
         request.kind = 'sample'
-        print(request.count('analyzed_sample'))
+        print(request.count('sample'))
 
     def sample_fasta(self, request):
         request.kind = 'sample'
@@ -4610,14 +5474,11 @@ class Pipeline(object):
 
     def sample_info(self, request):
         request.kind = 'sample'
-        cursor = request.cursor('analyzed_sample')
+        cursor = request.cursor('sample')
         for node in cursor:
             sample = Sample(self, node)
-            sample.info(profile)
+            sample.info(request.instruction['profile'])
         cursor.close()
-
-    def analyzed_sample_drop(self, request):
-        self.resolver.analyzed_sample_drop(request.instruction['library'])
 
     # study
     def study_collect(self, request):
@@ -4737,20 +5598,6 @@ class Pipeline(object):
         print(to_json(buffer))
 
     def library_list(self, request):
-        title = ' | '.join (
-            ['{:<9}', '{:<3}', '{:<2}', '{:<2}', '{:<30}', '{:12}', '{:8}', '{:8}', '{:<25}', '{}']
-        ).format (
-            'Strain', 'Exp', 'B', 'T', 'Tissue', 'Count', 'Valid', 'Prod', 'ID', 'Path'
-        )
-        print('| ' + title)
-
-        separator = '-|-'.join (
-            ['{:-<9}', '{:-<3}', '{:-<2}', '{:-<2}', '{:-<30}', '{:-<12}', '{:-<8}', '{:-<8}', '{:-<25}', '{:-<4}']
-        ).format (
-            '', '', '', '', '', '', '', '', '', ''
-        )
-        print('| ' + separator)
-
         buffer = {}
         order = []
         request.kind = 'library'
@@ -4768,14 +5615,14 @@ class Pipeline(object):
             library = Library(self, node)
             if library.reference is None:
                 if library.count is None or request.instruction['drop']:
-                    request = Request(self, {'library': library.id, 'profile': 'all', 'kind': 'sample'})
-                    library.count = request.count('sample')
+                    r = Request(self, {'library': library.id, 'profile': 'all', 'kind': 'sample'})
+                    library.count = r.count('sample')
 
-                    request = Request(self, {'library': library.id, 'profile': 'p', 'kind': 'sample'})
-                    library.productive_count = request.count('analyzed_sample')
+                    r = Request(self, {'library': library.id, 'profile': 'p', 'kind': 'sample'})
+                    library.productive_count = r.count('sample')
 
-                    request = Request(self, {'library': library.id, 'profile': 'valid', 'kind': 'sample'})
-                    library.valid_count = request.count('analyzed_sample')
+                    r = Request(self, {'library': library.id, 'profile': 'valid', 'kind': 'sample'})
+                    library.valid_count = r.count('sample')
 
                     self.resolver.library_save(library)
 
@@ -4796,6 +5643,20 @@ class Pipeline(object):
                             library.valid_count += buffer[reference].valid_count
                     self.resolver.library_save(library)
 
+
+        title = ' | '.join (
+            ['{:<9}', '{:<3}', '{:<2}', '{:<2}', '{:<30}', '{:12}', '{:8}', '{:8}', '{:<25}']
+        ).format (
+            'Strain', 'Exp', 'B', 'T', 'Tissue', 'Count', 'Valid', 'Prod', 'ID'
+        )
+        print('| ' + title)
+
+        separator = '-|-'.join (
+            ['{:-<9}', '{:-<3}', '{:-<2}', '{:-<2}', '{:-<30}', '{:-<12}', '{:-<8}', '{:-<8}', '{:-<25}']
+        ).format (
+            '', '', '', '', '', '', '', '', ''
+        )
+        print('| ' + separator)
         for library in order:
             print(str(library))
 

@@ -24,6 +24,7 @@ import logging
 import sys
 import math 
 import copy
+import hashlib
 
 def to_json(node):
     def handler(o):
@@ -70,12 +71,19 @@ def to_fastq(id, nucleotide, quality):
 def segment_to_fastq(segment):
     return '{}\n{}\n+\n{}\n'.format(segment['id'], segment['nucleotide'], segment['quality'])
 
-def hammig(one, two):
+def hamming(one, two):
     distance = 0
-    for i in range(len(one)):
-        if one[i] != two[i]:
-            distance += 1
+    for o, t in zip(one, two):
+      if o != t:
+          distance += 1
     return distance
+
+def sequence_diff(one, two):
+    diff = []
+    for o, t in zip(one, two):
+        if o == t: diff.append('-')
+        else: diff.append('*')
+    return ''.join(diff)
 
 class SequenceDenoiser(object):
     def __init__(self, configuration=None):
@@ -89,13 +97,9 @@ class SequenceDenoiser(object):
             'ambiguous code': 'BDHKMNRSVWY',
         }
         self.output = None
-        self.statitic = {
+        self.statistic = {
             'count': 0
         }
-        self.unique = {}
-        self.putative = []
-        self.singleton = []
-        self.uncertain = []
         self.cache = {}
         if configuration is not None:
             for k,v in configuration.items():
@@ -116,171 +120,147 @@ class SequenceDenoiser(object):
         return self.configuration['read length']
 
     def sort(self):
+        self.log.info('sorting %s reads in queue', len(self.queue))
         self.queue.sort(key=lambda c: c['error'], reverse=False)
         self.queue.sort(key=lambda c: c['abundance'], reverse=True)
 
     def add(self, segment):
         if len(segment['nucleotide']) >= self.length:
-            self.statitic['count'] += 1
+            self.statistic['count'] += 1
             key = segment['nucleotide'][:self.length]
-            if key in self.unique:
-                cluster = self.unique[key]
-                cluster['abundance'] += 1
+
+            id, comment = segment['id'].split(' ')
+            abundance, ambiguous = comment.split(':')
+            if abundance is not None:
+                try:
+                    abundance = int(abundance)
+                except ValueError:
+                    abundance = 1
+            else:
+                abundance = 1
+
+            if key in self.cache:
+                cluster = self.cache[key]
+                cluster['abundance'] += abundance
             else:
                 cluster = {
                     'key': key,
-                    'id': segment['id'],
-                    'abundance': 1,
+                    'id': id,
+                    'abundance': abundance,
                     'ambiguous': False,
-                    'phred': [ ],
+                    'quality': [ ],
                     'nucleotide': set(),
                 }
-                self.unique[key] = cluster
+                self.cache[key] = cluster
                 for c in self.configuration['ambiguous code']:
                     if c in key:
                         cluster['ambiguous'] = True
                         break
-
-            cluster['phred'].append(segment['quality'])
+            cluster['quality'].append(segment['quality'])
             cluster['nucleotide'].add(segment['nucleotide'])
 
     def write(self):
-        unique = list(self.unique.values())
-        unique.sort(key=lambda c: c['error'], reverse=True)
-        unique.sort(key=lambda c: c['abundance'], reverse=True)
-        for cluster in unique:
+        self.sort()
+        for cluster in self.queue:
             id = '{} {}:{}'.format(cluster['id'], cluster['abundance'], 'Y' if cluster['ambiguous'] else 'N')
             self.output.write(to_fastq(id, cluster['key'],cluster['quality']))
 
     def denoise(self):
-        self.consolidate_quality()
         self.prepare()
         iteration = 1
         before = len(self.queue) + 1
         while iteration <= self.configuration['iteration'] and before > len(self.queue):
+            before = len(self.queue)
             self.log.info('absorption iteration %d started with %s sequences in queue', iteration, len(self.queue))
             self.bubble()
-            before = len(self.queue)
             iteration += 1
         self.log.info(to_json(self.queue))
 
-    def consolidate_quality(self):
-        for cluster in self.unique.values():
+    def prepare(self):
+        self.queue = list(self.cache.values())
+        for cluster in self.queue:
+            # consolidate quality
             if cluster['abundance'] > 1:
-                cluster['quality'] = []
+                quality = []
+                count = len(cluster['quality'])
                 for i in range(self.length):
-                    q = 0
-                    for j in cluster['phred']:
-                        q += phred_code_to_value(j[i])
-
-                    cluster['quality'].append(phred_value_to_code(q / len(cluster['phred'])))
-                cluster['quality'] = ''.join(cluster['quality'])
+                    q = sum([phred_code_to_value(j[i]) for j in cluster['quality']])
+                    quality.append(phred_value_to_code(q / count))
+                cluster['quality'] = ''.join(quality)
             else:
-                cluster['quality'] = cluster['phred'][0][:self.length]
-
+                cluster['quality'] = cluster['quality'][0][:self.length]
             cluster['error'] = expected_error(cluster['quality'])
 
-    def prepare(self):
-        self.queue = []
-        self.pending = []
-        for key,cluster in self.unique.items():
             if cluster['abundance'] == 1:
                 cluster['state'] = 'singleton'
-                self.queue.append(cluster)
             elif cluster['abundance'] >= self.configuration['abundance ratio']:
                 cluster['state'] = 'putative'
-                self.queue.insert(0, cluster)
             else: 
                 cluster['state'] = 'pending'
-                self.queue.append(cluster)
         self.sort()
 
     def bubble(self):
+        pending = []
         while self.queue and self.queue[-1]['state'] != 'putative':
             cluster = self.queue.pop()
-            if not self.classify(cluster):
-                self.pending.append(cluster)
+            self.log.debug('pop %s', cluster['id'])
+            if self.classify(cluster):
+                self.sort()
             else:
-                self.queue.sort(key=lambda c: c['abundance'], reverse=True)
-
-        self.queue.extend(self.pending)
-        self.pending = []
+                pending.append(cluster)
+        self.queue.extend(pending)
         self.sort()
-
-    def hammig(self, left, right):
-        if left > right:
-            if left not in self.cache:
-                self.cache[left] = {}
-
-            if right not in self.cache[left]:
-                self.cache[left][right] = hammig(left, right)
-
-            result = self.cache[left][right]
-        else:
-            if right not in self.cache:
-                self.cache[right] = {}
-            if left not in self.cache[right]:
-                self.cache[right][left] = hammig(right, left)
-
-            result = self.cache[right][left]
-
-        return result
 
     def report_absorb(self, cluster, putative):
         report = []
         report.append('absorbing {} into {}'.format(cluster['id'], putative['id']))
-        report.append('{:<4} '.format(putative['abundance']) + putative['key'])
-        report.append('{:<4} '.format('') + putative['quality'])
-        report.append('{:<4} '.format(cluster['abundance']) + cluster['key'])
-        report.append('{:<4} '.format('') + cluster['quality'])
-        check = []
-        for i in range(len(putative['key'])):
-            if putative['key'][i] == cluster['key'][i]:
-                check.append('-')
-            else:
-                check.append('*')
-        report.append('{:<4} '.format('') + ''.join(check))
-        report.append('')
-        sys.stderr.write('\n'.join(report))
+        report.append('{:<4} {}'.format(putative['abundance'], putative['key']))
+        report.append('{:<4} {}'.format('', putative['quality']))
+        report.append('{:<4} {}'.format(cluster['abundance'], cluster['key']))
+        report.append('{:<4} {}'.format('', cluster['quality']))
+        report.append('{:<4} {}'.format('', sequence_diff(putative['key'], cluster['key'])))
+        self.log.info('\n'.join(report))
 
     def absorb(self, cluster, putative):
         self.report_absorb(cluster, putative)
 
-        # correct quality
         quality = []
-        for i in range(self.length):
-            q = (phred_code_to_value(putative['quality'][i]) * putative['abundance'] + phred_code_to_value(cluster['quality'][i]) * cluster['abundance']) / (putative['abundance'] + cluster['abundance'])
-            quality.append(phred_value_to_code(q))
+        pa = putative['abundance']
+        ca = cluster['abundance']
+        for p, c in zip(putative['quality'], cluster['quality']):
+            quality.append(phred_value_to_code((phred_code_to_value(p) * pa + phred_code_to_value(c) * ca) / (pa + ca)))
         putative['quality'] = ''.join(quality)
 
         putative['abundance'] += 1
-        putative['phred'].append(cluster['quality'])
         putative['nucleotide'] |= cluster['nucleotide']
         if putative['abundance'] >= self.configuration['abundance ratio']:
             putative['state'] = 'putative'
 
     def classify(self, cluster):
         result = False
+        factor = cluster['abundance'] * self.configuration['abundance ratio']
         for threshold in range(self.configuration['similarity threshold']):
             for putative in self.queue:
-                distance = self.hammig(cluster['key'], putative['key'])
-                ratio = putative['abundance'] / cluster['abundance']
-                if ratio >= self.configuration['abundance ratio'] and distance <= threshold + 1:
-                    self.absorb(cluster, putative)
-                    del self.unique[cluster['key']]
-                    result = True
+                if putative['abundance'] < factor:
                     break
+                else:
+                    distance = hamming(cluster['key'], putative['key'])
+                    if putative['abundance'] >= factor and distance <= threshold + 1:
+                        self.absorb(cluster, putative)
+                        result = True
+                        break
             if result:
                 break
         return result
 
-class FastqFilter(object):
+class FastqFilteringReader(object):
     def __init__(self, configuration=None):
         self.log = logging.getLogger('Filter')
         self.configuration = {
             'forward path': None,
             'reverse path': None,
-            'merged path': None,
+            'paired': False,
+            'filtering': True,
             'quota': 128,
             'limit': None,
             'minimum read length': 133,
@@ -720,10 +700,10 @@ class FastqFilter(object):
         self.forward = None
         self.reverse = None
         self.merged = None
-        self.buffer = []
-        self.output = []
+        self.buffer = None
+        self.output = None
         self.eof = False
-        self.statitic = {
+        self.statistic = {
             'total': 0,
             'matched adapter': 0,
             'adapter mismatch': {},
@@ -771,8 +751,16 @@ class FastqFilter(object):
         return self.configuration['quota']
 
     @property
+    def paired(self):
+        return self.configuration['paired']
+
+    @property
+    def filtering(self):
+        return self.configuration['filtering']
+
+    @property
     def count(self):
-        return self.statitic['total']
+        return self.statistic['total']
 
     @property
     def size(self):
@@ -797,22 +785,28 @@ class FastqFilter(object):
     def open(self):
         self.buffer = []
         self.output = []
-        self.forward = io.open(self.configuration['forward path'], 'r')
-        self.reverse = io.open(self.configuration['reverse path'], 'r')
-        if self.configuration['merged path'] is not None:
-            self.merged = io.open(self.configuration['merged path'], 'w')
+        if self.configuration['forward path'] is not None:
+            self.forward = io.open(self.configuration['forward path'], 'r')
         else:
-            self.merged = sys.stdout
+            self.forward = sys.stdin
+
+        if self.configuration['reverse path'] is not None:
+            self.reverse = io.open(self.configuration['reverse path'], 'r')
+
+        if self.forward is not None and self.reverse is not None:
+            self.configuration['paired'] = True
+
+        self.merged = sys.stdout
 
     def close(self):
-        if self.forward is not None:
+        if self.configuration['forward path'] is not None:
             self.forward.close()
 
-        if self.reverse is not None:
+        if self.configuration['reverse path'] is not None:
             self.reverse.close()
 
-        if self.configuration['merged path'] is not None:
-            self.merged.close()
+        self.buffer = None
+        self.output = None
 
     def read(self, file):
         state = 0
@@ -862,31 +856,43 @@ class FastqFilter(object):
         self.buffer = []
         self.output = []
         while not self.full and not self.eof:
-            sample =  {
-                'forward': self.read(self.forward),
-                'reverse': self.read(self.reverse)
-            }
-            if sample['forward'] and sample['reverse']:
-                fid = sample['forward']['id'].split()[0]
-                rid = sample['reverse']['id'].split()[0]
-                if fid == rid:
-                    sample['id'] = sample['forward']['id'].split()[0]
-                    sample['forward']['origin'] = 'forward'
-                    sample['reverse']['origin'] = 'reverse'
-                    self.buffer.append(sample)
-                else:
-                    raise ValueError('forward and reverse read don\'t match %s %s', fid, rid)
+            sample = None
+            forward = self.read(self.forward)
+            if forward:
+                forward['origin'] = 'forward'
+                sample =  {
+                    'forward': forward,
+                    'id': forward['id'].split()[0],
+                }
+
+                if self.paired:
+                    reverse = self.read(self.reverse)
+                    if reverse:
+                        reverse['origin'] = 'reverse'
+                        sample['reverse'] = reverse
+                        if forward['id'].split()[0] != reverse['id'].split()[0]:
+                            raise ValueError('forward and reverse read don\'t match {} {}'.format(forward['id'], reverse['id']))
+                    else:
+                        raise ValueError('missing matching reverse read for {}'.format(forward['id']))
+
+            if sample is not None:
+                self.buffer.append(sample)
 
         self.process_buffer()
-        self.statitic['total'] += len(self.buffer)
+        self.statistic['total'] += len(self.buffer)
         return self.size > 0
 
     def process_buffer(self):
-        for sample in self.buffer:
-            self.locate_adapter(sample['forward'])
-            self.locate_adapter(sample['reverse'])
-            self.merge_sample(sample)
-            self.pick_sample(sample)
+        if self.filtering:
+            for sample in self.buffer:
+                self.locate_adapter(sample['forward'])
+                if self.paired:
+                    self.locate_adapter(sample['reverse'])
+                    self.merge_sample(sample)
+                self.pick_sample(sample)
+        else:
+            for sample in self.buffer:
+                self.place_in_output(sample['forward'])
 
     def locate_adapter(self, segment):
         taken = False
@@ -899,7 +905,7 @@ class FastqFilter(object):
     def find_adapter(self, segment, adapter):
         taken = False
         if self.configuration['reverse adapter scan']:
-            right = len(segment['nucleotide'])
+            right = segment['length']
             left = right - len(adapter)
             while left >= 0:
                 if self.match_adapter(segment, adapter, left, right):
@@ -977,44 +983,44 @@ class FastqFilter(object):
         return result
 
     def report_adapter(self, segment, adapter):
-        self.statitic['matched adapter'] += 1
+        self.statistic['matched adapter'] += 1
 
-        if adapter['score'] not in self.statitic['adapter score']:
-            self.statitic['adapter score'][adapter['score']] = 0
-        self.statitic['adapter score'][adapter['score']] += 1
+        if adapter['score'] not in self.statistic['adapter score']:
+            self.statistic['adapter score'][adapter['score']] = 0
+        self.statistic['adapter score'][adapter['score']] += 1
 
-        if adapter['distance'] not in self.statitic['adapter mismatch']:
-            self.statitic['adapter mismatch'][adapter['distance']] = 0
-        self.statitic['adapter mismatch'][adapter['distance']] += 1
+        if adapter['distance'] not in self.statistic['adapter mismatch']:
+            self.statistic['adapter mismatch'][adapter['distance']] = 0
+        self.statistic['adapter mismatch'][adapter['distance']] += 1
 
-        if adapter['length'] not in self.statitic['adapter overlap']:
-            self.statitic['adapter overlap'][adapter['length']] = 0
-        self.statitic['adapter overlap'][adapter['length']] += 1
+        if adapter['length'] not in self.statistic['adapter overlap']:
+            self.statistic['adapter overlap'][adapter['length']] = 0
+        self.statistic['adapter overlap'][adapter['length']] += 1
 
         self.log.debug('%s found adapter %s at position %s with %s mismatch', segment['id'], adapter['nucleotide'], adapter['start'], adapter['distance'])
 
     def report_merge(self, sample):
-        self.statitic['merged'] += 1
+        self.statistic['merged'] += 1
 
         score = round(sample['merged']['score'] / 10) * 10
-        if score not in self.statitic['merged score']:
-            self.statitic['merged score'][score] = 0
-        self.statitic['merged score'][score] += 1
+        if score not in self.statistic['merged score']:
+            self.statistic['merged score'][score] = 0
+        self.statistic['merged score'][score] += 1
 
         mismatch = round(sample['merged']['mismatch'] / 10) * 10
-        if mismatch not in self.statitic['merged mismatch']:
-            self.statitic['merged mismatch'][mismatch] = 0
-        self.statitic['merged mismatch'][mismatch] += 1
+        if mismatch not in self.statistic['merged mismatch']:
+            self.statistic['merged mismatch'][mismatch] = 0
+        self.statistic['merged mismatch'][mismatch] += 1
 
         overlap = round(sample['merged']['overlap'] / 10) * 10
-        if overlap not in self.statitic['merged overlap']:
-            self.statitic['merged overlap'][overlap] = 0
-        self.statitic['merged overlap'][overlap] += 1
+        if overlap not in self.statistic['merged overlap']:
+            self.statistic['merged overlap'][overlap] = 0
+        self.statistic['merged overlap'][overlap] += 1
 
         offset = round(sample['merged']['offset'] / 10) * 10
-        if offset not in self.statitic['merged offset']:
-            self.statitic['merged offset'][offset] = 0
-        self.statitic['merged offset'][offset] += 1
+        if offset not in self.statistic['merged offset']:
+            self.statistic['merged offset'][offset] = 0
+        self.statistic['merged offset'][offset] += 1
 
         self.log.debug('%s merged at offset %s with score %s', sample['merged']['id'], sample['merged']['offset'], sample['merged']['score'])
 
@@ -1100,23 +1106,27 @@ class FastqFilter(object):
 
     def pick_sample(self, sample):
         picked = None
-        if 'merged' in sample:
-            self.trim_segment(sample['merged'])
-            picked = sample['merged']
+        if self.paired:
+            if 'merged' in sample:
+                self.trim_segment(sample['merged'])
+                picked = sample['merged']
 
-        elif self.configuration['retain unmerged']:
-            self.trim_segment(sample['forward'])
-            self.trim_segment(sample['reverse'])
-            if  sample['forward']['expected error'] < sample['reverse']['expected error'] and \
-                sample['forward']['length'] >= self.configuration['minimum read length']:
-                picked = copy.deepcopy(sample['forward'])
+            elif self.configuration['retain unmerged']:
+                self.trim_segment(sample['forward'])
+                self.trim_segment(sample['reverse'])
+                if  sample['forward']['expected error'] < sample['reverse']['expected error'] and \
+                    sample['forward']['length'] >= self.configuration['minimum read length']:
+                    picked = sample['forward']
 
-            elif sample['reverse']['length'] >= self.configuration['minimum read length']:
-                picked = self.complement_segment(sample['reverse'])
-                # if we use the reverse read we need to directionally trim it again
-                self.trim_segment(picked)
+                elif sample['reverse']['length'] >= self.configuration['minimum read length']:
+                    picked = self.complement_segment(sample['reverse'])
+                    # if we use the reverse read we need to directionally trim it again
+                    self.trim_segment(picked)
+            else:
+                self.log.info('dropping unmerged read pair {}\n{}\n{}'.format(sample['id'], segment_to_fastq(sample['forward']), segment_to_fastq(sample['reverse'])))
         else:
-            self.log.info('dropping unmerged read pair {}\n{}\n{}'.format(sample['id'], segment_to_fastq(sample['forward']), segment_to_fastq(sample['reverse'])))
+            self.trim_segment(sample['forward'])
+            picked = copy.deepcopy(sample['forward'])
 
         # drop reads that are shorter than minimum
         if picked is not None and picked['length'] < self.configuration['minimum read length']:
@@ -1131,14 +1141,17 @@ class FastqFilter(object):
 
         if picked is not None:
             picked['id'] = sample['id']
-            for term in [
-                'effective length',
-                'effective start',
-                'effective end'
-            ]:
-                if term in picked:
-                    del picked[term]
-            self.output.append(picked)
+            self.place_in_output(picked)
+
+    def place_in_output(self, segment):
+        for term in [
+            'effective length',
+            'effective start',
+            'effective end'
+        ]:
+            if term in segment:
+                del segment[term]
+        self.output.append(segment)
 
     def trim_segment(self, segment):
         length = segment['length']
@@ -1246,54 +1259,42 @@ class FastqFilter(object):
     def complement_sequence(self, sequence):
         return ''.join([ self.configuration['reverse complement'][n] for n in sequence ][::-1])
 
-
 def process(configuration):
-    fastqFilter = FastqFilter(
-        {
-            'forward path': configuration['forward path'],
-            'reverse path': configuration['reverse path'],
-            'limit': configuration['limit'],
-        }
-    )
-    sequenceDenoiser = SequenceDenoiser(
-        {
-            'output path': configuration['output path'],
-        }
-    )
+    fastqFilter = FastqFilteringReader(configuration)
+    sequenceDenoiser = SequenceDenoiser(configuration)
 
     sequenceDenoiser.open()
-
     fastqFilter.open()
+
     while fastqFilter.fill() and not fastqFilter.enough:
         # fastqFilter.write()
         for sample in fastqFilter.output:
             sequenceDenoiser.add(sample)
+
     fastqFilter.close()
+    sys.stderr.write(to_json(fastqFilter.statistic))
+    fastqFilter = None
 
     sequenceDenoiser.denoise()
     sequenceDenoiser.write()
     sequenceDenoiser.close()
-    sys.stderr.write(to_json(fastqFilter.statitic))
 
 def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
+    configuration = {
+        'limit': None,
+        'filtering': False,
+    }
+
+    if len(sys.argv) > 1:
+        configuration['forward path'] = sys.argv[1]
 
     if len(sys.argv) > 2:
-        configuration = {
-            'forward path': sys.argv[1],
-            'reverse path': sys.argv[2],
-            'output path': None,
-            'limit': None,
-        }
-        if len(sys.argv) > 3:
-            configuration['output path'] = sys.argv[3]
+        configuration['reverse path'] = sys.argv[2],
 
-        process(configuration)
-        sys.exit(0)
-    else:
-        print('usage: mergeseq <first fastq> <second fastq> <merged fastq>')
-        sys.exit(1)
+    process(configuration)
+    sys.exit(0)
 
 if __name__ == '__main__':
     main()
