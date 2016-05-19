@@ -1,0 +1,176 @@
+Bootstrapping a system
+----------------------------------------------------------------------------------------------
+* populating a json encoded gene repertoire file
+    somatic populate c57bl6.json
+
+* aligning genes with 300bp flanking to the reference genome
+    somatic align --flanking 300
+
+* validating and correcting RSS with 60bp flanking and 9bp leniency 
+    somatic rss --flanking 60 --distance 9
+
+* optionally generating HTML files with gene annotations
+    somatic gene --format html --region VH --title "c57bl6 IGHV" > vh.html
+    somatic gene --format html --region DH --title "c57bl6 IGHD" > dh.html
+    somatic gene --format html --region JH --title "c57bl6 IGHJ" > jh.html
+
+ * generating gene family fasta files for alignment
+    somatic gene --format fasta --region JH > mouse_ighj
+    somatic gene --format fasta --region VH > mouse_ighv
+    somatic gene --format fasta --region DH > mouse_ighd
+
+ * generating blastdb files for igblast
+    makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_jh -in mouse_ighj
+    makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_vh -in mouse_ighv
+    makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_dh -in mouse_ighd
+
+* optionally generating annotated gene files with alignments
+    somatic gene --format json --region VH > vh.json
+    somatic gene --format json --region DH > dh.json 
+    somatic gene --format json --region JH > jh.json 
+
+Read demultiplexing, Quality filtering and controlling sequencing and PCR amplification errors 
+----------------------------------------------------------------------------------------------
+merging forward and reverse overlapping amplicon reads
+----------------------------------------------------------------------------------------------
+* reads are anchored at the sequence baited by the primer
+* identifying technical illumina adapter sequences on 3 prime end of both forward and reverse reads
+* merging from the base of the forward read to the forward adapter, ignoring potential reverse adapter on the reverse complement of the reverse read
+* quality trimming 3 prime end of the merged read
+* filtering reads that shorter than the threshold
+* filtering reads with expected error rate below the threshold
+    somatic merge A1Y58_l01n01_c57bl6_spf_iabm_b01t01.fastq A1Y58_l01n02_c57bl6_spf_iabm_b01t01.fastq > A1Y58_c57bl6_spf_iabm_b01t01.fastq
+
+collapsing duplicate reads and denoising
+----------------------------------------------------------------------------------------------
+* trimming all reads to a fixed length
+* collapsing exact sequences into a cluster
+* cluster phred quality scores are averaged over instances
+* sort cluster queue by abundance/expected error
+* declare every cluster with abundance above threshold putative
+* iterate clusters from the bottom against the top and absorb into cluster if hamming distance is bellow threshold and relative abundance is above threshold
+* repeat until convergence or specified iteration count
+    cat A1Y58_c57bl6_spf_iabm_b01t01.fastq | somatic filter > A1Y58_c57bl6_spf_iabm_b01t01_filtered.fastq 
+* read id comment is annotated with abundance
+
+populating data
+----------------------------------------------------------------------------------------------
+* creating a json library annotation file and populating the library list
+    somatic libraryPopulate library_c57bl6.json
+
+* populating samples from library fastq files
+    cat A1Y58_c57bl6_spf_iabm_b01t01.fastq|somatic samplePopulate -l spf_iabm_b01t01
+----------------------------------------------------------------------------------------------
+
+
+
+
+
+Sample analysis
+----------------------------------------------------------------------------------------------
+alignment with igblast
+----------------------------------------------------------------------------------------------
+* align VH gene --> remove from read
+* align to JH gene --> remove from read
+* align to DH gene 
+
+pick a JH gene
+----------------------------------------------------------------------------------------------
+* minimum identity 80%
+* minimum alignment length 30
+
+pick a VH gene
+----------------------------------------------------------------------------------------------
+* minimum identity 70%
+* minimum alignment length 45
+
+pick a DH gene
+----------------------------------------------------------------------------------------------
+* minimum identity 70%
+* minimum alignment length 4
+* penalize DH overlap with VH or JH by removing ( overlap * 0.5) from the score
+* trim overlap from the alignment
+
+all 3 regions
+----------------------------------------------------------------------------------------------
+* if read frame already established use it otherwise use the gene's read frame. first picked gene sets the global read frame.
+* sort by score. if only one has a maximum score pick it otherwise take group with maximum score
+* use the read frame compare codon mismatch. if only one has min mismatch pick it otherwise pick the min mismatch group
+* if some are functional and some are not pick the functional.
+* who ever remains is picked.
+
+check if sequence is in frame
+----------------------------------------------------------------------------------------------
+* if VH and JH are in the same reading frame the rearrangement is in frame.
+
+analyze junctions
+----------------------------------------------------------------------------------------------
+* in sequences with an identified DH analyze the VD and DJ junctions
+* in sequences without a DH analyze the VJ junction
+* in every junction annotate which nucleotides are palindromic and which are non template
+
+CDR3 analysis
+----------------------------------------------------------------------------------------------
+* use annotated position from VH gene reference to locate the position of the structural 104 Cystine on the V gene
+* verify the structural 104 Cyctine is conserved in the established read frame and annotate
+* use annotated position from JH gene reference to locate the position of the structural Tryptophan on the J gene
+* verify the structural Tryptophan is conserved in the established read frame and annotate
+* annotate the established CDR3 sequence and annotate weight and charge
+
+Chewback analysis
+----------------------------------------------------------------------------------------------
+* compare 3 prime end of the alignment on VH and DH gene and annotate chewed nucleotides
+* compare 5 prime end of the alignment on JH and DH gene and annotate chewed nucleotides
+
+Check for stop codons 
+----------------------------------------------------------------------------------------------
+* check the entire product for stop codons in the established read frame
+
+Annotate productivity
+----------------------------------------------------------------------------------------------
+* both VH and JH genes were identified
+* CDR3 region was identified
+* rearrangement is in frame, meaning both JH and VH are in the same reading frame
+* no stop codons are encoded in the sequence
+* pickd VH and JH genes are annotated productive
+* both Cyctine and Tryptophan framing the CDR3 are conserved
+
+Read quality analysis
+----------------------------------------------------------------------------------------------
+* check quality on bases that mismatch the reference gene and calculate expected error probability for those bases
+
+
+
+
+Data analysis
+----------------------------------------------------------------------------------------------
+
+Sample alignment diagrams
+----------------------------------------------------------------------------------------------
+* display annotated alignment with established read frame or pseudo read frame for pseudo genes and out of frame rearrangements
+* query alignments by library, productivity, framenes, palindromic and non template junction composition and potentially any other feature.
+* pick tracks to be displayed on diagram 
+* tracks for junctions and CDR3
+* read quality annotation and abundance
+* extremely useful for fine tunning parameters and thresholds
+
+Sample export
+----------------------------------------------------------------------------------------------
+* sample queries can be exported to fastq, fasta and json
+
+Study parameters
+----------------------------------------------------------------------------------------------
+* pivot on VH, JH, DH, CDR3 nucleotide, CDR3 codon, effective nucleotide, effective codon, VH familiy, DH family, Read ID
+* at each pivoting layer in the graph the residual distributions are collected for each feature
+* cdr3 charge, cdr3 length, cdr3 weight,
+* total chew, d3 chew, d5 chew, v3 chew, j5 chew
+* dj length, vd length, vj length, 
+* dj n count, dj p count, n count, p count, vd n count, vd p count, vj n count, vj p count
+* expected error, expected error on mismatch, expected error on mismatch in cdr3
+* cdr3 low 4 phred, cdr3 min phred, effective low 4 phred, effective min phred
+
+Study output
+----------------------------------------------------------------------------------------------
+* study can be exported in CSV format for easy consumption and plotting in R
+* can be exported in full structure to json for loading in downstream code
+* expression can be exported tiled on genome coordinates  

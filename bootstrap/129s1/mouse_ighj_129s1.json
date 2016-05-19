@@ -14,7 +14,7 @@
         "identified": true, 
         "length": 53, 
         "organism name": "mus musculus", 
-        "region": "JH", 
+        "region": "jh", 
         "sequence": {
             "nucleotide": "CTACTGGTACTTCGATGTCTGGGGCGCAGGGACCACGGTCACCGTCTCCTCAG", 
             "read frame": 1, 
@@ -38,7 +38,7 @@
         "identified": true, 
         "length": 48, 
         "organism name": "mus musculus", 
-        "region": "JH", 
+        "region": "jh", 
         "sequence": {
             "nucleotide": "ACTACTTTGACTACTGGGGCCAAGGCACCACTCTCACAGTCTCCTCAG", 
             "read frame": 2, 
@@ -62,7 +62,7 @@
         "identified": true, 
         "length": 48, 
         "organism name": "mus musculus", 
-        "region": "JH", 
+        "region": "jh", 
         "sequence": {
             "nucleotide": "CCTGGTTTGCTTACTGGGGCCAAGGGACTCTGGTCACTGTCTCTGCAG", 
             "read frame": 2, 
@@ -86,7 +86,7 @@
         "identified": true, 
         "length": 54, 
         "organism name": "mus musculus", 
-        "region": "JH", 
+        "region": "jh", 
         "sequence": {
             "nucleotide": "ATTACTATGCTATGGACTACTGGGGTCAAGGAACCTCAGTCACCGTCTCCTCAG", 
             "read frame": 2, 

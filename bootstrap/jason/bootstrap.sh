@@ -1,6 +1,6 @@
 #!/bin/bash
 VERBOSITY="debug"
-STRAIN="C57BL/6"
+STRAIN="c57bl6"
 BASE="/Users/lg/Sites/secret/860ced9a-374a-4dba-9abe-c331504ff6d0"
 
 [ -d "$BASE/db" ] || mkdir -p "$BASE/db"

@@ -6,7 +6,7 @@ Bootstrap the system
 somatic rebuild
 ```
 
-**Load genes for C57BL/6**
+**Load genes for c57bl6**
 ```
 somatic gene-populate bootstrap/mouse_ighd.json 
 somatic gene-populate bootstrap/mouse_ighj.json 
@@ -16,14 +16,14 @@ somatic gene-populate bootstrap/mouse_ighv_extra.json
 
 **Align the genes to the reference with up to 200bp flanking sequences**
 ```
-somatic gene-align -F 200 --strain 'C57BL/6'
+somatic gene-align -F 200 --strain 'c57bl6'
 ```
 
-**Create FASTA files with the C57BL/6 genes**
+**Create FASTA files with the c57bl6 genes**
 ```
-somatic gene-fasta --strain 'C57BL/6' -r JH -p aligned > db/igblast/database/mouse_c57bl6_ighj
-somatic gene-fasta --strain 'C57BL/6' -r VH -p aligned > db/igblast/database/mouse_c57bl6_ighv
-somatic gene-fasta --strain 'C57BL/6' -r DH -p aligned > db/igblast/database/mouse_c57bl6_ighd
+somatic gene-fasta --strain 'c57bl6' -r JH -p aligned > db/igblast/database/mouse_c57bl6_ighj
+somatic gene-fasta --strain 'c57bl6' -r VH -p aligned > db/igblast/database/mouse_c57bl6_ighv
+somatic gene-fasta --strain 'c57bl6' -r DH -p aligned > db/igblast/database/mouse_c57bl6_ighd
 ```
 
 **Generate an igblast database**
@@ -32,14 +32,14 @@ makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_jh -i
 makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_vh -in db/igblast/database/mouse_c57bl6_ighv
 makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_dh -in db/igblast/database/mouse_c57bl6_ighd
 
-somatic gene-igblast-aux -r VH --strain 'C57BL/6' >  db/igblast/optional_file/mouse_gl.aux
-somatic gene-igblast-aux -r DH --strain 'C57BL/6' >> db/igblast/optional_file/mouse_gl.aux
-somatic gene-igblast-aux -r JH --strain 'C57BL/6' >> db/igblast/optional_file/mouse_gl.aux
+somatic gene-igblast-aux -r VH --strain 'c57bl6' >  db/igblast/optional_file/mouse_gl.aux
+somatic gene-igblast-aux -r DH --strain 'c57bl6' >> db/igblast/optional_file/mouse_gl.aux
+somatic gene-igblast-aux -r JH --strain 'c57bl6' >> db/igblast/optional_file/mouse_gl.aux
 ```
 
 Load a sample
 =============
-```zcat "A4G6U l01n01 b6_spf_preb_2.fastq.gz" | somatic populate --strain C57BL/6 --library c57bl6b02t01spfpreb```
+```zcat "A4G6U l01n01 b6_spf_preb_2.fastq.gz" | somatic populate --strain c57bl6 --library c57bl6b02t01spfpreb```
 
 Look at an alignment diagram
 ============================
@@ -66,7 +66,7 @@ Inspect a complete record
 ```json
 {
     "_id": "55511bf4a9605a812edb5d75",
-    "framed by": "IGHJ1*01-C57BL/6",
+    "framed by": "IGHJ1*01-c57bl6",
     "head": {
         "CDR3 length": 51,
         "D-J length": 3,
@@ -85,10 +85,10 @@ Inspect a complete record
         "premature": false,
         "productive": true,
         "region": [
-            "DSP2.2*01-C57BL/6",
-            "IGHJ1*01-C57BL/6",
+            "DSP2.2*01-c57bl6",
+            "IGHJ1*01-c57bl6",
             "D-J",
-            "J558.16.106*01-C57BL/6",
+            "J558.16.106*01-c57bl6",
             "CDR3",
             "V-D"
         ],
@@ -120,16 +120,16 @@ Inspect a complete record
             },
             "query end": 68,
             "query start": 0,
-            "region": "VH",
+            "region": "vh",
             "score": 107.0,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
                 "read frame": 2,
                 "strand": true
             },
             "subject end": 294,
-            "subject id": "J558.16.106*01-C57BL/6",
+            "subject id": "J558.16.106*01-c57bl6",
             "subject start": 226,
             "subject strand": true,
             "uuid": "010900c4-d97a-4c73-96f8-cbd9ec702749",
@@ -159,16 +159,16 @@ Inspect a complete record
             },
             "query end": 68,
             "query start": 0,
-            "region": "VH",
+            "region": "vh",
             "score": 104.0,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
                 "read frame": 2,
                 "strand": true
             },
             "subject end": 294,
-            "subject id": "J558.26.116*01-C57BL/6",
+            "subject id": "J558.26.116*01-c57bl6",
             "subject start": 226,
             "subject strand": true,
             "uuid": "34f6deb0-a6bb-4693-985a-8185bcd7bdf9",
@@ -198,16 +198,16 @@ Inspect a complete record
             },
             "query end": 68,
             "query start": 0,
-            "region": "VH",
+            "region": "vh",
             "score": 104.0,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
                 "read frame": 2,
                 "strand": true
             },
             "subject end": 294,
-            "subject id": "J558.34.124*01-C57BL/6",
+            "subject id": "J558.34.124*01-c57bl6",
             "subject start": 226,
             "subject strand": true,
             "uuid": "221667e0-93bc-4ca4-af52-8f63510fff0d",
@@ -244,16 +244,16 @@ Inspect a complete record
             },
             "query end": 86,
             "query start": 74,
-            "region": "DH",
+            "region": "dh",
             "score": 24.4,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "TATGATTACGAC",
                 "read frame": 1,
                 "strand": true
             },
             "subject end": 17,
-            "subject id": "DSP2.2*01-C57BL/6",
+            "subject id": "DSP2.2*01-c57bl6",
             "subject start": 5,
             "subject strand": true,
             "uuid": "5a5e18ec-047b-4f58-ba86-656d87d5cbc1",
@@ -294,16 +294,16 @@ Inspect a complete record
             },
             "query end": 89,
             "query start": 86,
-            "region": "DH",
+            "region": "dh",
             "score": 12.4,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "GGT",
                 "read frame": 1,
                 "strand": true
             },
             "subject end": 11,
-            "subject id": "DSP2.9*01-C57BL/6",
+            "subject id": "DSP2.9*01-c57bl6",
             "subject start": 8,
             "subject strand": true,
             "uuid": "b2f22881-0fa5-4927-bada-b30d3c04f676",
@@ -339,16 +339,16 @@ Inspect a complete record
             },
             "query end": 86,
             "query start": 79,
-            "region": "DH",
+            "region": "dh",
             "score": 14.4,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "TTACGAC",
                 "read frame": 2,
                 "strand": true
             },
             "subject end": 17,
-            "subject id": "DSP2.3*01-C57BL/6",
+            "subject id": "DSP2.3*01-c57bl6",
             "subject start": 10,
             "subject strand": true,
             "uuid": "d0147038-2bf9-461f-9b68-80780c9c9053",
@@ -389,16 +389,16 @@ Inspect a complete record
             },
             "query end": 80,
             "query start": 74,
-            "region": "DH",
+            "region": "dh",
             "score": 12.4,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "TATGAT",
                 "read frame": 1,
                 "strand": true
             },
             "subject end": 8,
-            "subject id": "DSP2.9*01-C57BL/6",
+            "subject id": "DSP2.9*01-c57bl6",
             "subject start": 2,
             "subject strand": true,
             "uuid": "dbe155c4-1c65-4f3b-ad3b-5439840840fb",
@@ -439,16 +439,16 @@ Inspect a complete record
             },
             "query end": 89,
             "query start": 86,
-            "region": "DH",
+            "region": "dh",
             "score": 10.9,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "GGT",
                 "read frame": 1,
                 "strand": true
             },
             "subject end": 11,
-            "subject id": "DSP2.3*01-C57BL/6",
+            "subject id": "DSP2.3*01-c57bl6",
             "subject start": 8,
             "subject strand": true,
             "uuid": "f097bf08-a2c4-4e77-8ade-6fb3d40f78d3",
@@ -484,16 +484,16 @@ Inspect a complete record
             },
             "query end": 141,
             "query start": 89,
-            "region": "JH",
+            "region": "jh",
             "score": 103.0,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "TACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG",
                 "read frame": 0,
                 "strand": true
             },
             "subject end": 53,
-            "subject id": "IGHJ1*01-C57BL/6",
+            "subject id": "IGHJ1*01-c57bl6",
             "subject start": 1,
             "subject strand": true,
             "uuid": "d1fe985e-b81a-4d58-a60d-daa858a44969",
@@ -528,16 +528,16 @@ Inspect a complete record
             },
             "query end": 113,
             "query start": 106,
-            "region": "JH",
+            "region": "jh",
             "score": 14.4,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "CTGGGGC",
                 "read frame": 1,
                 "strand": true
             },
             "subject end": 20,
-            "subject id": "IGHJ3*01-C57BL/6",
+            "subject id": "IGHJ3*01-c57bl6",
             "subject start": 13,
             "subject strand": true,
             "uuid": "83c1b70a-177c-4c64-a2ef-5de07b61c4e5",
@@ -572,16 +572,16 @@ Inspect a complete record
             },
             "query end": 95,
             "query start": 88,
-            "region": "JH",
+            "region": "jh",
             "score": 14.4,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "TTACTGG",
                 "read frame": 1,
                 "strand": true
             },
             "subject end": 17,
-            "subject id": "IGHJ3*01-C57BL/6",
+            "subject id": "IGHJ3*01-c57bl6",
             "subject start": 10,
             "subject strand": true,
             "uuid": "dc9be552-684d-452b-a703-be59edb48d97",
@@ -622,7 +622,7 @@ Inspect a complete record
             "subject id": "D-J",
             "subject strand": true
         },
-        "DH": {
+        "dh": {
             "5 chew": {
                 "nucleotide": "TCTAC",
                 "read frame": 0,
@@ -653,22 +653,22 @@ Inspect a complete record
             },
             "query end": 86,
             "query start": 74,
-            "region": "DH",
+            "region": "dh",
             "score": 24.4,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "TATGATTACGAC",
                 "read frame": 1,
                 "strand": true
             },
             "subject end": 17,
-            "subject id": "DSP2.2*01-C57BL/6",
+            "subject id": "DSP2.2*01-c57bl6",
             "subject start": 5,
             "subject strand": true,
             "uuid": "5a5e18ec-047b-4f58-ba86-656d87d5cbc1",
             "valid": true
         },
-        "JH": {
+        "jh": {
             "5 chew": {
                 "nucleotide": "C",
                 "read frame": 1,
@@ -698,16 +698,16 @@ Inspect a complete record
             },
             "query end": 141,
             "query start": 89,
-            "region": "JH",
+            "region": "jh",
             "score": 103.0,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "TACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG",
                 "read frame": 0,
                 "strand": true
             },
             "subject end": 53,
-            "subject id": "IGHJ1*01-C57BL/6",
+            "subject id": "IGHJ1*01-c57bl6",
             "subject start": 1,
             "subject strand": true,
             "uuid": "d1fe985e-b81a-4d58-a60d-daa858a44969",
@@ -730,7 +730,7 @@ Inspect a complete record
             "subject id": "V-D",
             "subject strand": true
         },
-        "VH": {
+        "vh": {
             "alignment length": 68,
             "allele": "J558.16.106*01",
             "average phread": 34.64705882352941,
@@ -755,16 +755,16 @@ Inspect a complete record
             },
             "query end": 68,
             "query start": 0,
-            "region": "VH",
+            "region": "vh",
             "score": 107.0,
-            "strain": "C57BL/6",
+            "strain": "c57bl6",
             "subject": {
                 "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
                 "read frame": 2,
                 "strand": true
             },
             "subject end": 294,
-            "subject id": "J558.16.106*01-C57BL/6",
+            "subject id": "J558.16.106*01-c57bl6",
             "subject start": 226,
             "subject strand": true,
             "uuid": "010900c4-d97a-4c73-96f8-cbd9ec702749",

@@ -16,7 +16,7 @@
         "imgt gene name": "IGHJ1", 
         "length": 53, 
         "organism name": "mus musculus", 
-        "region": "JH", 
+        "region": "jh", 
         "sequence": {
             "nucleotide": "CTACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG", 
             "read frame": 1, 
@@ -40,7 +40,7 @@
         "identified": true, 
         "length": 48, 
         "organism name": "mus musculus", 
-        "region": "JH", 
+        "region": "jh", 
         "sequence": {
             "nucleotide": "ACTACTTTGACTACTGGGGCCAAGGCACCACTCTCACAGTCTCCTCAG", 
             "read frame": 2, 
@@ -64,7 +64,7 @@
         "identified": true, 
         "length": 48, 
         "organism name": "mus musculus", 
-        "region": "JH", 
+        "region": "jh", 
         "sequence": {
             "nucleotide": "CCTGGTTTGCTTACTGGGGCCAAGGGACTCTGGTCACTGTCTCTGCAG", 
             "read frame": 2, 
@@ -88,7 +88,7 @@
         "identified": true, 
         "length": 54, 
         "organism name": "mus musculus", 
-        "region": "JH", 
+        "region": "jh", 
         "sequence": {
             "nucleotide": "ATTACTATGCTATGGACTACTGGGGTCAAGGAACCTCAGTCACCGTCTCCTCAG", 
             "read frame": 2, 

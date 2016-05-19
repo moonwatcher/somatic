@@ -27,18 +27,18 @@ theme (
 ggsave(diagram_filename, plot = intensity_plot, width = 16, height = length(unique(intensity$study)) * 3, limitsize=FALSE)
 
 
-h = read.csv('vhhamming', sep=',')
-m <- as.matrix(h)
-# m <- as.matrix(scale(h))
-d = hclust(as.dist(m))
-c <- m[d$order, d$order]
-p <- ggplot(melt(c), aes(x=Var1, y=Var2, fill=value)) + 
-geom_tile(colour = "white") +
-theme (
-    axis.text.y = element_text(size = rel(0.5)),
-    axis.text.x = element_text(size = rel(0.5)),
-    axis.title = element_text(size = rel(0.5), color="#111111"),
-    panel.background = element_rect(colour = "#FFFFFF", fill="#FFFFFF")
-) +
-scale_fill_gradient(low = "white", high = "steelblue")
-ggsave('vhheatmap.png', plot = p, width = 14, height = 12, limitsize=FALSE)
+# h = read.csv('vhhamming', sep=',')
+# m <- as.matrix(h)
+# # m <- as.matrix(scale(h))
+# d = hclust(as.dist(m))
+# c <- m[d$order, d$order]
+# p <- ggplot(melt(c), aes(x=Var1, y=Var2, fill=value)) + 
+# geom_tile(colour = "white") +
+# theme (
+#     axis.text.y = element_text(size = rel(0.5)),
+#     axis.text.x = element_text(size = rel(0.5)),
+#     axis.title = element_text(size = rel(0.5), color="#111111"),
+#     panel.background = element_rect(colour = "#FFFFFF", fill="#FFFFFF")
+# ) +
+# scale_fill_gradient(low = "white", high = "steelblue")
+# ggsave('vhheatmap.png', plot = p, width = 14, height = 12, limitsize=FALSE)

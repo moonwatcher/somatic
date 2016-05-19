@@ -1,6 +1,6 @@
 #!/bin/bash
 VERBOSITY="debug"
-STRAIN="C57BL/6"
+STRAIN="c57bl6"
 BASE="/volume/albireo/canal/thesis"
 
 [ -d "$BASE/db" ] || mkdir -p "$BASE/db"

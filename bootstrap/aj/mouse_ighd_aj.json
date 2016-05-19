@@ -15,7 +15,7 @@
         "imgt allele name": "IGHD1-1*02", 
         "length": 23, 
         "organism name": "mus musculus", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "TTTATTACTATGGTGGTAGCTAC", 
             "read frame": 0, 

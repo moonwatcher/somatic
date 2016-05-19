@@ -15,7 +15,7 @@
         "imgt allele name": "IGHD1-3*01", 
         "length": 23, 
         "organism name": "mus musculus", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "TATATAACTAAAGTGGTAGCTCA", 
             "read frame": 0, 
@@ -40,7 +40,7 @@
         "imgt allele name": "IGHD2-14*01", 
         "length": 17, 
         "organism name": "mus musculus", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "CCTACTATAGGTACGAC", 
             "read frame": 0, 
@@ -65,7 +65,7 @@
         "length": 17, 
         "organism name": "mus musculus", 
         "read frame": "0", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "TCTACTATGATTACGAC", 
             "read frame": "0", 
@@ -90,7 +90,7 @@
         "length": 17, 
         "organism name": "mus musculus", 
         "read frame": "0", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "TCTACTATGATTACGAC", 
             "read frame": "0", 
@@ -115,7 +115,7 @@
         "imgt allele name": "IGHD2-1*01", 
         "length": 17, 
         "organism name": "mus musculus", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "TCTACTATGGTAACTAC", 
             "read frame": 0, 
@@ -140,7 +140,7 @@
         "imgt allele name": "IGHD2-11*02", 
         "length": 17, 
         "organism name": "mus musculus", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "CCTACTATGGTAACTAC", 
             "read frame": 0, 
@@ -165,7 +165,7 @@
         "imgt allele name": "IGHD2-10*02", 
         "length": 17, 
         "organism name": "mus musculus", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "CCTAGTATGGTAACTAC", 
             "read frame": 0, 
@@ -190,7 +190,7 @@
         "imgt allele name": "IGHD3-3*01", 
         "length": 17, 
         "organism name": "mus musculus", 
-        "region": "DH", 
+        "region": "dh", 
         "sequence": {
             "nucleotide": "GGGACAGCTAGGGCTGT", 
             "read frame": 0, 

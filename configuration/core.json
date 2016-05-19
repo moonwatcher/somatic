@@ -1,187 +1,911 @@
 {
     "command": {
         "blat": {
-            "arguments": [
-                "blat", 
-                null, 
-                "stdin", 
-                "stdout", 
-                "-noHead", 
-                "-minIdentity=98"
-            ]
+            "binary": "/Users/lg/code/somatic/bin/blat", 
+            "environment": {
+                "LANG": "en_US.UTF-8", 
+                "LC_CTYPE": "en_US.UTF-8", 
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 
+                "SHELL": "/bin/bash"
+            }
+        }, 
+        "bwa index": {
+            "binary": "bwa", 
+            "environment": {
+                "LANG": "en_US.UTF-8", 
+                "LC_CTYPE": "en_US.UTF-8", 
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 
+                "SHELL": "/bin/bash"
+            }, 
+            "sub command": "index"
+        }, 
+        "bwa mem": {
+            "binary": "bwa", 
+            "environment": {
+                "LANG": "en_US.UTF-8", 
+                "LC_CTYPE": "en_US.UTF-8", 
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 
+                "SHELL": "/bin/bash"
+            }, 
+            "sub command": "mem"
         }, 
         "igblast": {
-            "arguments": [
-                "igblastn", 
-                "-germline_db_V", 
-                "database/mouse_ighv", 
-                "-germline_db_J", 
-                "database/mouse_ighj", 
-                "-germline_db_D", 
-                "database/mouse_ighd", 
-                "-num_alignments_V", 
-                "3", 
-                "-num_alignments_J", 
-                "3", 
-                "-num_alignments_D", 
-                "5", 
-                "-organism", 
-                "mouse", 
-                "-domain_system", 
-                "imgt", 
-                "-query", 
-                "-", 
-                "-auxiliary_data", 
-                "optional_file/mouse_gl.aux", 
-                "-show_translation", 
-                "-outfmt", 
-                "7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand"
-            ], 
-            "cwd": null
+            "binary": "/Users/lg/code/somatic/bin/igblastn", 
+            "environment": {
+                "LANG": "en_US.UTF-8", 
+                "LC_CTYPE": "en_US.UTF-8", 
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 
+                "SHELL": "/bin/bash"
+            }, 
+            "parameter": {
+                "-domain_system": "imgt", 
+                "-outfmt": "7 qseqid sseqid qstart qend sstart send gapopen gaps mismatch pident bitscore evalue length sstrand", 
+                "-query": "-", 
+                "-show_translation": null
+            }
         }, 
-        "igblast.gapped": {
-            "arguments": [
-                "igblastn", 
-                "-germline_db_V", 
-                "database/mouse_ighv", 
-                "-germline_db_J", 
-                "database/mouse_ighj", 
-                "-germline_db_D", 
-                "database/mouse_ighd", 
-                "-num_alignments_V", 
-                "3", 
-                "-num_alignments_J", 
-                "3", 
-                "-num_alignments_D", 
-                "5", 
-                "-organism", 
-                "mouse", 
-                "-domain_system", 
-                "imgt", 
-                "-query", 
-                "-", 
-                "-auxiliary_data", 
-                "optional_file/mouse_gl.aux", 
-                "-show_translation", 
-                "-outfmt", 
-                "4"
-            ], 
-            "cwd": null
+        "makeblastdb": {
+            "binary": "/Users/lg/code/somatic/bin/makeblastdb", 
+            "environment": {
+                "LANG": "en_US.UTF-8", 
+                "LC_CTYPE": "en_US.UTF-8", 
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 
+                "SHELL": "/bin/bash"
+            }, 
+            "parameter": {
+                "-dbtype": "nucl", 
+                "-input_type": "fasta", 
+                "-parse_seqids": null
+            }
+        }, 
+        "rsync": {
+            "binary": "rsync", 
+            "environment": {
+                "LANG": "en_US.UTF-8", 
+                "LC_CTYPE": "en_US.UTF-8", 
+                "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 
+                "SHELL": "/bin/bash"
+            }
         }
     }, 
     "constant": {
-        "float accuracy": 3,
         "buffer size": 128, 
-        "fasta line length": 80
+        "fasta line length": 80, 
+        "float accuracy": 3
+    }, 
+    "enumeration": {
+        "iupac amino acid notation": {
+            "*": {
+                "code": "stop", 
+                "name": "Stop codon"
+            }, 
+            "A": {
+                "charge": 1.8, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "ala", 
+                "name": "Alanine", 
+                "weight": 89
+            }, 
+            "B": {
+                "code": "asx", 
+                "name": "Aspartic acid or Asparagine"
+            }, 
+            "C": {
+                "charge": 2.5, 
+                "class code": "P", 
+                "class name": "polar", 
+                "code": "cys", 
+                "name": "Cysteine", 
+                "weight": 121
+            }, 
+            "D": {
+                "charge": -3.5, 
+                "class code": "A", 
+                "class name": "acidic", 
+                "code": "asp", 
+                "name": "Aspartic acid", 
+                "weight": 133
+            }, 
+            "E": {
+                "charge": -3.5, 
+                "class code": "A", 
+                "class name": "acidic", 
+                "code": "glu", 
+                "name": "Glutamic acid", 
+                "weight": 147
+            }, 
+            "F": {
+                "charge": 2.8, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "phe", 
+                "name": "Phenylalanine", 
+                "weight": 165
+            }, 
+            "G": {
+                "charge": -0.4, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "gly", 
+                "name": "Glycine", 
+                "weight": 75
+            }, 
+            "H": {
+                "charge": -3.2, 
+                "class code": "B", 
+                "class name": "basic", 
+                "code": "his", 
+                "name": "Histidine", 
+                "weight": 155
+            }, 
+            "I": {
+                "charge": 4.5, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "ile", 
+                "name": "Isoleucine", 
+                "weight": 131
+            }, 
+            "J": {
+                "code": "xle", 
+                "name": "Leucine or Isoleucine"
+            }, 
+            "K": {
+                "charge": -3.9, 
+                "class code": "B", 
+                "class name": "basic", 
+                "code": "lys", 
+                "name": "Lysine", 
+                "weight": 146
+            }, 
+            "L": {
+                "charge": 3.8, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "leu", 
+                "name": "Leucine", 
+                "weight": 131
+            }, 
+            "M": {
+                "charge": 1.9, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "met", 
+                "name": "Methionine", 
+                "weight": 149
+            }, 
+            "N": {
+                "charge": -3.5, 
+                "class code": "P", 
+                "class name": "polar", 
+                "code": "asn", 
+                "name": "Asparagine", 
+                "weight": 132
+            }, 
+            "P": {
+                "charge": -1.6, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "pro", 
+                "name": "Proline", 
+                "weight": 115
+            }, 
+            "Q": {
+                "charge": -3.5, 
+                "class code": "P", 
+                "class name": "polar", 
+                "code": "gln", 
+                "name": "Glutamine", 
+                "weight": 146
+            }, 
+            "R": {
+                "charge": -4.5, 
+                "class code": "B", 
+                "class name": "basic", 
+                "code": "arg", 
+                "name": "Arginine", 
+                "weight": 174
+            }, 
+            "S": {
+                "charge": -0.8, 
+                "class code": "P", 
+                "class name": "polar", 
+                "code": "ser", 
+                "name": "Serine", 
+                "weight": 105
+            }, 
+            "T": {
+                "charge": -0.7, 
+                "class code": "P", 
+                "class name": "polar", 
+                "code": "thr", 
+                "name": "Threonine", 
+                "weight": 119
+            }, 
+            "V": {
+                "charge": 4.2, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "val", 
+                "name": "Valine", 
+                "weight": 117
+            }, 
+            "W": {
+                "charge": -0.9, 
+                "class code": "N", 
+                "class name": "nonpolar", 
+                "code": "trp", 
+                "name": "Tryptophan", 
+                "weight": 204
+            }, 
+            "X": {
+                "code": "xaa", 
+                "name": "Any amino acid"
+            }, 
+            "Y": {
+                "charge": -1.3, 
+                "class code": "P", 
+                "class name": "polar", 
+                "code": "tyr", 
+                "name": "Tyrosine", 
+                "weight": 181
+            }, 
+            "Z": {
+                "code": "glx", 
+                "name": "Glutamine or Glutamic acid"
+            }
+        }, 
+        "iupac nucleic acid notation": {
+            "A": {
+                "name": "Adenine", 
+                "option": [
+                    "A"
+                ], 
+                "reverse": "T"
+            }, 
+            "B": {
+                "name": "Not A", 
+                "option": [
+                    "G", 
+                    "T", 
+                    "C"
+                ], 
+                "reverse": "V"
+            }, 
+            "C": {
+                "name": "Cytosine", 
+                "option": [
+                    "C"
+                ], 
+                "reverse": "G"
+            }, 
+            "D": {
+                "name": "Not C", 
+                "option": [
+                    "G", 
+                    "A", 
+                    "T"
+                ], 
+                "reverse": "H"
+            }, 
+            "G": {
+                "name": "Guanine", 
+                "option": [
+                    "G"
+                ], 
+                "reverse": "C"
+            }, 
+            "H": {
+                "name": "Not G", 
+                "option": [
+                    "A", 
+                    "C", 
+                    "T"
+                ], 
+                "reverse": "D"
+            }, 
+            "K": {
+                "name": "Keto", 
+                "option": [
+                    "G", 
+                    "T"
+                ], 
+                "reverse": "M"
+            }, 
+            "M": {
+                "name": "Amino", 
+                "option": [
+                    "A", 
+                    "C"
+                ], 
+                "reverse": "K"
+            }, 
+            "N": {
+                "name": "Any", 
+                "option": [
+                    "A", 
+                    "G", 
+                    "C", 
+                    "T"
+                ], 
+                "reverse": "N"
+            }, 
+            "R": {
+                "name": "Purine", 
+                "option": [
+                    "G", 
+                    "A"
+                ], 
+                "reverse": "Y"
+            }, 
+            "S": {
+                "name": "Strong bonds", 
+                "option": [
+                    "G", 
+                    "C"
+                ], 
+                "reverse": "S"
+            }, 
+            "T": {
+                "name": "Thymine", 
+                "option": [
+                    "T"
+                ], 
+                "reverse": "A"
+            }, 
+            "V": {
+                "name": "Not T", 
+                "option": [
+                    "G", 
+                    "C", 
+                    "A"
+                ], 
+                "reverse": "B"
+            }, 
+            "W": {
+                "name": "Weak bonds", 
+                "option": [
+                    "A", 
+                    "T"
+                ], 
+                "reverse": "W"
+            }, 
+            "Y": {
+                "name": "Pyrimidine", 
+                "option": [
+                    "T", 
+                    "C"
+                ], 
+                "reverse": "R"
+            }
+        }, 
+        "nucleic to amino": {
+            "AAA": "K", 
+            "AAC": "N", 
+            "AAG": "K", 
+            "AAT": "N", 
+            "ACA": "T", 
+            "ACC": "T", 
+            "ACG": "T", 
+            "ACT": "T", 
+            "AGA": "R", 
+            "AGC": "S", 
+            "AGG": "R", 
+            "AGT": "S", 
+            "ATA": "I", 
+            "ATC": "I", 
+            "ATG": "M", 
+            "ATT": "I", 
+            "CAA": "Q", 
+            "CAC": "H", 
+            "CAG": "Q", 
+            "CAT": "H", 
+            "CCA": "P", 
+            "CCC": "P", 
+            "CCG": "P", 
+            "CCT": "P", 
+            "CGA": "R", 
+            "CGC": "R", 
+            "CGG": "R", 
+            "CGT": "R", 
+            "CTA": "L", 
+            "CTC": "L", 
+            "CTG": "L", 
+            "CTT": "L", 
+            "GAA": "E", 
+            "GAC": "D", 
+            "GAG": "E", 
+            "GAT": "D", 
+            "GCA": "A", 
+            "GCC": "A", 
+            "GCG": "A", 
+            "GCT": "A", 
+            "GGA": "G", 
+            "GGC": "G", 
+            "GGG": "G", 
+            "GGT": "G", 
+            "GTA": "V", 
+            "GTC": "V", 
+            "GTG": "V", 
+            "GTT": "V", 
+            "TAA": "*", 
+            "TAC": "Y", 
+            "TAG": "*", 
+            "TAT": "Y", 
+            "TCA": "S", 
+            "TCC": "S", 
+            "TCG": "S", 
+            "TCT": "S", 
+            "TGA": "*", 
+            "TGC": "C", 
+            "TGG": "W", 
+            "TGT": "C", 
+            "TTA": "L", 
+            "TTC": "F", 
+            "TTG": "L", 
+            "TTT": "F"
+        }, 
+        "nucleotide substitution": {
+            "A": {
+                "A": 5, 
+                "B": -4, 
+                "C": -4, 
+                "D": -1, 
+                "G": -4, 
+                "H": -1, 
+                "K": -4, 
+                "M": 1, 
+                "N": -2, 
+                "R": 1, 
+                "S": -4, 
+                "T": -4, 
+                "V": -1, 
+                "W": 1, 
+                "Y": -4
+            }, 
+            "B": {
+                "A": -4, 
+                "B": -1, 
+                "C": -1, 
+                "D": -2, 
+                "G": -1, 
+                "H": -2, 
+                "K": -1, 
+                "M": -3, 
+                "N": -1, 
+                "R": -3, 
+                "S": -1, 
+                "T": -1, 
+                "V": -2, 
+                "W": -3, 
+                "Y": -1
+            }, 
+            "C": {
+                "A": -4, 
+                "B": -1, 
+                "C": 5, 
+                "D": -4, 
+                "G": -4, 
+                "H": -1, 
+                "K": -4, 
+                "M": 1, 
+                "N": -2, 
+                "R": -4, 
+                "S": 1, 
+                "T": -4, 
+                "V": -1, 
+                "W": -4, 
+                "Y": 1
+            }, 
+            "D": {
+                "A": -1, 
+                "B": -2, 
+                "C": -4, 
+                "D": -1, 
+                "G": -1, 
+                "H": -2, 
+                "K": -1, 
+                "M": -3, 
+                "N": -1, 
+                "R": -1, 
+                "S": -3, 
+                "T": -1, 
+                "V": -2, 
+                "W": -1, 
+                "Y": -3
+            }, 
+            "G": {
+                "A": -4, 
+                "B": -1, 
+                "C": -4, 
+                "D": -1, 
+                "G": 5, 
+                "H": -4, 
+                "K": 1, 
+                "M": -4, 
+                "N": -2, 
+                "R": 1, 
+                "S": 1, 
+                "T": -4, 
+                "V": -1, 
+                "W": -4, 
+                "Y": -4
+            }, 
+            "H": {
+                "A": -1, 
+                "B": -2, 
+                "C": -1, 
+                "D": -2, 
+                "G": -4, 
+                "H": -1, 
+                "K": -3, 
+                "M": -1, 
+                "N": -1, 
+                "R": -3, 
+                "S": -3, 
+                "T": -1, 
+                "V": -2, 
+                "W": -1, 
+                "Y": -1
+            }, 
+            "K": {
+                "A": -4, 
+                "B": -1, 
+                "C": -4, 
+                "D": -1, 
+                "G": 1, 
+                "H": -3, 
+                "K": -1, 
+                "M": -4, 
+                "N": -1, 
+                "R": -2, 
+                "S": -2, 
+                "T": 1, 
+                "V": -3, 
+                "W": -2, 
+                "Y": -2
+            }, 
+            "M": {
+                "A": 1, 
+                "B": -3, 
+                "C": 1, 
+                "D": -3, 
+                "G": -4, 
+                "H": -1, 
+                "K": -4, 
+                "M": -1, 
+                "N": -1, 
+                "R": -2, 
+                "S": -2, 
+                "T": -4, 
+                "V": -1, 
+                "W": -2, 
+                "Y": -2
+            }, 
+            "N": {
+                "A": -2, 
+                "B": -1, 
+                "C": -2, 
+                "D": -1, 
+                "G": -2, 
+                "H": -1, 
+                "K": -1, 
+                "M": -1, 
+                "N": -1, 
+                "R": -1, 
+                "S": -1, 
+                "T": -2, 
+                "V": -1, 
+                "W": -1, 
+                "Y": -1
+            }, 
+            "R": {
+                "A": 1, 
+                "B": -3, 
+                "C": -4, 
+                "D": -1, 
+                "G": 1, 
+                "H": -3, 
+                "K": -2, 
+                "M": -2, 
+                "N": -1, 
+                "R": -1, 
+                "S": -2, 
+                "T": -4, 
+                "V": -1, 
+                "W": -2, 
+                "Y": -4
+            }, 
+            "S": {
+                "A": -4, 
+                "B": -1, 
+                "C": 1, 
+                "D": -3, 
+                "G": 1, 
+                "H": -3, 
+                "K": -2, 
+                "M": -2, 
+                "N": -1, 
+                "R": -2, 
+                "S": -1, 
+                "T": -4, 
+                "V": -1, 
+                "W": -4, 
+                "Y": -2
+            }, 
+            "T": {
+                "A": -4, 
+                "B": -1, 
+                "C": -4, 
+                "D": -1, 
+                "G": -4, 
+                "H": -1, 
+                "K": 1, 
+                "M": -4, 
+                "N": -2, 
+                "R": -4, 
+                "S": -4, 
+                "T": 5, 
+                "V": -4, 
+                "W": 1, 
+                "Y": 1
+            }, 
+            "V": {
+                "A": -1, 
+                "B": -2, 
+                "C": -1, 
+                "D": -2, 
+                "G": -1, 
+                "H": -2, 
+                "K": -3, 
+                "M": -1, 
+                "N": -1, 
+                "R": -1, 
+                "S": -1, 
+                "T": -4, 
+                "V": -1, 
+                "W": -3, 
+                "Y": -3
+            }, 
+            "W": {
+                "A": 1, 
+                "B": -3, 
+                "C": -4, 
+                "D": -1, 
+                "G": -4, 
+                "H": -1, 
+                "K": -2, 
+                "M": -2, 
+                "N": -1, 
+                "R": -2, 
+                "S": -4, 
+                "T": 1, 
+                "V": -3, 
+                "W": -1, 
+                "Y": -2
+            }, 
+            "Y": {
+                "A": -4, 
+                "B": -1, 
+                "C": 1, 
+                "D": -3, 
+                "G": -4, 
+                "H": -1, 
+                "K": -2, 
+                "M": -2, 
+                "N": -1, 
+                "R": -4, 
+                "S": -2, 
+                "T": 1, 
+                "V": -3, 
+                "W": -2, 
+                "Y": -1
+            }
+        }
+    }, 
+    "extension": {
+        "preset": {
+            "study": {
+                "unique": {
+                    "type": "str"
+                }
+            }
+        }, 
+        "profile": {
+            "accession": null, 
+            "gene": {
+                "select": {
+                    "functionality": {
+                        "type": "str"
+                    }, 
+                    "id": {
+                        "type": "str"
+                    }, 
+                    "region": {
+                        "type": "str"
+                    }
+                }
+            }, 
+            "library": {
+                "select": {
+                    "id": {
+                        "type": "str"
+                    }
+                }
+            }, 
+            "sample": {
+                "select": {
+                    "framed": {
+                        "type": "bool"
+                    }, 
+                    "functionality": {
+                        "type": "str"
+                    }, 
+                    "gapped": {
+                        "type": "bool"
+                    }, 
+                    "id": {
+                        "type": "str"
+                    }, 
+                    "in frame": {
+                        "type": "bool"
+                    }, 
+                    "library": {
+                        "type": "str"
+                    }, 
+                    "premature": {
+                        "type": "bool"
+                    }, 
+                    "productive": {
+                        "type": "bool"
+                    }, 
+                    "region": {
+                        "type": "str"
+                    }, 
+                    "strain": {
+                        "type": "str"
+                    }, 
+                    "valid": {
+                        "type": "bool"
+                    }
+                }
+            }, 
+            "study": null
+        }
+    }, 
+    "filtering reader": {
+        "default": {
+            "adapter": [
+                "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC", 
+                "TACACTCTTTCCCTACACGACGCTCTTCCGATCT"
+            ], 
+            "adapter mismatch": 3, 
+            "adapter overlap": 6, 
+            "adapter score threshold": 40, 
+            "error threshold": 2, 
+            "merge overlap threshold": 70, 
+            "merge score threshold": 400, 
+            "minimum read length": 133, 
+            "quota": 128, 
+            "retain short": true, 
+            "retain unmerged": true, 
+            "reverse adapter scan": true, 
+            "substitution quality correction": 28, 
+            "trim end": true, 
+            "trim start": false, 
+            "trimming error threshold": 1, 
+            "trimming window": 6
+        }
     }, 
     "histogram": {
         "vdj": {
-            "VDJ CDR3 charge": {
+            "vdj cdr3 charge": {
                 "bins": 80, 
                 "range": [
                     -80, 
                     80
                 ]
             }, 
-            "VDJ CDR3 length": {
+            "vdj cdr3 length": {
                 "bins": 100, 
                 "range": [
                     0, 
                     100
                 ]
             }, 
-            "VDJ CDR3 weight": {
+            "vdj cdr3 weight": {
                 "bins": 50, 
                 "range": [
                     0, 
                     5000
                 ]
             }, 
-            "VDJ D 3 chew": {
+            "vdj chew": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ D 5 chew": {
+            "vdj d 3 chew": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ D-J N count": {
+            "vdj d 5 chew": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ D-J P count": {
+            "vdj dj length": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ D-J length": {
+            "vdj dj n count": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ J 5 chew": {
+            "vdj dj p count": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ N count": {
+            "vdj j 5 chew": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ P count": {
+            "vdj n count": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ V 3 chew": {
+            "vdj p count": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ V-D N count": {
+            "vdj v 3 chew": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ V-D P count": {
+            "vdj vd length": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ V-D length": {
+            "vdj vd n count": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VDJ chew": {
+            "vdj vd p count": {
                 "bins": 50, 
                 "range": [
                     0, 
@@ -190,63 +914,63 @@
             }
         }, 
         "vj": {
-            "VJ CDR3 charge": {
+            "vj cdr3 charge": {
                 "bins": 80, 
                 "range": [
                     -80, 
                     80
                 ]
             }, 
-            "VJ CDR3 length": {
+            "vj cdr3 length": {
                 "bins": 120, 
                 "range": [
                     0, 
                     120
                 ]
             }, 
-            "VJ CDR3 weight": {
+            "vj cdr3 weight": {
                 "bins": 50, 
                 "range": [
                     0, 
                     5000
                 ]
             }, 
-            "VJ J 5 chew": {
+            "vj chew": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VJ V 3 chew": {
+            "vj j 5 chew": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VJ V-J N count": {
+            "vj v 3 chew": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VJ V-J P count": {
+            "vj vj length": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VJ V-J length": {
+            "vj vj n count": {
                 "bins": 50, 
                 "range": [
                     0, 
                     50
                 ]
             }, 
-            "VJ chew": {
+            "vj vj p count": {
                 "bins": 50, 
                 "range": [
                     0, 
@@ -266,15 +990,19 @@
             "description": "Lior Galanti lior.galanti@nyu.edu NYU Center for Genomics & Systems Biology"
         }, 
         "prototype": {
-            "alignment": {
+            "chain": {
                 "flag": [
-                    "-A", 
-                    "--alignment"
+                    "--chain"
                 ], 
                 "parameter": {
-                    "action": "store_true", 
-                    "dest": "alignment", 
-                    "help": "print alignment diagram"
+                    "choices": [
+                        "igh", 
+                        "igk", 
+                        "igl"
+                    ], 
+                    "default": "igh", 
+                    "dest": "chain", 
+                    "help": "chain"
                 }
             }, 
             "depth": {
@@ -329,11 +1057,26 @@
                 "parameter": {
                     "choices": [
                         "json", 
-                        "csv"
+                        "csv", 
+                        "fastq", 
+                        "fasta", 
+                        "html", 
+                        "markdown", 
+                        "diagram"
                     ], 
-                    "default": null,
+                    "default": "json", 
                     "dest": "format", 
                     "help": "output format"
+                }
+            }, 
+            "forward": {
+                "flag": [
+                    "-F", 
+                    "--forward"
+                ], 
+                "parameter": {
+                    "dest": "forward path", 
+                    "help": "forward read file path"
                 }
             }, 
             "functionality": {
@@ -371,7 +1114,7 @@
                 ], 
                 "parameter": {
                     "dest": "id", 
-                    "help": "sample id", 
+                    "help": "id", 
                     "metavar": "ID"
                 }
             }, 
@@ -400,6 +1143,44 @@
                     "help": "print json info"
                 }
             }, 
+            "key": {
+                "flag": [
+                    "-k", 
+                    "--key"
+                ], 
+                "parameter": {
+                    "dest": "key", 
+                    "help": "unique identifier", 
+                    "metavar": "KEY"
+                }
+            }, 
+            "keys": {
+                "flag": [
+                    "keys"
+                ], 
+                "parameter": {
+                    "help": "name or uuid", 
+                    "nargs": "*"
+                }
+            }, 
+            "kind": {
+                "flag": [
+                    "-k", 
+                    "--kind"
+                ], 
+                "parameter": {
+                    "choices": [
+                        "sample", 
+                        "gene", 
+                        "study", 
+                        "library", 
+                        "accession"
+                    ], 
+                    "default": "sample", 
+                    "dest": "kind", 
+                    "help": "entity kind"
+                }
+            }, 
             "library": {
                 "flag": [
                     "-l", 
@@ -422,27 +1203,6 @@
                     "type": "int"
                 }
             }, 
-            "key": {
-                "flag": [
-                    "-k",
-                    "--key"
-                ], 
-                "parameter": {
-                    "dest": "key", 
-                    "help": "unique identifier", 
-                    "metavar": "KEY"
-                }
-            }, 
-            "keys": {
-                "flag": [
-                    "keys"
-                ], 
-                "parameter": {
-                    "help": "list of unique identifiers", 
-                    "metavar": "KEYS", 
-                    "nargs": "*"
-                }
-            }, 
             "name": {
                 "flag": [
                     "--name"
@@ -453,33 +1213,15 @@
                     "metavar": "NAME"
                 }
             }, 
-            "keys": {
+            "organism": {
                 "flag": [
-                    "keys"
+                    "-o", 
+                    "--organism"
                 ], 
                 "parameter": {
-                    "help": "name or uuid", 
-                    "nargs": "*"
-                }
-            }, 
-            "forward": {
-                "flag": [
-                    "-F",
-                    "--forward"
-                ], 
-                "parameter": {
-                    "help": "forward read file path", 
-                    "dest": "forward path"
-                }
-            }, 
-            "reverse": {
-                "flag": [
-                    "-R",
-                    "--reverse"
-                ], 
-                "parameter": {
-                    "help": "reverse read file path", 
-                    "dest": "reverse path"
+                    "default": "mus musculus", 
+                    "dest": "organism", 
+                    "help": "organism"
                 }
             }, 
             "path": {
@@ -552,12 +1294,22 @@
                 ], 
                 "parameter": {
                     "choices": [
-                        "VH", 
-                        "DH", 
-                        "JH"
+                        "vh", 
+                        "dh", 
+                        "jh"
                     ], 
                     "dest": "region", 
                     "help": "region"
+                }
+            }, 
+            "reverse": {
+                "flag": [
+                    "-R", 
+                    "--reverse"
+                ], 
+                "parameter": {
+                    "dest": "reverse path", 
+                    "help": "reverse read file path"
                 }
             }, 
             "skip": {
@@ -576,6 +1328,7 @@
                     "--strain"
                 ], 
                 "parameter": {
+                    "default": "c57bl6", 
                     "dest": "strain", 
                     "help": "strain"
                 }
@@ -656,15 +1409,118 @@
             "action": [
                 {
                     "argument": [
+                        "profile", 
+                        "library", 
+                        "id", 
+                        "gapped", 
+                        "valid", 
+                        "in frame", 
+                        "premature", 
+                        "limit", 
+                        "skip", 
+                        "productive", 
+                        "format"
+                    ], 
+                    "implementation": "sample", 
+                    "instruction": {
+                        "help": "export sample", 
+                        "name": "sample"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "profile", 
+                        "region", 
+                        "strain", 
+                        "chain", 
+                        "organism", 
+                        "flanking", 
+                        "functionality"
+                    ], 
+                    "implementation": "index", 
+                    "instruction": {
+                        "help": "rebuild alignment index", 
+                        "name": "index"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "region", 
+                        "strain", 
+                        "chain", 
+                        "profile", 
+                        "id", 
+                        "flanking", 
+                        "limit", 
+                        "functionality", 
+                        "format", 
+                        "title"
+                    ], 
+                    "implementation": "gene", 
+                    "instruction": {
+                        "help": "export gene repertoire", 
+                        "name": "gene"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "strain", 
+                        "chain", 
+                        "profile", 
+                        "id", 
+                        "format", 
+                        "drop"
+                    ], 
+                    "implementation": "library", 
+                    "instruction": {
+                        "help": "library", 
+                        "name": "library"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "library", 
+                        "profile", 
+                        "preset", 
+                        "name", 
+                        "depth", 
+                        "unique", 
+                        "limit", 
+                        "skip", 
+                        "format", 
+                        "drop"
+                    ], 
+                    "implementation": "study", 
+                    "instruction": {
+                        "help": "study", 
+                        "name": "study"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "strain", 
+                        "chain", 
+                        "profile", 
+                        "format", 
+                        "id"
+                    ], 
+                    "implementation": "accession", 
+                    "instruction": {
+                        "help": "accession", 
+                        "name": "accession"
+                    }
+                }, 
+                {
+                    "argument": [
                         "forward", 
-                        "reverse",
+                        "reverse", 
                         "limit"
                     ], 
-                    "implementation": "sample_merge", 
+                    "implementation": "sample_filter", 
                     "instruction": {
-                        "description": "merge forward and reverse read", 
-                        "help": "merge forward and reverse read", 
-                        "name": "merge"
+                        "description": "Filter raw fastq reads. If both forward and reverse reads are given they will be merged as ", 
+                        "help": "filter fastq reads", 
+                        "name": "filter"
                     }
                 }, 
                 {
@@ -681,26 +1537,42 @@
                 }, 
                 {
                     "argument": [
+                        "drop", 
+                        "path"
+                    ], 
+                    "implementation": "populate", 
+                    "instruction": {
+                        "description": "populate", 
+                        "help": "populate", 
+                        "name": "populate"
+                    }
+                }, 
+                {
+                    "argument": [
+                        "limit", 
+                        "skip", 
+                        "drop", 
                         "library", 
                         "strain", 
-                        "drop"
+                        "chain", 
+                        "organism"
                     ], 
-                    "implementation": "sample_populate", 
+                    "implementation": "analyze", 
                     "instruction": {
-                        "description": "match each read in file to regions with igblast and store results in the library. takes data from stdin", 
-                        "help": "populate samples for library", 
-                        "name": "samplePopulate"
+                        "description": "analyze", 
+                        "help": "analyze", 
+                        "name": "analyze"
                     }
                 }, 
                 {
                     "argument": [
                         "library"
                     ], 
-                    "implementation": "sample_drop", 
+                    "implementation": "drop", 
                     "instruction": {
-                        "description": "remove all samples for the provided library name", 
-                        "help": "drop samples of a given library", 
-                        "name": "sampleDrop"
+                        "description": "drop", 
+                        "help": "drop", 
+                        "name": "drop"
                     }
                 }, 
                 {
@@ -712,104 +1584,57 @@
                         "valid", 
                         "in frame", 
                         "premature", 
-                        "limit", 
-                        "skip", 
-                        "productive"
+                        "productive", 
+                        "region", 
+                        "strain", 
+                        "chain"
                     ], 
-                    "implementation": "sample_view", 
+                    "implementation": "count", 
                     "instruction": {
-                        "help": "view sample alignment", 
-                        "name": "sampleView"
+                        "help": "count", 
+                        "name": "count"
                     }
                 }, 
                 {
                     "argument": [
+                        "region", 
+                        "strain", 
+                        "chain", 
                         "profile", 
-                        "library", 
-                        "gapped", 
-                        "valid", 
-                        "limit", 
-                        "skip", 
-                        "id"
-                    ], 
-                    "implementation": "sample_analyze", 
-                    "instruction": {
-                        "help": "analyze samples", 
-                        "name": "sampleAnalyze"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "profile", 
-                        "library", 
                         "id", 
-                        "gapped", 
-                        "valid", 
-                        "in frame", 
-                        "premature", 
-                        "productive"
+                        "flanking", 
+                        "distance"
                     ], 
-                    "implementation": "sample_count", 
+                    "implementation": "gene_rss", 
                     "instruction": {
-                        "help": "count sample alignment", 
-                        "name": "sampleCount"
+                        "help": "verify gene RSS", 
+                        "name": "rss"
                     }
                 }, 
                 {
                     "argument": [
+                        "region", 
+                        "organism", 
+                        "strain", 
+                        "chain", 
                         "profile", 
-                        "library", 
                         "id", 
-                        "gapped", 
-                        "valid", 
-                        "in frame", 
-                        "premature", 
-                        "limit", 
-                        "skip", 
-                        "productive"
+                        "flanking"
                     ], 
-                    "implementation": "sample_fasta", 
+                    "implementation": "gene_align", 
                     "instruction": {
-                        "help": "print sample fasta stream", 
-                        "name": "sampleFasta"
+                        "help": "align gene sequences to genome", 
+                        "name": "align"
                     }
                 }, 
                 {
                     "argument": [
-                        "profile", 
-                        "library", 
-                        "id", 
-                        "gapped", 
-                        "valid", 
-                        "in frame", 
-                        "premature", 
-                        "limit", 
-                        "skip", 
-                        "productive"
+                        "table"
                     ], 
-                    "implementation": "sample_fastq", 
+                    "implementation": "rebuild", 
                     "instruction": {
-                        "help": "print sample fastq stream", 
-                        "name": "sampleFastq"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "profile", 
-                        "library", 
-                        "id", 
-                        "gapped", 
-                        "valid", 
-                        "in frame", 
-                        "premature", 
-                        "limit", 
-                        "skip", 
-                        "productive"
-                    ], 
-                    "implementation": "sample_info", 
-                    "instruction": {
-                        "help": "view JSON sample record", 
-                        "name": "sampleInfo"
+                        "help": "rebuild database indexes", 
+                        "name": "rebuild"
                     }
                 }, 
                 {
@@ -824,19 +1649,6 @@
                 }, 
                 {
                     "argument": [
-                        "strain", 
-                        "profile", 
-                        "limit", 
-                        "skip"
-                    ], 
-                    "implementation": "study_list", 
-                    "instruction": {
-                        "help": "list cached studies", 
-                        "name": "studyList"
-                    }
-                }, 
-                {
-                    "argument": [
                         "keys", 
                         "depth", 
                         "format"
@@ -845,204 +1657,6 @@
                     "instruction": {
                         "help": "collect", 
                         "name": "collect"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "library", 
-                        "profile", 
-                        "preset", 
-                        "name", 
-                        "depth", 
-                        "unique", 
-                        "limit", 
-                        "skip",
-                        "format",
-                        "drop"
-                    ], 
-                    "implementation": "study", 
-                    "instruction": {
-                        "help": "make a study", 
-                        "name": "study"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "path"
-                    ], 
-                    "implementation": "library_populate", 
-                    "instruction": {
-                        "help": "load library definition from JSON file", 
-                        "name": "libraryPopulate"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "strain", 
-                        "profile", 
-                        "id"
-                    ], 
-                    "implementation": "library_info", 
-                    "instruction": {
-                        "help": "view JSON library records", 
-                        "name": "libraryInfo"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "strain", 
-                        "profile", 
-                        "drop", 
-                        "id"
-                    ], 
-                    "implementation": "library_list", 
-                    "instruction": {
-                        "help": "list library records", 
-                        "name": "libraryList"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "path"
-                    ], 
-                    "implementation": "gene_populate", 
-                    "instruction": {
-                        "help": "load gene sequences from JSON file", 
-                        "name": "genePopulate"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "region", 
-                        "strain", 
-                        "profile", 
-                        "id"
-                    ], 
-                    "implementation": "gene_info", 
-                    "instruction": {
-                        "help": "view JSON gene records", 
-                        "name": "geneInfo"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "region", 
-                        "strain", 
-                        "profile", 
-                        "id"
-                    ], 
-                    "implementation": "gene_list", 
-                    "instruction": {
-                        "help": "list gene records", 
-                        "name": "geneList"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "region", 
-                        "strain", 
-                        "profile", 
-                        "id", 
-                        "title", 
-                        "functionality"
-                    ], 
-                    "implementation": "gene_html", 
-                    "instruction": {
-                        "help": "print genes html diagram", 
-                        "name": "geneHtml"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "region", 
-                        "strain", 
-                        "profile", 
-                        "id", 
-                        "flanking", 
-                        "distance"
-                    ], 
-                    "implementation": "gene_rss", 
-                    "instruction": {
-                        "help": "verify gene RSS", 
-                        "name": "geneRss"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "region", 
-                        "strain", 
-                        "profile", 
-                        "id"
-                    ], 
-                    "implementation": "gene_count", 
-                    "instruction": {
-                        "help": "count gene records", 
-                        "name": "geneCount"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "region", 
-                        "strain", 
-                        "profile", 
-                        "id", 
-                        "flanking"
-                    ], 
-                    "implementation": "gene_align", 
-                    "instruction": {
-                        "help": "align gene sequences to genome", 
-                        "name": "geneAlign"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "region", 
-                        "strain", 
-                        "profile", 
-                        "id", 
-                        "flanking", 
-                        "limit", 
-                        "functionality"
-                    ], 
-                    "implementation": "gene_fasta", 
-                    "instruction": {
-                        "help": "dump gene sequences to fasta", 
-                        "name": "geneFasta"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "region", 
-                        "strain", 
-                        "profile", 
-                        "id"
-                    ], 
-                    "implementation": "gene_igblast_auxiliary", 
-                    "instruction": {
-                        "help": "dump gene sequences to igblast auxiliary file", 
-                        "name": "geneIgblastAux"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "profile", 
-                        "strain", 
-                        "id"
-                    ], 
-                    "implementation": "accession_fasta", 
-                    "instruction": {
-                        "help": "dump accession sequences to fasta", 
-                        "name": "accessionFasta"
-                    }
-                }, 
-                {
-                    "argument": [
-                        "table"
-                    ], 
-                    "implementation": "rebuild", 
-                    "instruction": {
-                        "help": "rebuild database indexes", 
-                        "name": "rebuild"
                     }
                 }
             ], 
@@ -1055,953 +1669,985 @@
             }
         }
     }, 
-    "iupac amino acid notation": {
-        "*": {
-            "code": "stop", 
-            "name": "Stop codon"
-        }, 
-        "A": {
-            "charge": 1.8, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "ala", 
-            "name": "Alanine", 
-            "weight": 89
-        }, 
-        "B": {
-            "code": "asx", 
-            "name": "Aspartic acid or Asparagine"
-        }, 
-        "C": {
-            "charge": 2.5, 
-            "class code": "P", 
-            "class name": "polar", 
-            "code": "cys", 
-            "name": "Cysteine", 
-            "weight": 121
-        }, 
-        "D": {
-            "charge": -3.5, 
-            "class code": "A", 
-            "class name": "acidic", 
-            "code": "asp", 
-            "name": "Aspartic acid", 
-            "weight": 133
-        }, 
-        "E": {
-            "charge": -3.5, 
-            "class code": "A", 
-            "class name": "acidic", 
-            "code": "glu", 
-            "name": "Glutamic acid", 
-            "weight": 147
-        }, 
-        "F": {
-            "charge": 2.8, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "phe", 
-            "name": "Phenylalanine", 
-            "weight": 165
-        }, 
-        "G": {
-            "charge": -0.4, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "gly", 
-            "name": "Glycine", 
-            "weight": 75
-        }, 
-        "H": {
-            "charge": -3.2, 
-            "class code": "B", 
-            "class name": "basic", 
-            "code": "his", 
-            "name": "Histidine", 
-            "weight": 155
-        }, 
-        "I": {
-            "charge": 4.5, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "ile", 
-            "name": "Isoleucine", 
-            "weight": 131
-        }, 
-        "J": {
-            "code": "xle", 
-            "name": "Leucine or Isoleucine"
-        }, 
-        "K": {
-            "charge": -3.9, 
-            "class code": "B", 
-            "class name": "basic", 
-            "code": "lys", 
-            "name": "Lysine", 
-            "weight": 146
-        }, 
-        "L": {
-            "charge": 3.8, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "leu", 
-            "name": "Leucine", 
-            "weight": 131
-        }, 
-        "M": {
-            "charge": 1.9, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "met", 
-            "name": "Methionine", 
-            "weight": 149
-        }, 
-        "N": {
-            "charge": -3.5, 
-            "class code": "P", 
-            "class name": "polar", 
-            "code": "asn", 
-            "name": "Asparagine", 
-            "weight": 132
-        }, 
-        "P": {
-            "charge": -1.6, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "pro", 
-            "name": "Proline", 
-            "weight": 115
-        }, 
-        "Q": {
-            "charge": -3.5, 
-            "class code": "P", 
-            "class name": "polar", 
-            "code": "gln", 
-            "name": "Glutamine", 
-            "weight": 146
-        }, 
-        "R": {
-            "charge": -4.5, 
-            "class code": "B", 
-            "class name": "basic", 
-            "code": "arg", 
-            "name": "Arginine", 
-            "weight": 174
-        }, 
-        "S": {
-            "charge": -0.8, 
-            "class code": "P", 
-            "class name": "polar", 
-            "code": "ser", 
-            "name": "Serine", 
-            "weight": 105
-        }, 
-        "T": {
-            "charge": -0.7, 
-            "class code": "P", 
-            "class name": "polar", 
-            "code": "thr", 
-            "name": "Threonine", 
-            "weight": 119
-        }, 
-        "V": {
-            "charge": 4.2, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "val", 
-            "name": "Valine", 
-            "weight": 117
-        }, 
-        "W": {
-            "charge": -0.9, 
-            "class code": "N", 
-            "class name": "nonpolar", 
-            "code": "trp", 
-            "name": "Tryptophan", 
-            "weight": 204
-        }, 
-        "X": {
-            "code": "xaa", 
-            "name": "Any amino acid"
-        }, 
-        "Y": {
-            "charge": -1.3, 
-            "class code": "P", 
-            "class name": "polar", 
-            "code": "tyr", 
-            "name": "Tyrosine", 
-            "weight": 181
-        }, 
-        "Z": {
-            "code": "glx", 
-            "name": "Glutamine or Glutamic acid"
+    "organism": {
+        "mus musculus": {
+            "strain": {
+                "c57bl6": {
+                    "chain": {
+                        "igh": {
+                            "alignment order": [
+                                "jh", 
+                                "vh", 
+                                "dh"
+                            ], 
+                            "blat": {
+                                "parameter": {
+                                    "-minIdentity=98": null, 
+                                    "-noHead": null
+                                }
+                            }, 
+                            "igblast": {
+                                "parameter": {
+                                    "-domain_system": "imgt", 
+                                    "-germline_db_D": "dh.fa", 
+                                    "-germline_db_J": "jh.fa", 
+                                    "-germline_db_V": "vh.fa", 
+                                    "-num_alignments_D": "5", 
+                                    "-num_alignments_J": "3", 
+                                    "-num_alignments_V": "3", 
+                                    "-organism": "mouse", 
+                                    "-query": "-"
+                                }
+                            }, 
+                            "reference": "c89df13562b75f28e0e7d9124521dc27efc9f978", 
+                            "region": {
+                                "cdr1": {
+                                    "type": "complementarity determining"
+                                }, 
+                                "cdr2": {
+                                    "type": "complementarity determining"
+                                }, 
+                                "cdr3": {
+                                    "type": "complementarity determining"
+                                }, 
+                                "dh": {
+                                    "bwa mem": {
+                                        "parameter": {
+                                            "-B": "4", 
+                                            "-T": "7", 
+                                            "-a": null, 
+                                            "-k": "4"
+                                        }
+                                    }, 
+                                    "makeblastdb": {
+                                        "parameter": {
+                                            "-in": "dh.fa", 
+                                            "-title": "dh"
+                                        }
+                                    }, 
+                                    "minimum alignment": 4, 
+                                    "minimum identity": 0.7, 
+                                    "overlap penalty factor": 0.5, 
+                                    "type": "gene segment"
+                                }, 
+                                "fr1": {
+                                    "type": "framework"
+                                }, 
+                                "fr2": {
+                                    "type": "framework"
+                                }, 
+                                "fr3": {
+                                    "type": "framework"
+                                }, 
+                                "jh": {
+                                    "bwa mem": {
+                                        "parameter": {
+                                            "-B": "4", 
+                                            "-T": "24", 
+                                            "-a": null, 
+                                            "-k": "4"
+                                        }
+                                    }, 
+                                    "makeblastdb": {
+                                        "parameter": {
+                                            "-in": "jh.fa", 
+                                            "-title": "jh"
+                                        }
+                                    }, 
+                                    "minimum alignment": 30, 
+                                    "minimum identity": 0.8, 
+                                    "type": "gene segment"
+                                }, 
+                                "vh": {
+                                    "bwa mem": {
+                                        "parameter": {
+                                            "-B": "4", 
+                                            "-T": "48", 
+                                            "-a": null, 
+                                            "-k": "4"
+                                        }
+                                    }, 
+                                    "makeblastdb": {
+                                        "parameter": {
+                                            "-in": "vh.fa", 
+                                            "-title": "vh"
+                                        }
+                                    }, 
+                                    "minimum alignment": 45, 
+                                    "minimum identity": 0.7, 
+                                    "type": "gene segment"
+                                }
+                            }
+                        }, 
+                        "igk": null, 
+                        "igl": null
+                    }
+                }
+            }
         }
     }, 
-    "iupac nucleic acid notation": {
-        "A": {
-            "name": "Adenine", 
-            "option": [
-                "A"
-            ], 
-            "reverse": "T"
+    "preset": {
+        "c3": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "B": {
-            "name": "Not A", 
-            "option": [
-                "G", 
-                "T", 
-                "C"
-            ], 
-            "reverse": "V"
+        "c3v": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon", 
+                    "vh"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "C": {
-            "name": "Cytosine", 
-            "option": [
-                "C"
-            ], 
-            "reverse": "G"
+        "c3vdj": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon", 
+                    "vh", 
+                    "dh", 
+                    "jh"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "D": {
-            "name": "Not C", 
-            "option": [
-                "G", 
-                "A", 
-                "T"
-            ], 
-            "reverse": "H"
+        "cn3": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon", 
+                    "cdr3 nucleotide"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "G": {
-            "name": "Guanine", 
-            "option": [
-                "G"
-            ], 
-            "reverse": "C"
+        "cn3v": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon", 
+                    "cdr3 nucleotide", 
+                    "vh"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "H": {
-            "name": "Not G", 
-            "option": [
-                "A", 
-                "C", 
-                "T"
-            ], 
-            "reverse": "D"
+        "cn3vdj": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon", 
+                    "cdr3 nucleotide", 
+                    "vh", 
+                    "dh", 
+                    "jh"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "K": {
-            "name": "Keto", 
-            "option": [
-                "G", 
-                "T"
-            ], 
-            "reverse": "M"
+        "cne": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "effective codon", 
+                    "effective nucleotide"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "M": {
-            "name": "Amino", 
-            "option": [
-                "A", 
-                "C"
-            ], 
-            "reverse": "K"
+        "id": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "id", 
+                    "vh", 
+                    "dh", 
+                    "jh", 
+                    "cdr3 codon", 
+                    "cdr3 nucleotide", 
+                    "effective codon", 
+                    "effective nucleotide"
+                ], 
+                "sort": [
+                    {
+                        "column": "cdr3 codon", 
+                        "reverse": true
+                    }, 
+                    {
+                        "column": "cdr3 nucleotide", 
+                        "reverse": true
+                    }
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "N": {
-            "name": "Any", 
-            "option": [
-                "A", 
-                "G", 
-                "C", 
-                "T"
-            ], 
-            "reverse": "N"
+        "j": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "jh"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "R": {
-            "name": "Purine", 
-            "option": [
-                "G", 
-                "A"
-            ], 
-            "reverse": "Y"
+        "n3vdj": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 nucleotide", 
+                    "vh", 
+                    "dh", 
+                    "jh"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "S": {
-            "name": "Strong bonds", 
-            "option": [
-                "G", 
-                "C"
-            ], 
-            "reverse": "S"
+        "rc3": {
+            "study": {
+                "chain": "igh", 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 codon"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "T": {
-            "name": "Thymine", 
-            "option": [
-                "T"
-            ], 
-            "reverse": "A"
+        "rn3": {
+            "study": {
+                "chain": "igh", 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "cdr3 nucleotide"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "V": {
-            "name": "Not T", 
-            "option": [
-                "G", 
-                "C", 
-                "A"
-            ], 
-            "reverse": "B"
+        "vdj": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": {
+                        "max": null, 
+                        "mean": {
+                            "enabled": true
+                        }, 
+                        "min": null, 
+                        "std": {
+                            "enabled": true
+                        }
+                    }, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "vh", 
+                    "dh", 
+                    "jh"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "W": {
-            "name": "Weak bonds", 
-            "option": [
-                "A", 
-                "T"
-            ], 
-            "reverse": "W"
+        "vf": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "vh family"
+                ], 
+                "strain": "c57bl6"
+            }
         }, 
-        "Y": {
-            "name": "Pyrimidine", 
-            "option": [
-                "T", 
-                "C"
-            ], 
-            "reverse": "R"
+        "vfc": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "vh family", 
+                    "cdr3 codon"
+                ], 
+                "sort": [
+                    {
+                        "column": "vh family", 
+                        "reverse": true
+                    }
+                ], 
+                "strain": "c57bl6"
+            }
+        }, 
+        "vj": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "d3 chew": null, 
+                    "d5 chew": null, 
+                    "dj length": null, 
+                    "dj n count": null, 
+                    "dj p count": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "n count": null, 
+                    "p count": null, 
+                    "v3 chew": null, 
+                    "vd length": null, 
+                    "vd n count": null, 
+                    "vd p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "vh", 
+                    "jh"
+                ], 
+                "strain": "c57bl6"
+            }
+        }, 
+        "vjnd": {
+            "study": {
+                "chain": "igh", 
+                "feature": {
+                    "cdr3 charge": null, 
+                    "cdr3 length": null, 
+                    "cdr3 low 4 phred": null, 
+                    "cdr3 min phred": null, 
+                    "cdr3 weight": null, 
+                    "chew": null, 
+                    "effective low 4 phred": null, 
+                    "effective min phred": null, 
+                    "j5 chew": null, 
+                    "v3 chew": null, 
+                    "vj length": null, 
+                    "vj n count": null, 
+                    "vj p count": null
+                }, 
+                "organism name": "mus musculus", 
+                "rotate": [
+                    "vh", 
+                    "jh"
+                ], 
+                "strain": "c57bl6"
+            }
         }
-    }, 
-    "nucleotide substitution": {
-        "A": {
-            "A": 5,
-            "B": -4,
-            "C": -4,
-            "D": -1,
-            "G": -4,
-            "H": -1,
-            "K": -4,
-            "M": 1,
-            "N": -2,
-            "R": 1,
-            "S": -4,
-            "T": -4,
-            "V": -1,
-            "W": 1,
-            "Y": -4
-        },
-        "B": {
-            "A": -4,
-            "B": -1,
-            "C": -1,
-            "D": -2,
-            "G": -1,
-            "H": -2,
-            "K": -1,
-            "M": -3,
-            "N": -1,
-            "R": -3,
-            "S": -1,
-            "T": -1,
-            "V": -2,
-            "W": -3,
-            "Y": -1
-        },
-        "C": {
-            "A": -4,
-            "B": -1,
-            "C": 5,
-            "D": -4,
-            "G": -4,
-            "H": -1,
-            "K": -4,
-            "M": 1,
-            "N": -2,
-            "R": -4,
-            "S": 1,
-            "T": -4,
-            "V": -1,
-            "W": -4,
-            "Y": 1
-        },
-        "D": {
-            "A": -1,
-            "B": -2,
-            "C": -4,
-            "D": -1,
-            "G": -1,
-            "H": -2,
-            "K": -1,
-            "M": -3,
-            "N": -1,
-            "R": -1,
-            "S": -3,
-            "T": -1,
-            "V": -2,
-            "W": -1,
-            "Y": -3
-        },
-        "G": {
-            "A": -4,
-            "B": -1,
-            "C": -4,
-            "D": -1,
-            "G": 5,
-            "H": -4,
-            "K": 1,
-            "M": -4,
-            "N": -2,
-            "R": 1,
-            "S": 1,
-            "T": -4,
-            "V": -1,
-            "W": -4,
-            "Y": -4
-        },
-        "H": {
-            "A": -1,
-            "B": -2,
-            "C": -1,
-            "D": -2,
-            "G": -4,
-            "H": -1,
-            "K": -3,
-            "M": -1,
-            "N": -1,
-            "R": -3,
-            "S": -3,
-            "T": -1,
-            "V": -2,
-            "W": -1,
-            "Y": -1
-        },
-        "K": {
-            "A": -4,
-            "B": -1,
-            "C": -4,
-            "D": -1,
-            "G": 1,
-            "H": -3,
-            "K": -1,
-            "M": -4,
-            "N": -1,
-            "R": -2,
-            "S": -2,
-            "T": 1,
-            "V": -3,
-            "W": -2,
-            "Y": -2
-        },
-        "M": {
-            "A": 1,
-            "B": -3,
-            "C": 1,
-            "D": -3,
-            "G": -4,
-            "H": -1,
-            "K": -4,
-            "M": -1,
-            "N": -1,
-            "R": -2,
-            "S": -2,
-            "T": -4,
-            "V": -1,
-            "W": -2,
-            "Y": -2
-        },
-        "N": {
-            "A": -2,
-            "B": -1,
-            "C": -2,
-            "D": -1,
-            "G": -2,
-            "H": -1,
-            "K": -1,
-            "M": -1,
-            "N": -1,
-            "R": -1,
-            "S": -1,
-            "T": -2,
-            "V": -1,
-            "W": -1,
-            "Y": -1
-        },
-        "R": {
-            "A": 1,
-            "B": -3,
-            "C": -4,
-            "D": -1,
-            "G": 1,
-            "H": -3,
-            "K": -2,
-            "M": -2,
-            "N": -1,
-            "R": -1,
-            "S": -2,
-            "T": -4,
-            "V": -1,
-            "W": -2,
-            "Y": -4
-        },
-        "S": {
-            "A": -4,
-            "B": -1,
-            "C": 1,
-            "D": -3,
-            "G": 1,
-            "H": -3,
-            "K": -2,
-            "M": -2,
-            "N": -1,
-            "R": -2,
-            "S": -1,
-            "T": -4,
-            "V": -1,
-            "W": -4,
-            "Y": -2
-        },
-        "T": {
-            "A": -4,
-            "B": -1,
-            "C": -4,
-            "D": -1,
-            "G": -4,
-            "H": -1,
-            "K": 1,
-            "M": -4,
-            "N": -2,
-            "R": -4,
-            "S": -4,
-            "T": 5,
-            "V": -4,
-            "W": 1,
-            "Y": 1
-        },
-        "V": {
-            "A": -1,
-            "B": -2,
-            "C": -1,
-            "D": -2,
-            "G": -1,
-            "H": -2,
-            "K": -3,
-            "M": -1,
-            "N": -1,
-            "R": -1,
-            "S": -1,
-            "T": -4,
-            "V": -1,
-            "W": -3,
-            "Y": -3
-        },
-        "W": {
-            "A": 1,
-            "B": -3,
-            "C": -4,
-            "D": -1,
-            "G": -4,
-            "H": -1,
-            "K": -2,
-            "M": -2,
-            "N": -1,
-            "R": -2,
-            "S": -4,
-            "T": 1,
-            "V": -3,
-            "W": -1,
-            "Y": -2
-        },
-        "Y": {
-            "A": -4,
-            "B": -1,
-            "C": 1,
-            "D": -3,
-            "G": -4,
-            "H": -1,
-            "K": -2,
-            "M": -2,
-            "N": -1,
-            "R": -4,
-            "S": -2,
-            "T": 1,
-            "V": -3,
-            "W": -2,
-            "Y": -1
-        }
-    },
-    "nucleic to amino": {
-        "AAA": "K", 
-        "AAC": "N", 
-        "AAG": "K", 
-        "AAT": "N", 
-        "ACA": "T", 
-        "ACC": "T", 
-        "ACG": "T", 
-        "ACT": "T", 
-        "AGA": "R", 
-        "AGC": "S", 
-        "AGG": "R", 
-        "AGT": "S", 
-        "ATA": "I", 
-        "ATC": "I", 
-        "ATG": "M", 
-        "ATT": "I", 
-        "CAA": "Q", 
-        "CAC": "H", 
-        "CAG": "Q", 
-        "CAT": "H", 
-        "CCA": "P", 
-        "CCC": "P", 
-        "CCG": "P", 
-        "CCT": "P", 
-        "CGA": "R", 
-        "CGC": "R", 
-        "CGG": "R", 
-        "CGT": "R", 
-        "CTA": "L", 
-        "CTC": "L", 
-        "CTG": "L", 
-        "CTT": "L", 
-        "GAA": "E", 
-        "GAC": "D", 
-        "GAG": "E", 
-        "GAT": "D", 
-        "GCA": "A", 
-        "GCC": "A", 
-        "GCG": "A", 
-        "GCT": "A", 
-        "GGA": "G", 
-        "GGC": "G", 
-        "GGG": "G", 
-        "GGT": "G", 
-        "GTA": "V", 
-        "GTC": "V", 
-        "GTG": "V", 
-        "GTT": "V", 
-        "TAA": "*", 
-        "TAC": "Y", 
-        "TAG": "*", 
-        "TAT": "Y", 
-        "TCA": "S", 
-        "TCC": "S", 
-        "TCG": "S", 
-        "TCT": "S", 
-        "TGA": "*", 
-        "TGC": "C", 
-        "TGG": "W", 
-        "TGT": "C", 
-        "TTA": "L", 
-        "TTC": "F", 
-        "TTG": "L", 
-        "TTT": "F"
     }, 
     "profile": {
         "aligned": {
             "gene": {
-                "aligned": true
+                "select": {
+                    "aligned": true
+                }
             }
         }, 
         "all": {
-            "accession": {}, 
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "name", 
-                    "strain", 
-                    "strand", 
-                    "functionality", 
-                    "in frame", 
-                    "gapped", 
-                    "picked"
-                ], 
-                "track": {}
-            }, 
-            "gene": {}, 
-            "sample": {}
+            "accession": null, 
+            "gene": null, 
+            "sample": {
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "name", 
+                            "strain", 
+                            "strand", 
+                            "functionality", 
+                            "in frame", 
+                            "gapped", 
+                            "picked"
+                        ]
+                    }
+                }
+            }
         }, 
         "default": {
-            "accession": {}, 
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
+            "accession": null, 
+            "gene": null, 
+            "library": null, 
+            "sample": {
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
+                }, 
+                "select": {
                     "valid": true
                 }
             }, 
-            "gene": {}, 
-            "library": {}, 
-            "sample": {
-                "valid": true
-            }, 
-            "study": {}
+            "study": null
         }, 
         "invalid": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "gapped": false
-                }
-            }, 
             "sample": {
-                "valid": false
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "name", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "gapped": false
+                        }
+                    }
+                }, 
+                "select": {
+                    "valid": false
+                }
             }
         }, 
         "np": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "picked",
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
-                }
-            }, 
             "gene": {
-                "functionality": {
-                    "__ne__": "F"
+                "select": {
+                    "functionality": {
+                        "__ne__": "F"
+                    }
                 }
             }, 
             "sample": {
-                "productive": false, 
-                "valid": true
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "picked", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
+                }, 
+                "select": {
+                    "productive": false, 
+                    "valid": true
+                }
             }
         }, 
         "np33": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
+            "sample": {
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
+                }, 
+                "select": {
+                    "average phred": {
+                        "__gt__": 33
+                    }, 
+                    "productive": false, 
                     "valid": true
                 }
-            }, 
-            "sample": {
-                "average phred": {
-                    "__gt__": 33
-                }, 
-                "productive": false, 
-                "valid": true
             }
         }, 
         "npn033": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
+            "sample": {
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
+                }, 
+                "select": {
+                    "average phred": {
+                        "__gt__": 33
+                    }, 
+                    "n count": 0, 
+                    "productive": false, 
                     "valid": true
                 }
-            }, 
-            "sample": {
-                "average phred": {
-                    "__gt__": 38
-                }, 
-                "n count": 0, 
-                "productive": false, 
-                "valid": true
             }
         }, 
         "npn133": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
+            "sample": {
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
+                }, 
+                "select": {
+                    "average phred": {
+                        "__gt__": 33
+                    }, 
+                    "n count": {
+                        "__gte__": 1
+                    }, 
+                    "productive": false, 
                     "valid": true
                 }
-            }, 
-            "sample": {
-                "average phred": {
-                    "__gt__": 38
-                }, 
-                "n count": {
-                    "__gte__": 1
-                }, 
-                "productive": false, 
-                "valid": true
             }
         }, 
         "p": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "picked",
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
+            "gene": {
+                "select": {
+                    "functionality": "F"
                 }
             }, 
-            "gene": {
-                "functionality": "F"
-            }, 
             "sample": {
-                "productive": true
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "picked", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
+                }, 
+                "select": {
+                    "productive": true
+                }
             }
         }, 
         "p33": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
-                }
-            }, 
             "sample": {
-                "average phred": {
-                    "__gt__": 33
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
                 }, 
-                "productive": true
-            }
-        }, 
-        "p38": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
+                "select": {
+                    "average phred": {
+                        "__gt__": 33
+                    }, 
+                    "productive": true
                 }
-            }, 
-            "sample": {
-                "average phred": {
-                    "__gt__": 38
-                }, 
-                "productive": true
-            }
-        }, 
-        "picked": {
-            "accession": {}, 
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
-                }
-            }, 
-            "gene": {}, 
-            "library": {}, 
-            "sample": {
-                "valid": true
             }
         }, 
         "pn033": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
-                }
-            }, 
             "sample": {
-                "average phred": {
-                    "__gte__": 33
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
                 }, 
-                "n count": 0, 
-                "productive": true
+                "select": {
+                    "average phred": {
+                        "__gte__": 33
+                    }, 
+                    "n count": 0, 
+                    "productive": true
+                }
             }
         }, 
         "pn133": {
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality"
-                ], 
-                "track": {
-                    "picked": true, 
-                    "valid": true
-                }
-            }, 
             "sample": {
-                "average phred": {
-                    "__gte__": 33
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "functionality"
+                        ], 
+                        "track": {
+                            "picked": true, 
+                            "valid": true
+                        }
+                    }
                 }, 
-                "n count": {
-                    "__gte__": 1
-                }, 
-                "productive": true
+                "select": {
+                    "average phred": {
+                        "__gte__": 33
+                    }, 
+                    "n count": {
+                        "__gte__": 1
+                    }, 
+                    "productive": true
+                }
             }
         }, 
         "valid": {
-            "accession": {}, 
-            "diagram": {
-                "feature": [
-                    "region", 
-                    "phred", 
-                    "name", 
-                    "functionality", 
-                    "in frame", 
-                    "picked"
-                ], 
-                "track": {
+            "sample": {
+                "format": {
+                    "diagram": {
+                        "feature": [
+                            "region", 
+                            "phred", 
+                            "name", 
+                            "functionality", 
+                            "in frame", 
+                            "picked"
+                        ], 
+                        "track": {
+                            "valid": true
+                        }
+                    }
+                }, 
+                "select": {
                     "valid": true
                 }
-            }, 
-            "gene": {}, 
-            "library": {}, 
-            "sample": {
-                "valid": true
             }
         }
     }, 
-    "region": {
-        "DH": {
-            "minimum alignment": 4, 
-            "minimum identity": 0.7, 
-            "name": "DH", 
-            "overlap penalty factor": 0.5
-        }, 
-        "JH": {
-            "minimum alignment": 30, 
-            "minimum identity": 0.8, 
-            "name": "JH"
-        }, 
-        "VH": {
-            "minimum alignment": 45, 
-            "minimum identity": 0.7, 
-            "name": "VH"
+    "reference": {
+        "c89df13562b75f28e0e7d9124521dc27efc9f978": {
+            "remote": "ftp://ftp.ensembl.org/pub/release-84/fasta/mus_musculus/dna/Mus_musculus.GRCm38.dna.chromosome.12.fa.gz", 
+            "sha1": "c89df13562b75f28e0e7d9124521dc27efc9f978"
         }
     }, 
     "rss": {
-        "DH": {
+        "dh": {
             "heptamer": [
                 "CATTGTG", 
                 "CACTGTG", 
@@ -2037,7 +2683,7 @@
             ], 
             "spacer": 12
         }, 
-        "JH": {
+        "jh": {
             "heptamer": [
                 "TATTGTG", 
                 "GGGTGTG", 
@@ -2057,7 +2703,7 @@
             ], 
             "spacer": 23
         }, 
-        "VH": {
+        "vh": {
             "heptamer": [
                 "CACAGCC", 
                 "CACAGTG", 
@@ -2194,588 +2840,6 @@
         "TATA box": "TAAATA", 
         "ocatmer": "ATGCAAA[GT]"
     }, 
-    "study": {
-        "default": {
-            "column": {
-                "enabled": false
-            }, 
-            "feature": {
-                "column": {
-                    "max": null, 
-                    "mean": {
-                        "enabled": true
-                    }, 
-                    "min": null, 
-                    "std": null
-                }, 
-                "order": [
-                    "mean", 
-                    "std",
-                    "min", 
-                    "max"
-                ]
-            }, 
-            "preset": {
-                "order": [
-                    "chew", 
-                    "v3 chew", 
-                    "d5 chew", 
-                    "d3 chew", 
-                    "j5 chew", 
-                    "cdr3 length", 
-                    "cdr3 charge", 
-                    "cdr3 weight", 
-                    "vd length", 
-                    "vd n count", 
-                    "vd p count", 
-                    "dj length", 
-                    "dj n count", 
-                    "dj p count", 
-                    "vj length", 
-                    "vj n count", 
-                    "vj p countn count", 
-                    "n count", 
-                    "p count", 
-                    "cdr3 low 4 phred", 
-                    "cdr3 min phred", 
-                    "effective low 4 phred", 
-                    "effective min phred"
-                ], 
-                "sort": [
-                    {
-                        "column": "weight", 
-                        "reverse": true
-                    }
-                ], 
-                "unique": false
-            }
-        }, 
-        "feature": {
-            "cdr3 charge": null, 
-            "cdr3 length": null, 
-            "cdr3 low 4 phred": null, 
-            "cdr3 min phred": null, 
-            "cdr3 weight": null, 
-            "chew": null, 
-            "d3 chew": null, 
-            "d5 chew": null, 
-            "dj length": null, 
-            "dj n count": null, 
-            "dj p count": null, 
-            "effective low 4 phred": null, 
-            "effective min phred": null, 
-            "j5 chew": null, 
-            "n count": null, 
-            "p count": null, 
-            "v3 chew": null, 
-            "vd length": null, 
-            "vd n count": null, 
-            "vd p count": null, 
-            "vj length": null, 
-            "vj n count": null, 
-            "vj p count": null
-        }, 
-        "preset": {
-            "RichC3": {
-                "feature": {
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "RichN3": {
-                "feature": {
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 nucleotide"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "C3": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "C3V": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon", 
-                    "VH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "C3VDJ": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon", 
-                    "VH", 
-                    "DH", 
-                    "JH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "CN3": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon", 
-                    "cdr3 nucleotide"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "CN3V": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon", 
-                    "cdr3 nucleotide", 
-                    "VH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "CN3VDJ": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 codon", 
-                    "cdr3 nucleotide", 
-                    "VH", 
-                    "DH", 
-                    "JH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "CNE": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "effective codon", 
-                    "effective nucleotide"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "ID": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "id", 
-                    "VH",
-                    "DH",
-                    "JH",
-                    "cdr3 codon", 
-                    "cdr3 nucleotide", 
-                    "effective codon", 
-                    "effective nucleotide"
-                ], 
-                "sort": [
-                    {
-                        "column": "cdr3 codon", 
-                        "reverse": true
-                    }, 
-                    {
-                        "column": "cdr3 nucleotide", 
-                        "reverse": true
-                    }
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "N3VDJ": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "cdr3 nucleotide", 
-                    "VH", 
-                    "DH", 
-                    "JH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "VDJ": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": {
-                        "max": null, 
-                        "mean": {
-                            "enabled": true
-                        }, 
-                        "min": null, 
-                        "std": {
-                            "enabled": true
-                        }
-                    }, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "VH", 
-                    "DH", 
-                    "JH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "J": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "JH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "VJ": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "VH", 
-                    "JH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "VJnD": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "v3 chew": null, 
-                    "vj length": null, 
-                    "vj n count": null, 
-                    "vj p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "VH", 
-                    "JH"
-                ], 
-                "strain": "C57BL/6"
-            }, 
-            "Vf": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "vh family"
-                ], 
-                "strain": "C57BL/6"
-            },
-            "VfC": {
-                "feature": {
-                    "cdr3 charge": null, 
-                    "cdr3 length": null, 
-                    "cdr3 low 4 phred": null, 
-                    "cdr3 min phred": null, 
-                    "cdr3 weight": null, 
-                    "chew": null, 
-                    "d3 chew": null, 
-                    "d5 chew": null, 
-                    "dj length": null, 
-                    "dj n count": null, 
-                    "dj p count": null, 
-                    "effective low 4 phred": null, 
-                    "effective min phred": null, 
-                    "j5 chew": null, 
-                    "n count": null, 
-                    "p count": null, 
-                    "v3 chew": null, 
-                    "vd length": null, 
-                    "vd n count": null, 
-                    "vd p count": null
-                }, 
-                "organism name": "mus musculus", 
-                "rotate": [
-                    "vh family",
-                    "cdr3 codon"
-                ], 
-                "sort": [
-                    {
-                        "column": "vh family", 
-                        "reverse": true
-                    }
-                ], 
-                "strain": "C57BL/6"
-            }
-        }
-    }, 
     "table": {
         "accession": {
             "collection": "accession", 
@@ -2898,21 +2962,6 @@
                         ]
                     ], 
                     "name": "library id", 
-                    "unique": true
-                }
-            ]
-        }, 
-        "ncbi_accession": {
-            "collection": "ncbi_accession", 
-            "index": [
-                {
-                    "key": [
-                        [
-                            "head.id", 
-                            1
-                        ]
-                    ], 
-                    "name": "accession id", 
                     "unique": true
                 }
             ]
@@ -3101,29 +3150,90 @@
                 }
             ]
         }
-    },
-    "filtering reader": {
-        "default": {
-            "quota": 128,
-            "minimum read length": 133,
-            "trim start": false,
-            "trim end": true,
-            "trimming window": 6,
-            "trimming error threshold": 1,
-            "adapter mismatch": 3,
-            "adapter overlap": 6,
-            "adapter score threshold": 40,
-            "reverse adapter scan": true,
-            "adapter": [
-                "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC",
-                "TACACTCTTTCCCTACACGACGCTCTTCCGATCT"
-            ],
-            "retain short": true,
-            "retain unmerged": true,
-            "error threshold": 2,
-            "merge overlap threshold": 70,
-            "merge score threshold": 400,
-            "substitution quality correction": 28
+    }, 
+    "template": {
+        "study": {
+            "default": {
+                "column": {
+                    "enabled": false
+                }, 
+                "feature": {
+                    "column": {
+                        "max": null, 
+                        "mean": {
+                            "enabled": true
+                        }, 
+                        "min": null, 
+                        "std": null
+                    }, 
+                    "order": [
+                        "mean", 
+                        "std", 
+                        "min", 
+                        "max"
+                    ]
+                }, 
+                "preset": {
+                    "feature": {}, 
+                    "order": [
+                        "chew", 
+                        "v3 chew", 
+                        "d5 chew", 
+                        "d3 chew", 
+                        "j5 chew", 
+                        "cdr3 length", 
+                        "cdr3 charge", 
+                        "cdr3 weight", 
+                        "vd length", 
+                        "vd n count", 
+                        "vd p count", 
+                        "dj length", 
+                        "dj n count", 
+                        "dj p count", 
+                        "vj length", 
+                        "vj n count", 
+                        "vj p countn count", 
+                        "n count", 
+                        "p count", 
+                        "cdr3 low 4 phred", 
+                        "cdr3 min phred", 
+                        "effective low 4 phred", 
+                        "effective min phred"
+                    ], 
+                    "sort": [
+                        {
+                            "column": "weight", 
+                            "reverse": true
+                        }
+                    ], 
+                    "unique": false
+                }
+            }, 
+            "feature": {
+                "cdr3 charge": null, 
+                "cdr3 length": null, 
+                "cdr3 low 4 phred": null, 
+                "cdr3 min phred": null, 
+                "cdr3 weight": null, 
+                "chew": null, 
+                "d3 chew": null, 
+                "d5 chew": null, 
+                "dj length": null, 
+                "dj n count": null, 
+                "dj p count": null, 
+                "effective low 4 phred": null, 
+                "effective min phred": null, 
+                "j5 chew": null, 
+                "n count": null, 
+                "p count": null, 
+                "v3 chew": null, 
+                "vd length": null, 
+                "vd n count": null, 
+                "vd p count": null, 
+                "vj length": null, 
+                "vj n count": null, 
+                "vj p count": null
+            }
         }
     }
 }

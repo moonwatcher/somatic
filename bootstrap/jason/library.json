@@ -6,7 +6,7 @@
         }, 
         "head": {
             "id": "jason_bmpreb_pilot1", 
-            "strain": "C57BL/6", 
+            "strain": "c57bl6", 
             "tissue": "bone marrow pre b"
         }
     },
@@ -17,7 +17,7 @@
         }, 
         "head": {
             "id": "jason_bmpreb_pilot2", 
-            "strain": "C57BL/6", 
+            "strain": "c57bl6", 
             "tissue": "bone marrow pre b"
         }
     },
@@ -28,7 +28,7 @@
         }, 
         "head": {
             "id": "jason_bmpreb_pilot3", 
-            "strain": "C57BL/6", 
+            "strain": "c57bl6", 
             "tissue": "bone marrow pre b"
         }
     }
