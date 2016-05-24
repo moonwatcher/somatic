@@ -1166,29 +1166,53 @@ class Sequence(object):
 
     def crop(self, start, end=None):
         sequence = None
-        if start is not None:
-            start = max(start, 0)
-            end = self.length if end is None else min(end, self.length)
-            if end > start:
-                cropped = {
-                    'nucleotide': self.nucleotide[start:end],
-                    'strand': self.strand
-                }
-                if 'read frame' in self.node:
-                    cropped['read frame'] = (3 - (start - self.read_frame)%3)%3
+        start = 0 if start is None else max(start, 0)
+        end = self.length if end is None else min(end, self.length)
+        if end > start:
+            cropped = {
+                'nucleotide': self.nucleotide[start:end],
+                'strand': self.strand
+            }
+            if self.read_frame is not None:
+                cropped['read frame'] = (3 - (start - self.read_frame)%3)%3
 
-                if 'quality' in self.node:
-                    cropped['quality'] = self.quality[start:end]
-                sequence = Sequence(self.pipeline, cropped)
+            if 'quality' in self.node:
+                cropped['quality'] = self.quality[start:end]
+            sequence = Sequence(self.pipeline, cropped)
         return sequence
+
+
+        # sequence = None
+        # if start is not None:
+        #     start = max(start, 0)
+        #     end = self.length if end is None else min(end, self.length)
+        #     if end > start:
+        #         cropped = {
+        #             'nucleotide': self.nucleotide[start:end],
+        #             'strand': self.strand
+        #         }
+        #         if 'read frame' in self.node:
+        #             cropped['read frame'] = (3 - (start - self.read_frame)%3)%3
+
+        #         if 'quality' in self.node:
+        #             cropped['quality'] = self.quality[start:end]
+        #         sequence = Sequence(self.pipeline, cropped)
+        # return sequence
 
     @property
     def read_frame(self):
-        return self.node['read frame']
+        if 'read frame' in self.node:
+            return self.node['read frame']
+        else:
+            return None
 
     @read_frame.setter
     def read_frame(self, value):
-        self.node['read frame'] = value
+        if value is None:
+            if 'read frame' in self.node:
+                del self.node['read frame']
+        else:
+            self.node['read frame'] = value
         self.reset()
 
     @property
@@ -1209,9 +1233,11 @@ class Sequence(object):
 
     @nucleotide.setter
     def nucleotide(self, value):
-        self.node['nucleotide'] = value
-        if not self.node['nucleotide']:
-            del self.node['nucleotide']
+        if value is None:
+            if 'nucleotide' in self.node:
+                del self.node['nucleotide']
+        else:
+            self.node['nucleotide'] = value
         self.reset()
 
     @property
@@ -1223,9 +1249,11 @@ class Sequence(object):
 
     @quality.setter
     def quality(self, value):
-        self.node['quality'] = value
-        if not self.node['quality']:
-            del self.node['quality']
+        if value is None:
+            if 'quality' in self.node:
+                del self.node['quality']
+        else:
+            self.node['quality'] = value
         self.reset()
 
     @property
@@ -2438,7 +2466,7 @@ class Hit(object):
         return self.node['weight']
 
     @classmethod
-    def from_bwa(cls, block, value):
+    def from_bwa(cls, block, value, region, type='gene segment'):
         instance = None
         if block is not None:
             if value is not None:
@@ -2474,6 +2502,8 @@ class Hit(object):
                 match = block.configuration.expression['sam record'].search(value)
                 if match:
                     record = match.groupdict()
+                    record['region'] = region
+                    record['type'] = type
                     for field in [
                         'FLAG',
                         'POS',
@@ -2542,12 +2572,16 @@ class Hit(object):
                                             instance.node['subject end'] += o[1]
                                         elif o[0] in ['S', 'H']:
                                             break
+
+                            if not instance.query_start < instance.query_end:
+                                block.log.error('discarding zero length hit %s', value)
+                                instance = None
                         else:
                             block.log.debug('discarding unmapped hit for sample %s', record['QNAME'])
                     else:
                         block.log.error('could not locate sample %s in block', record['QNAME'])
                 else:
-                    block.log.error('invalid sam record %s', value)
+                    block.log.error('invalid sam syntax %s', value)
             else:
                 block.log.error('sam record cannot be null')
         else:
@@ -2800,6 +2834,62 @@ class Sample(object):
                     hit.invalidate('unknown gene')
             self._add_hit(hit)
 
+    @property
+    def residual(self):
+        start = 0
+        end = self.sequence.length
+        if 'jh' in self.primary:
+            jh = self.primary['jh']
+            if jh.query_strand:
+                if jh.query.strand != self.sequence.strand:
+                    start = max(start, self.sequence.length - jh.query_start)
+                else:
+                    end = min(end, jh.query_start)
+            else:
+                if jh.query.strand != self.sequence.strand:
+                    start = max(start, self.sequence.length - jh.query_start)
+                else:
+                    end = min(end, jh.query_start)
+
+        if 'vh' in self.primary:
+            vh = self.primary['vh']
+            if vh.query_strand:
+                if vh.query.strand != self.sequence.strand:
+                    end = min(end, self.sequence.length - vh.query_end)
+                else:
+                    start = max(start, vh.query_end)
+            else:
+                if vh.query.strand != self.sequence.strand:
+                    end = min(end, self.sequence.length - vh.query_end)
+                else:
+                    start = max(start, vh.query_end)
+
+        return self.sequence.crop(start, end)
+
+    def determine_region(self, region):
+        if region == 'jh':
+            self._pick_jh_region()
+        elif region == 'vh':
+            self._pick_vh_region()
+        elif region == 'dh':
+            self._pick_dh_region()
+
+    def analyze(self):
+        self._reset()
+        self._load_gene()
+        self._pick_jh_region()
+        self._pick_vh_region()
+        self._check_v_j_framing()
+        self._pick_dh_region()
+        self._identify_v_j_junction()
+        self._identify_v_d_junction()
+        self._identify_d_j_junction()
+        self._identify_cdr3()
+        self._identify_chewback()
+        self._check_for_stop_codon()
+        self._check_for_productivity()
+        self._analyze_quality()
+
     def _add_hit(self, hit):
         self.hit.append(hit)
         self._load_hit(hit)
@@ -2823,22 +2913,6 @@ class Sample(object):
         ]:
             if k in hit.node and isinstance(hit.node[k], dict):
                 hit.node[k] = Sequence(self.pipeline, hit.node[k])
-
-    def analyze(self):
-        self._reset()
-        self._load_gene()
-        self._pick_jh_region()
-        self._pick_vh_region()
-        self._check_v_j_framing()
-        self._pick_dh_region()
-        self._identify_v_j_junction()
-        self._identify_v_d_junction()
-        self._identify_d_j_junction()
-        self._identify_cdr3()
-        self._identify_chewback()
-        self._check_for_stop_codon()
-        self._check_for_productivity()
-        self._analyze_quality()
 
     def _reset(self):
         self.head['valid'] = True
@@ -3048,18 +3122,17 @@ class Sample(object):
                 else:
                     junction.node['palindrome ratio'] = 0.0
 
-        if left is not None and right is not None:
-            if left.query_end < right.query_start:
-                junction = Hit(self, {
-                    'FLAG': self.FLAG,
-                    'region': name,
-                    'subject id': name,
-                    'query start': left.query_end,
-                    'query end': right.query_start,
-                })
-                identify_palindrome(junction, left.query, right.query)
-                self._add_hit(junction)
-                self._pick_hit(junction)
+        if left is not None and right is not None and left.query_end < right.query_start:
+            junction = Hit(self, {
+                'FLAG': self.FLAG,
+                'region': name,
+                'subject id': name,
+                'query start': left.query_end,
+                'query end': right.query_start,
+            })
+            identify_palindrome(junction, left.query, right.query)
+            self._add_hit(junction)
+            self._pick_hit(junction)
 
     def _identify_v_d_junction(self):
         vh = None if 'vh' not in self.primary else self.primary['vh']
@@ -3138,24 +3211,21 @@ class Sample(object):
         if vh is not None and jh is not None:
             start = locate_cdr3_start(vh)
             end = locate_cdr3_end(jh)
-            if self.reverse_complemented:
-                query = self.sequence.reversed.crop(start, end)
-            else:
-                query = self.sequence.crop(start, end)
-
-            if query:
+            if start is not None and end is not None and start < end:
                 cdr3 = Hit(self, { 
                     'FLAG': self.FLAG,
                     'region': 'cdr3',
                     'subject id': 'cdr3',
                     'query start': start,
-                    'query end': end,
-                    'query': query
+                    'query end': end
                 })
-                self._add_hit(cdr3)
-                self._pick_hit(cdr3)
-                cdr3.charge
-                cdr3.weight
+                if cdr3.valid:
+                    print(to_json_document(cdr3.query))
+                    # print(to_json_document(cdr3))
+                    self._add_hit(cdr3)
+                    self._pick_hit(cdr3)
+                    cdr3.charge
+                    cdr3.weight
 
     def _identify_chewback(self):
         for hit in self.hit:
@@ -4465,6 +4535,11 @@ class Block(object):
     def search(self):
         for key in self.chain['alignment order']:
             self.bwa(self.region[key])
+            self.determine_region(key)
+
+    def determine_region(self, region):
+        for sample in self.buffer:
+            sample.determine_region(region)
 
     def bwa(self, region):
         command = Command(self.pipeline, 'bwa mem', region['bwa mem'])
@@ -4477,10 +4552,8 @@ class Block(object):
             for line in buffer:
                 line = line.strip('\n')
                 if line[0] != '@':
-                    hit = Hit.from_bwa(self, line)
-                    if hit:
-                        hit.region = region['key']
-                        hit.type = region['type']
+                    hit = Hit.from_bwa(self, line, region['key'], region['type'])
+                    if hit and hit.valid:
                         hit.sample.add_bwa_hit(hit)
 
     def igblast(self):
@@ -4529,8 +4602,10 @@ class Block(object):
     def to_fastq(self):
         buffer = StringIO()
         for sample in self.buffer:
-            buffer.write(to_fastq(sample.id, sample.sequence.nucleotide, sample.sequence.quality))
-            buffer.write('\n')
+            residual = sample.residual
+            if residual is not None:
+                buffer.write(to_fastq(sample.id, residual.nucleotide, residual.quality))
+                buffer.write('\n')
         buffer.seek(0)
         return buffer
 
@@ -6433,9 +6508,9 @@ class Pipeline(object):
         block = Block(self, request)
         while block.fill():
             count += block.size
-            for sample in block.buffer:
-                if sample.gapped:
-                    print(to_json_document(sample))
+            # for sample in block.buffer:
+            #     if sample.gapped:
+            #         print(to_json_document(sample))
             # self.resolver.bulk_store_sample(block.buffer)
             self.log.info('%s so far', count)
 
