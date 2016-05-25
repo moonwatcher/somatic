@@ -1713,9 +1713,9 @@
                                 "dh": {
                                     "bwa mem": {
                                         "parameter": {
-                                            "-A": "2",
+                                            "-A": "2", 
                                             "-B": "4", 
-                                            "-T": "14",
+                                            "-T": "14", 
                                             "-a": null, 
                                             "-k": "4"
                                         }
@@ -1743,7 +1743,7 @@
                                 "jh": {
                                     "bwa mem": {
                                         "parameter": {
-                                            "-A": "2",
+                                            "-A": "2", 
                                             "-B": "4", 
                                             "-T": "48", 
                                             "-a": null, 
@@ -1763,7 +1763,7 @@
                                 "vh": {
                                     "bwa mem": {
                                         "parameter": {
-                                            "-A": "2",
+                                            "-A": "2", 
                                             "-B": "4", 
                                             "-T": "54", 
                                             "-a": null, 
@@ -1815,7 +1815,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 codon"
                 ], 
@@ -1847,7 +1847,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 codon", 
                     "vh"
@@ -1880,7 +1880,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 codon", 
                     "vh", 
@@ -1915,7 +1915,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 codon", 
                     "cdr3 nucleotide"
@@ -1948,7 +1948,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 codon", 
                     "cdr3 nucleotide", 
@@ -1982,7 +1982,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 codon", 
                     "cdr3 nucleotide", 
@@ -2018,7 +2018,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "effective codon", 
                     "effective nucleotide"
@@ -2051,7 +2051,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "id", 
                     "vh", 
@@ -2100,7 +2100,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "jh"
                 ], 
@@ -2132,7 +2132,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 nucleotide", 
                     "vh", 
@@ -2145,7 +2145,7 @@
         "rc3": {
             "study": {
                 "chain": "igh", 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 codon"
                 ], 
@@ -2155,7 +2155,7 @@
         "rn3": {
             "study": {
                 "chain": "igh", 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "cdr3 nucleotide"
                 ], 
@@ -2196,7 +2196,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "vh", 
                     "dh", 
@@ -2230,7 +2230,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "vh family"
                 ], 
@@ -2262,7 +2262,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "vh family", 
                     "cdr3 codon"
@@ -2301,7 +2301,7 @@
                     "vd n count": null, 
                     "vd p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "vh", 
                     "jh"
@@ -2327,7 +2327,7 @@
                     "vj n count": null, 
                     "vj p count": null
                 }, 
-                "organism name": "mus musculus", 
+                "organism": "mus musculus", 
                 "rotate": [
                     "vh", 
                     "jh"
@@ -2860,11 +2860,11 @@
                 {
                     "key": [
                         [
-                            "head.organism name", 
+                            "head.organism", 
                             1
                         ]
                     ], 
-                    "name": "accession organism name", 
+                    "name": "accession organism", 
                     "unique": false
                 }, 
                 {
@@ -2915,11 +2915,11 @@
                 {
                     "key": [
                         [
-                            "head.organism name", 
+                            "head.organism", 
                             1
                         ]
                     ], 
-                    "name": "gene organism name", 
+                    "name": "gene organism", 
                     "unique": false
                 }, 
                 {

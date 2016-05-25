@@ -128,13 +128,21 @@ def expected_error(quality):
 def to_csv(row):
     return ','.join([str(column) for column in row])
 
-def to_document(node):
-    if isinstance(node, set):
-        return [ to_document(v) for v in node ]
-    if isinstance(node, list):
-        return [ to_document(v) for v in node ]
+def to_document(node, clear=False):
+    if isinstance(node, list) or isinstance(node, set):
+        o = [ to_document(v, clear) for v in node ]
+        if clear:
+            o = [ v for v in node if v is not None ]
+            if len(o) == 0:
+                o = None
+        return o
     elif isinstance(node, dict):
-        return dict([ (k,to_document(v)) for k,v in node.items() ])
+        o = dict([ (k,to_document(v, clear)) for k,v in node.items()])
+        if clear:
+            o = dict([ (k,v) for k,v in o.items() if v is not None])
+            if len(o) == 0:
+                o = None
+        return o
     elif isinstance(node, numpy.ndarray):
         if node.dtype == numpy.float:
             return [ float(v) for v in node ]
@@ -1112,9 +1120,22 @@ class Sequence(object):
     def __init__(self, pipeline, node=None):
         self.log = logging.getLogger('Sequence')
         self.pipeline = pipeline
-        self.node = node
-        self._reversed = None
+        self.node = merge(self.default['body'], node)
         self.reset()
+
+    @property
+    def default(self):
+        return {
+            'body': {
+                'nucleotide': None,
+                'quality': None,
+                'read frame': None,
+                'strand': None,
+                'codon': None,
+                'phred': None,
+                'reversed': None,
+            },
+        }
 
     def __str__(self):
         buffer = StringIO()
@@ -1138,48 +1159,37 @@ class Sequence(object):
 
     @property
     def document(self):
-        document = to_document(self.node)
-        for key in [
-            'codon',
-            'phred',
-        ]:
-            if key in document:
-                del document[key]
-        return document
+        # return to_document(self.node)
+        return to_document({
+            'nucleotide': self.nucleotide,
+            'quality': self.quality,
+            'read frame': self.read_frame,
+            'strand': self.strand,
+        }, True)
 
     def reset(self):
-        if self.node is None:
-            self.node = { 'read frame': 0, 'strand': True }
-        for k in ['codon', 'phred']:
-            if k in self.node: del self.node[k]
-        self._reversed = None
+        for term in [
+            'codon',
+            'phred',
+            'reversed',
+        ]:
+            self.node[term] = None
 
     def clone(self):
-        clone = {
-            'nucleotide': self.nucleotide,
-            'read frame': self.read_frame,
-            'strand': self.strand
-        }
-        if 'quality' in self.node:
-            clone['quality'] = self.quality
-        return Sequence(self.pipeline, clone)
+        return Sequence(self.pipeline, self.node)
 
-    def crop(self, start, end=None):
-        sequence = None
+    def crop(self, start=None, end=None):
+        cropped = None
         start = 0 if start is None else max(start, 0)
         end = self.length if end is None else min(end, self.length)
         if end > start:
-            cropped = {
+            cropped = Sequence(self.pipeline, {
                 'nucleotide': self.nucleotide[start:end],
-                'strand': self.strand
-            }
-            if self.read_frame is not None:
-                cropped['read frame'] = (3 - (start - self.read_frame)%3)%3
-
-            if 'quality' in self.node:
-                cropped['quality'] = self.quality[start:end]
-            sequence = Sequence(self.pipeline, cropped)
-        return sequence
+                'strand': self.strand,
+                'read frame': None if self.read_frame is None else (3 - (start - self.read_frame)%3)%3,
+                'quality': None if self.quality is None else self.quality[start:end],
+            })
+        return cropped
 
 
         # sequence = None
@@ -1201,18 +1211,11 @@ class Sequence(object):
 
     @property
     def read_frame(self):
-        if 'read frame' in self.node:
-            return self.node['read frame']
-        else:
-            return None
+        return self.node['read frame']
 
     @read_frame.setter
     def read_frame(self, value):
-        if value is None:
-            if 'read frame' in self.node:
-                del self.node['read frame']
-        else:
-            self.node['read frame'] = value
+        self.node['read frame'] = value
         self.reset()
 
     @property
@@ -1233,11 +1236,7 @@ class Sequence(object):
 
     @nucleotide.setter
     def nucleotide(self, value):
-        if value is None:
-            if 'nucleotide' in self.node:
-                del self.node['nucleotide']
-        else:
-            self.node['nucleotide'] = value
+        self.node['nucleotide'] = value
         self.reset()
 
     @property
@@ -1249,25 +1248,19 @@ class Sequence(object):
 
     @quality.setter
     def quality(self, value):
-        if value is None:
-            if 'quality' in self.node:
-                del self.node['quality']
-        else:
-            self.node['quality'] = value
+        self.node['quality'] = value
         self.reset()
 
     @property
     def codon(self):
-        if 'codon' not in self.node and self.nucleotide:
-            codon = self.codon_at_frame(self.read_frame)
-            if codon:
-                self.node['codon'] = codon
-        return None if 'codon' not in self.node else self.node['codon']
+        if self.node['codon'] is None and self.nucleotide is not None:
+            self.node['codon'] = self.codon_at_frame(self.read_frame)
+        return self.node['codon']
 
     @property
     def classified(self):
         classified = None
-        if self.codon:
+        if self.codon is not None:
             classified = []
             for codon in self.codon:
                 acid = self.configuration.enumeration['iupac amino acid notation'][codon]
@@ -1280,28 +1273,31 @@ class Sequence(object):
 
     @property
     def phred(self):
-        if 'phred' not in self.node and self.quality:
+        if self.node['phred'] is None and self.quality is not None:
             self.node['phred'] = [ (ord(c) - 33) for c in self.quality ]
         return self.node['phred']
 
     def codon_at_frame(self, read_frame):
-        start = read_frame
-        end = start + 3
-        codon = []
-        while(not end > self.length):
-            acid = self.nucleotide[start:end]
-            try:
-                codon.append(self.configuration.enumeration['nucleic to amino'][acid])
-            except KeyError as e:
-                self.log.debug('could not resolve %s triplet to an amino acid', e)
-                if acid in self.configuration.enumeration['stop codon repertoire']:
-                    self.log.debug('%s is potentially a stop codon', acid)
-                    codon.append('*')
-                else:
-                    codon.append('X')
-            start = end
+        codon = None
+        if read_frame is not None:
+            start = read_frame
             end = start + 3
-        return ''.join(codon)
+            codon = []
+            while(not end > self.length):
+                acid = self.nucleotide[start:end]
+                try:
+                    codon.append(self.configuration.enumeration['nucleic to amino'][acid])
+                except KeyError as e:
+                    self.log.debug('could not resolve %s triplet to an amino acid', e)
+                    if acid in self.configuration.enumeration['stop codon repertoire']:
+                        self.log.debug('%s is potentially a stop codon', acid)
+                        codon.append('*')
+                    else:
+                        codon.append('X')
+                start = end
+                end = start + 3
+            codon = ''.join(codon)
+        return codon
 
     @property
     def length(self):
@@ -1309,19 +1305,14 @@ class Sequence(object):
 
     @property
     def reversed(self):
-        if self._reversed is None and self.nucleotide:
-            reversed = {
+        if self.node['reversed'] is None and self.nucleotide is not None:
+            self.node['reversed'] = Sequence(self.pipeline, {
                 'nucleotide': ''.join([ self.configuration.enumeration['reverse complement'][b] for b in list(self.nucleotide) ][::-1]),
-                'strand': not self.strand
-            }
-            if 'read frame' in self.node:
-                reversed['read frame'] = (self.length - self.read_frame) % 3
-
-            if 'quality' in self.node:
-                reversed['quality'] = self.quality[::-1]
-                
-            self._reversed = Sequence(self.pipeline, reversed)
-        return self._reversed
+                'strand': None if self.strand is None else not self.strand,
+                'read frame': None if self.read_frame is None else (self.length - self.read_frame) % 3,
+                'quality': None if self.quality is None else self.quality[::-1],
+            })
+        return self.node['reversed']
 
 class Accession(object):
     def __init__(self, pipeline, node=None):
@@ -1422,49 +1413,54 @@ class Artifact(object):
     def __init__(self, pipeline, node=None):
         self.log = logging.getLogger('Artifact')
         self.pipeline = pipeline
-        self.node = node
-        
-        if self.node is None:
-            self.node = {
-                'head': { },
-                'body': { 'accession strand': True }
-            }
-            
-        if 'sequence' in self.body:
+        self.node = merge(self.default, node)
+
+        if self.body['sequence'] is not None:
             if isinstance(self.body['sequence'], dict):
                 self.body['sequence'] = Sequence(self.pipeline, self.body['sequence'])
         else:
             self.body['sequence'] = Sequence(self.pipeline)
 
-    def __str__(self):
-        buffer = []
-        buffer.append(self.id if self.id else 'unknown id')
-        buffer.append(self.region if self.region else 'unknown region')
-        buffer.append(self.strain if self.strain else 'unknown strain')
-        if 'accession' in self.head: buffer.append(self.head['accession'])
-        if 'accession strand' in self.body: buffer.append('+' if self.accession_strand else '-')
-        buffer.append('{}bp'.format(self.length))
-        return '[ {} ]'.format(', '.join(buffer))
+        # if 'start' in self.body and 'end' not in self.body:
+        #     self.body['end'] = self.body['start'] + self.sequence.length
 
     @property
     def configuration(self):
         return self.pipeline.configuration
 
     @property
-    def head(self):
-        return self.node['head']
+    def default(self):
+        return {
+            'id' : None,
+            'start': None,
+            'end': None,
+            'source': None,
+            'position': None,
+            'organism': None,
+            'strain' : None,
+            'region' : None,
+            'description': None,
+            'accession' : None,
+            'aligned' : None,
+            'sequence': None,
+            'alignment': None,
+            'reference start': None,
+            'reference end': None,
+            'reference strand': None,
+            'accession start': None,
+            'accession end': None,
+            'accession strand': None,
+            'reference file sha1': None,
+            'reference record sha1': None,
+        }
 
     @property
     def body(self):
-        return self.node['body']
+        return self.node
 
     @property
     def document(self):
-        return to_document(self.node)
-
-    @property
-    def fasta(self):
-        return to_fasta(self.id, self.sequence.nucleotide, None, self.configuration.constant['fasta line length'])
+        return to_document(self.body, True)
 
     @property
     def valid(self):
@@ -1472,99 +1468,95 @@ class Artifact(object):
 
     @property
     def id(self):
-        if 'id' in self.head:
-            return self.head['id']
-        else:
-            return None
+        return self.body['id']
 
     @property
     def organism(self):
-        if 'organism name' in self.head:
-            return self.head['organism name']
-        else:
-            return None
+        return self.body['organism']
 
     @property
     def strain(self):
-        if 'strain' in self.head:
-            return self.head['strain']
-        else:
-            return None
+        return self.body['strain']
 
     @property
     def region(self):
-        if 'region' in self.head:
-            return self.head['region']
-        else:
-            return None
+        return self.body['region']
+
+    @property
+    def description(self):
+        return self.body['description']
 
     @property
     def accession(self):
-        if 'accession' in self.head:
-            return self.head['accession']
-        else:
-            return None
+        return self.body['accession']
 
     @property
     def aligned(self):
-        if 'aligned' in self.head:
-            return self.head['aligned']
-        else:
-            return False
+        return self.body['aligned']
+
+    @property
+    def sequence(self):
+        return self.body['sequence']
 
     @property
     def alignment(self):
-        if 'alignment' in self.body:
-            return self.body['alignment']
-        else:
-            return None
+        return self.body['alignment']
     
     @property
+    def source(self):
+        return self.body['source']
+
+    @property
+    def start(self):
+        return self.body['start']
+    
+    @property
+    def end(self):
+        if  self.body['end'] is None and \
+            self.start is not None and \
+            self.sequence is not None:
+                self.body['end'] = self.start + self.sequence.length
+        return self.body['end']
+
+    @property
+    def position(self):
+        return self.body['position']
+
+    @property
     def reference_start(self):
-        if 'reference start' in self.body:
-            return self.body['reference start']
-        else:
-            return None
+        return self.body['reference start']
     
     @property
     def reference_end(self):
-        if 'reference end' in self.body:
-            return self.body['reference end']
-        else:
-            return None
+        return self.body['reference end']
     
     @property
     def reference_strand(self):
-        if 'reference strand' in self.body:
-            return self.body['reference strand']
-        else:
-            return None
+        return self.body['reference strand']
     
     @property
     def accession_start(self):
-        if 'accession start' in self.body:
-            return self.body['accession start']
-        else:
-            return None
+        return self.body['accession start']
 
     @property
     def accession_end(self):
-        if 'accession end' in self.body:
-            return self.body['accession end']
-        else:
-            return None
+        return self.body['accession end']
 
     @property
     def accession_strand(self):
         return self.body['accession strand']
 
     @property
-    def length(self):
-        return self.sequence.length
+    def reference_file_sha1(self):
+        return self.body['reference file sha1']
 
     @property
-    def sequence(self):
-        return self.body['sequence']
+    def reference_record_sha1(self):
+        return self.body['reference record sha1']
+
+    @property
+    def length(self):
+        return self.sequence.length
 
     def flanking_accession_query(self, flank):
         query = None
@@ -1649,7 +1641,7 @@ class Artifact(object):
                         self.log.debug('artifact sequence for %s matched to accession %s:%d:%d', self.id, accession.id, self.accession_start, self.accession_end)
 
                     if self.strain is None and accession.strain is not None:
-                        self.head['strain'] = accession.strain
+                        self.body['strain'] = accession.strain
                         self.log.info('strain %s assigned to artifact %s from %s', self.strain, self.id, self.accession)
             else:
                 self.log.error('coordinates %d:%d invalid for accession %s', self.accession_start, self.accession_end, self.accession)
@@ -1677,7 +1669,7 @@ class Artifact(object):
         positions = []
         start = accession.sequence.nucleotide.find(self.sequence.nucleotide)
         while start >= 0 and start < accession.sequence.length:
-            end = start + self.sequence.length
+            end = start + self.length
             positions.append([start, end])
             start = accession.sequence.nucleotide.find(self.sequence.nucleotide, start + 1)
 
@@ -1704,7 +1696,7 @@ class Artifact(object):
         self.body['reference start'] = start
         self.body['reference end'] = end
         self.body['reference strand'] = strand
-        self.head['aligned'] = True
+        self.body['aligned'] = True
 
     def assign_reference_alignment(self, hit):
         self.align_to_reference(hit['target start'], hit['target end'], hit['query strand'])
@@ -1716,118 +1708,164 @@ class Gene(Artifact):
     def __init__(self, pipeline, node=None):
         Artifact.__init__(self, pipeline, node)
         self.log = logging.getLogger('Gene')
-        for k in [ 'confirmed',  'identified' ]:
-            if k not in self.head:
-                self.head[k] = True
 
-        for name in [
-            '3 heptamer',
-            '3 nonamer',
-            '3 spacer',
-            '5 heptamer',
-            '5 nonamer',
-            '5 spacer',
-            '3 gap',
-            '5 gap',
-            'preamble',
-            'fr1',
-            'cdr1',
-            'fr2',
-            'cdr2',
-            'fr3',
-            'cdr3'
-        ]:
-            if name in self.body:
-                artifact = self.body[name]
-                if 'sequence' in artifact and isinstance(artifact['sequence'], dict):
-                    artifact['sequence'] = Sequence(self.pipeline, artifact['sequence'])
+        for term in self.index:
+            if term in self.body:
+                self.head[term] = self.body[term]
 
-                if 'start' in artifact and 'end' not in artifact and 'sequence' in artifact:
-                    artifact['end'] = artifact['start'] + artifact['sequence'].length
+        for key,artifact in self.artifacts.items():
+            if artifact is not None:
+                self.artifacts[key] = Artifact(self.pipeline, artifact)
+
+    @property
+    def document(self):
+        return to_document(self.node, True)
+
+    @property
+    def index(self):
+        return [
+            'id',
+            'organism',
+            'strain',
+            'region',
+            'description',
+            'accession',
+            'aligned',
+            'framed',
+            'identified',
+            'confirmed',
+            'functionality',
+            'verified',
+            'gene',
+            'allele',
+            'group',
+        ]
+
+    @property
+    def default(self):
+        return merge(
+            {
+                'body': super(Gene, self).default,
+            }, 
+            {
+                'head': {},
+                'body': {
+                    'framed': None,
+                    'identified': True,
+                    'confirmed': True,
+                    'functionality': None,
+                    'verified': None,
+                    'gene': None,
+                    'allele': None,
+                    'group': None,
+                    'kind': None,
+                    'chain': None,
+                    'family': None,
+                    'artifacts': {
+                        '3 heptamer': None,
+                        '3 nonamer': None,
+                        '3 spacer': None,
+                        '5 heptamer': None,
+                        '5 nonamer': None,
+                        '5 spacer': None,
+                        '3 gap': None,
+                        '5 gap': None,
+                        'preamble': None,
+                        'fr1': None,
+                        'cdr1': None,
+                        'fr2': None,
+                        'cdr2': None,
+                        'fr3': None,
+                        'cdr3': None,
+                    }
+                },
+            }
+        )
+
+    @property
+    def body(self):
+        return self.node['body']
+
+    @property
+    def head(self):
+        return self.node['head']
+
+    @property
+    def framed(self):
+        return self.body['framed']
+
+    @property
+    def functionality(self):
+        return self.body['functionality']
+
+    @property
+    def verified(self):
+        return self.body['verified']
+
+    @property
+    def chain(self):
+        return self.body['chain']
+
+    @property
+    def family(self):
+        return self.body['family']
+
+    @property
+    def name(self):
+        return self.body['gene']
+
+    @property
+    def allele(self):
+        return self.body['allele']
+
+    @property
+    def group(self):
+        return self.body['group']
+
+    @property
+    def artifacts(self):
+        return self.body['artifacts']
 
     @property
     def row(self):
         return '| ' + ' | '.join(['{:<13}', '{:<12}', '{:<1}', '{:<3}', '{:<12}']).format(
-            str(self.body['gene']), 
-            str(self.body['family']), 
-            str(self.body['functionality']), 
-            str(self.body['length']), 
-            str(self.body['reference start']), 
+            str(self.gene), 
+            str(self.family), 
+            str(self.functionality), 
+            str(self.length), 
+            str(self.reference_start), 
         )
 
-    @property
-    def framed(self):
-        return self.head['framed']
-
-    @property
-    def functionality(self):
-        return self.head['functionality']
-
     def validate_artifact(self):
-        self.validate_artifact_in_gene()
+        self.validate_internal_artifact()
         self.validate_artifact_in_reference()
 
+    def validate_internal_artifact(self):
+        for key, artifact in self.artifacts.items():
+            if artifact is not None:
+                if artifact.position == 'inside':
+                    fragment = self.sequence.crop(artifact.start, artifact.end)
+                    if fragment:
+                        artifact.body['sequence'] = fragment
+                        if key not in [ 'preamble', 'cdr3' ] and fragment.read_frame != 0:
+                            self.log.debug('artifact %s for %s is out of frame %s', key, self.id, fragment.read_frame)
+                    else:
+                        self.artifacts[key] = None
+                        self.log.info('dropping empty %s for %s', key, self.id)
+
     def validate_artifact_in_reference(self):
-        for name in [
-            '3 heptamer',
-            '3 nonamer',
-            '3 spacer',
-            '5 heptamer',
-            '5 nonamer',
-            '5 spacer',
-            '3 gap',
-            '5 gap',
-            'preamble',
-            'fr1',
-            'cdr1',
-            'fr2',
-            'cdr2',
-            'fr3',
-            'cdr3'
-        ]:
-            if name in self.body:
-                node = self.body[name]
-                if ('reference strand' in node and \
-                    'reference start' in node and \
-                    'reference end' in node):
-                    artifact = Artifact(self.pipeline, { 'head':{ 'aligned':True, 'id': '{} {}'.format(name, self.id) }, 'body':node })
+        for artifact in self.artifacts.values():
+            if artifact is not None:
+                if  artifact.reference_start is not None and \
+                    artifact.reference_end is not None and \
+                    artifact.reference_strand is not None:
                     artifact.validate_in_reference()
 
-    def validate_artifact_in_gene(self):
-        for artifact in [
-            'preamble',
-            'fr1',
-            'cdr1',
-            'fr2',
-            'cdr2',
-            'fr3',
-            'cdr3'
-        ]:
-            if artifact in self.body:
-                start = self.body[artifact]['start']
-                end = None if 'end' not in self.body[artifact] else self.body[artifact]['end']
-                fragment = self.sequence.crop(start, end)
-                if fragment:
-                    self.body[artifact]['sequence'] = fragment
-                    if artifact not in [ 'preamble', 'cdr3' ] and fragment.read_frame != 0:
-                        self.log.debug('artifact %s for %s is out of frame %s', artifact, self.id, fragment.read_frame)
-                else:
-                    del self.body[artifact]
-                    self.log.info('dropping empty %s for %s', artifact, self.id)
-
     def check_rss(self, flank, distance):
-        for artifact in [
-            '3 heptamer',
-            '3 nonamer',
-            '3 spacer',
-            '5 heptamer',
-            '5 nonamer',
-            '5 spacer',
-            '3 gap',
-            '5 gap',
-        ]:
-            if artifact in self.body and self.body[artifact]['source'] in ['implied', 'pattern']:
-                del self.body[artifact]
+        # reset the implicit flanking artifacts
+        for key, artifact in self.artifacts.items():
+            if artifact.source in ['implied', 'pattern'] and artifact.position != 'inside':
+                self.artifacts[key] = None
 
         flanking = self.flanking_reference_query(flank)
         if flanking:
@@ -1872,7 +1910,7 @@ class Gene(Artifact):
             'fr3',
             'cdr3'
         ]:
-            if artifact in self.body and self.body[artifact]['sequence'].read_frame != 0:
+            if self.artifacts[artifact] is not None and self.artifacts[artifact].sequence.read_frame != 0:
                 framed_artifact = False
 
         if self.framed:
@@ -1887,8 +1925,8 @@ class Gene(Artifact):
                     'fr3',
                     'cdr3'
                 ]:
-                    if artifact in self.body:
-                        buffer.append('<span class="{}">{}</span>'.format(artifact, self.body[artifact]['sequence'].codon))
+                    if self.artifacts[artifact] is not None:
+                        buffer.append('<span class="{}">{}</span>'.format(artifact, self.artifacts[artifact].sequence.codon))
             else:
                 buffer.append(self.sequence.codon)
             buffer.append('</div>')
@@ -1915,8 +1953,8 @@ class Gene(Artifact):
                 'fr3',
                 'cdr3'
             ]:
-                if artifact in self.body:
-                    buffer.append('<span class="{}">{}</span>'.format(artifact, self.body[artifact]['sequence'].nucleotide))
+                if self.artifacts[artifact] is not None:
+                    buffer.append('<span class="{}">{}</span>'.format(artifact, self.artifacts[artifact].sequence.nucleotide))
         else:
             buffer.append(self.sequence.nucleotide)
         buffer.append('</div>')
@@ -1940,19 +1978,21 @@ class Gene(Artifact):
         heptamer = '{} heptamer'.format('3' if orientation else '5')
         nonamer = '{} nonamer'.format('3' if orientation else '5')
 
-        if gap in self.body: del self.body[gap]
-        offset = 0
-        if heptamer in self.body:
-            if orientation == self.body['reference strand']:
-                offset = self.body[heptamer]['reference start'] - self.body['reference end']
-            else:
-                offset = self.body['reference start'] - self.body[heptamer]['reference end'] 
+        # remove existing
+        self.artifacts[gap] = None
 
-        elif nonamer in self.body:
-            if orientation == self.body['reference strand']:
-                offset = self.body[nonamer]['reference start'] - self.body['reference end']
+        offset = 0
+        if self.artifacts[heptamer] is not None:
+            if orientation == self.reference_strand:
+                offset = self.artifacts[heptamer].reference_start - self.reference_end
             else:
-                offset = self.body['reference start'] - self.body[nonamer]['reference end'] 
+                offset = self.reference_start - self.artifacts[heptamer].reference_end 
+
+        elif self.artifacts[nonamer] is not None:
+            if orientation == self.reference_strand:
+                offset = self.artifacts[nonamer].reference_start - self.reference_end
+            else:
+                offset = self.reference_start - self.artifacts[nonamer].reference_end 
 
         if offset > 0:
             artifact = {
@@ -1960,12 +2000,12 @@ class Gene(Artifact):
                 'source': 'implied',
             }
 
-            if orientation == self.body['reference strand']:
-                artifact['reference start'] = self.body['reference end']
-                artifact['reference end'] = self.body['reference end'] + offset
+            if orientation == self.reference_strand:
+                artifact['reference start'] = self.reference_end
+                artifact['reference end'] = self.reference_end + offset
             else:
-                artifact['reference start'] = self.body['reference start'] - offset
-                artifact['reference end'] = self.body['reference start']
+                artifact['reference start'] = self.reference_start - offset
+                artifact['reference end'] = self.reference_start
 
             if flanking['reference strand']:
                 start = artifact['reference start'] - flanking['flank start']
@@ -1975,21 +2015,23 @@ class Gene(Artifact):
                 end = flanking['flank end'] - artifact['reference start']
 
             artifact['sequence'] = flanking['sequence'].crop(start, end)
-            self.body[gap] = artifact
-            self.log.info('annotating %s with %dbp %s %s', self.id, artifact['sequence'].length, gap, artifact['sequence'].nucleotide)
+            artifact == Artifact(self.pipeline, artifact)
+            self.artifacts[gap] = artifact
+            self.log.info('annotating %s with %dbp %s %s', self.id, artifact.length, gap, artifact.sequence.nucleotide)
 
     def _align_to_rss(self, flanking, orientation, distance):
         name = '{} heptamer'.format('3' if orientation else '5')
         offset = 0
-        if name in self.body:
-            if orientation == self.body['reference strand']:
-                offset = self.body[name]['reference start'] - self.body['reference end']
+        if self.artifacts[name] is not None:
+            artifact = self.artifacts[name]
+            if orientation == self.reference_strand:
+                offset = artifact.reference_start - self.reference_end
             else:
-                offset = self.body['reference start'] - self.body[name]['reference end'] 
+                offset = self.reference_start - artifact.reference_end
 
             if offset > 0:
                 if distance is None or offset <= distance:
-                    if orientation == self.body['reference strand']:
+                    if orientation == self.reference_strand:
                         self.body['reference end'] += offset
                     else:
                         self.body['reference start'] -= offset
@@ -2000,8 +2042,8 @@ class Gene(Artifact):
                         self.body['accession start'] -= offset
 
                     self.log.info('aligning %s gene with %s by %dbp', self.id, name, offset)
-                    self.body['length'] = self.accession_end - self.accession_start
                     self.sequence.nucleotide = None
+
                 else:
                     self.log.info('not aligning %s gene with %s because distance is %dbp which is further than %dbp', self.id, name, offset, distance)
 
@@ -2009,15 +2051,13 @@ class Gene(Artifact):
         position = 0
         name = '{} {}'.format('3' if orientation else '5', type)
         pattern = self.configuration.rss[region][name]
-        if name not in self.body:
+        if self.artifacts[name] is None:
             if orientation:
                 # Look in the 3 prime flanking sequence
                 interval = flanking['sequence'].crop(flanking['end'] + offset, flanking['flank length'])
-
             else:
                 # Look for the reverse complement in the reverse complement of the 5 prime flanking sequence
                 interval = flanking['sequence'].crop(0, flanking['start'] - offset).reversed
-
             match = pattern.search(interval.nucleotide)
             if match:
                 artifact = {
@@ -2040,32 +2080,35 @@ class Gene(Artifact):
                     artifact['reference end'] = flanking['reference start'] - match.start() - offset
                     gap = flanking['reference start'] - artifact['reference end']
 
-                artifact['length'] = artifact['reference end'] - artifact['reference start']
-                self.body[name] = artifact
-                self.log.info('%s %s found %dbp from the %s gene', name, artifact['sequence'].nucleotide, gap, self.id)
-                position = artifact['length'] + gap
+                artifact =  Artifact(self.pipeline, artifact)
+                self.artifacts[name] = artifact
+                self.log.info('%s %s found %dbp from the %s gene', name, artifact.sequence.nucleotide, gap, self.id)
+                position = artifact.length + gap
         else:
-            artifact = self.body[name]
+            artifact = self.artifacts[name]
             if orientation == flanking['reference strand']:
-                artifact['reference start'] = flanking['reference end'] + artifact['relative start']
-                artifact['reference end'] = flanking['reference end'] + artifact['relative end']
-                gap = artifact['reference start'] - flanking['reference end']
+                artifact.body['reference start'] = flanking['reference end'] + artifact.start
+                artifact.body['reference end'] = flanking['reference end'] + artifact.end
+                gap = artifact.reference_start - flanking['reference end']
             else:
-                artifact['reference start'] = flanking['reference start'] - artifact['relative end']
-                artifact['reference end'] = flanking['reference start'] - artifact['relative start']
-                gap = flanking['reference start'] - artifact['reference end']
-            artifact['length'] = artifact['reference end'] - artifact['reference start']
-            self.log.info('%s %s aligned %dbp from the %s gene', name, artifact['sequence'].nucleotide, gap, self.id)
-            position = artifact['length'] + gap
+                artifact.body['reference start'] = flanking['reference start'] - artifact.end
+                artifact.body['reference end'] = flanking['reference start'] - artifact.start
+                gap = flanking['reference start'] - artifact.reference_end
+            self.log.info('%s %s aligned %dbp from the %s gene', name, artifact.sequence.nucleotide, gap, self.id)
+            position = artifact.length + gap
         return position
 
     def _lookup_spacer(self, flanking, orientation):
         name = '{} spacer'.format('3' if orientation else '5')
         heptamer_name = '{} heptamer'.format('3' if orientation else '5')
         nonamer_name = '{} nonamer'.format('3' if orientation else '5')
-        if  name not in self.body and heptamer_name in self.body and nonamer_name in self.body:
-            heptamer = self.body[heptamer_name]
-            nonamer = self.body[nonamer_name]
+
+        if  self.artifacts[name] is None and \
+            self.artifacts[heptamer_name] is not None and \
+            self.artifacts[nonamer_name] is not None:
+
+            heptamer = self.artifacts[heptamer_name]
+            nonamer = self.artifacts[nonamer_name]
             artifact = {
                 'source': 'implied',
                 'reference strand': flanking['reference strand'],
@@ -2089,39 +2132,39 @@ class Gene(Artifact):
                 'strand': True,
                 'read frame': 0
             })
-            artifact['length'] = artifact['reference end'] - artifact['reference start']
-            self.body[name] = artifact
-            self.log.info('%s %s of length %dbp found for %s gene', name, artifact['sequence'].nucleotide, artifact['sequence'].length, self.id)
+            artifact =  Artifact(self.pipeline, artifact)
+            self.artifacts[name] = artifact
+            self.log.info('%s %s of length %dbp found for %s gene', name, artifact.sequence.nucleotide, artifact.length, self.id)
 
     def _html_3(self, buffer, region):
-        if ('3 heptamer' in self.body or '3 nonamer' in self.body) and '3 gap' in self.body:
-            buffer.append('<div class="gap">{}</div>'.format(self.body['3 gap']['sequence'].nucleotide))
+        if ( self.artifacts['3 heptamer'] is not None or self.artifacts['3 nonamer'] is not None) and self.artifacts['3 gap'] is not None:
+            buffer.append('<div class="gap">{}</div>'.format(self.artifacts['3 gap'].sequence.nucleotide))
 
-        if '3 heptamer' in self.body:
-            buffer.append('<div class="heptamer {}">{}</div>'.format(self.body['3 heptamer']['source'], self.body['3 heptamer']['sequence'].nucleotide)) 
+        if self.artifacts['3 heptamer'] is not None:
+            buffer.append('<div class="heptamer {}">{}</div>'.format(self.artifacts['3 heptamer'].source, self.artifacts['3 heptamer'].sequence.nucleotide)) 
 
-        if '3 spacer' in self.body:
-            buffer.append('<div class="spacer {}">{}</div>'.format(self.body['3 spacer']['source'], self.body['3 spacer']['sequence'].nucleotide))
+        if self.artifacts['3 spacer'] is not None:
+            buffer.append('<div class="spacer {}">{}</div>'.format(self.artifacts['3 spacer'].source, self.artifacts['3 spacer'].sequence.nucleotide))
 
-        if '3 nonamer' in self.body:
-            buffer.append('<div class="nonamer {}">{}</div>'.format(self.body['3 nonamer']['source'], self.body['3 nonamer']['sequence'].nucleotide))
+        if self.artifacts['3 nonamer'] is not None:
+            buffer.append('<div class="nonamer {}">{}</div>'.format(self.artifacts['3 nonamer'].source, self.artifacts['3 nonamer'].sequence.nucleotide))
 
     def _html_5(self, buffer, region):
-        if '5 nonamer' in self.body:
-            buffer.append('<div class="nonamer {}">{}</div>'.format(self.body['5 nonamer']['source'], self.body['5 nonamer']['sequence'].nucleotide))
+        if self.artifacts['5 nonamer'] is not None:
+            buffer.append('<div class="nonamer {}">{}</div>'.format(self.artifacts['5 nonamer'].source, self.artifacts['5 nonamer'].sequence.nucleotide))
 
-        if '5 spacer' in self.body:
-            buffer.append('<div class="spacer {}">{}</div>'.format(self.body['5 spacer']['source'], self.body['5 spacer']['sequence'].nucleotide))
+        if self.artifacts['5 spacer'] is not None:
+            buffer.append('<div class="spacer {}">{}</div>'.format(self.artifacts['5 spacer'].source, self.artifacts['5 spacer'].sequence.nucleotide))
 
-        if '5 heptamer' in self.body:
-            buffer.append('<div class="heptamer {}">{}</div>'.format(self.body['5 heptamer']['source'], self.body['5 heptamer']['sequence'].nucleotide)) 
+        if self.artifacts['5 heptamer'] is not None:
+            buffer.append('<div class="heptamer {}">{}</div>'.format(self.artifacts['5 heptamer'].source, self.artifacts['5 heptamer'].sequence.nucleotide)) 
 
-        if ('5 heptamer' in self.body or '5 nonamer' in self.body) and '5 gap' in self.body:
-            buffer.append('<div class="gap">{}</div>'.format(self.body['5 gap']['sequence'].nucleotide))
+        if (self.artifacts['5 heptamer'] is not None or self.artifacts['5 nonamer'] is not None) and self.artifacts['5 gap'] is not None:
+            buffer.append('<div class="gap">{}</div>'.format(self.artifacts['5 gap'].sequence.nucleotide))
 
     def assign_reference_alignment(self, hit):
         Artifact.assign_reference_alignment(self, hit)
-        for name in [
+        for term in [
             'preamble',
             'fr1',
             'cdr1',
@@ -2130,22 +2173,22 @@ class Gene(Artifact):
             'fr3',
             'cdr3'
         ]:
-            if name in self.body:
-                artifact = self.body[name]
-                artifact['reference file sha1'] = self.body['reference file sha1']
-                artifact['reference record sha1'] = self.body['reference record sha1']
+            if self.artifacts[term] is not None:
+                artifact = self.artifacts[term]
+                artifact.body['reference file sha1'] = self.body['reference file sha1']
+                artifact.body['reference record sha1'] = self.body['reference record sha1']
 
-                if artifact['sequence'].strand == self.sequence.strand:
-                    artifact['reference strand'] = self.reference_strand
+                if artifact.sequence.strand == self.sequence.strand:
+                    artifact.body['reference strand'] = self.reference_strand
                 else:
-                    artifact['reference strand'] = not self.reference_strand
+                    artifact.body['reference strand'] = not self.reference_strand
 
-                if artifact['reference strand']:
-                    artifact['reference start'] = self.reference_start + artifact['start']
-                    artifact['reference end'] = self.reference_start + artifact['end']
+                if artifact.reference_strand:
+                    artifact.body['reference start'] = self.reference_start + artifact.start
+                    artifact.body['reference end'] = self.reference_start + artifact.end
                 else:
-                    artifact['reference start'] = self.reference_start + self.length - artifact['end']
-                    artifact['reference end'] = self.reference_start + self.length - artifact['start']
+                    artifact.body['reference start'] = self.reference_start + self.length - artifact.end
+                    artifact.body['reference end'] = self.reference_start + self.length - artifact.start
 
 class Hit(object):
     def __init__(self, sample, node=None):
@@ -2198,7 +2241,7 @@ class Hit(object):
 
     @property
     def document(self):
-        document = to_document(self.node)
+        document = to_document(self.node, True)
         return document
 
     @property
@@ -2383,8 +2426,8 @@ class Hit(object):
                 (self.region == 'vh' or self.region == 'dh'):
                 gene = self.pipeline.resolver.gene_fetch(self.subject_id)
                 if gene:
-                    if self.subject_end < gene.sequence.length:
-                        self.node['3 chew'] = gene.sequence.crop(self.subject_end, gene.sequence.length)
+                    if self.subject_end < gene.length:
+                        self.node['3 chew'] = gene.sequence.crop(self.subject_end, gene.length)
         return None if '3 chew' not in self.node else self.node['3 chew']
 
     @property
@@ -3220,8 +3263,6 @@ class Sample(object):
                     'query end': end
                 })
                 if cdr3.valid:
-                    print(to_json_document(cdr3.query))
-                    # print(to_json_document(cdr3))
                     self._add_hit(cdr3)
                     self._pick_hit(cdr3)
                     cdr3.charge
@@ -3541,7 +3582,6 @@ class Sample(object):
                     self.body['effective'] = self.sequence.reversed.crop(start, end)
                 else:
                     self.body['effective'] = self.sequence.crop(start, end)
-            # print(to_json_document(self.body['effective']))
         return self.body['effective']
 
     @property
@@ -4493,7 +4533,7 @@ class Block(object):
             self.search()
             for sample in self.buffer:
                 sample.analyze()
-                # print(to_json_document(sample))
+                print(to_json_document(sample))
                 # print(sample.productive)
         return not self.empty
 
@@ -4517,6 +4557,7 @@ class Block(object):
                     elif state == 1:
                         if sample is not None:
                             sample.sequence.nucleotide = line
+                            sample.sequence.strand = True
                         state = 2
                         
                     elif state == 2:
@@ -5756,34 +5797,17 @@ class Resolver(object):
         if node is not None:
             if 'kind' in node and 'group' in node:
                 if 'id' in node:
-                    document = {
-                        'head': {},
-                        'body': node
-                    }
                     if node['kind'] == 'gene':
-                        for term in [
-                            'id',
-                            'group',
-                            'gene',
-                            'strain',
-                            'organism',
-                            'accession',
-                            'framed',
-                            'region',
-                            'verified',
-                            'confirmed',
-                            'functionality',
-                            'identified',
-                        ]:
-                            if term in node:
-                                document['head'][term] = node[term]
-
-                        gene = Gene(self.pipeline, document)
+                        gene = Gene(self.pipeline, { 'body': node })
                         gene.validate()
                         gene.validate_artifact()
                         self.gene_save(gene)
 
                     elif node['kind'] == 'library':
+                        document = {
+                            'head': {},
+                            'body': node,
+                        }
                         for term in [
                             'id',
                             'strain', 
@@ -5971,7 +5995,7 @@ class Resolver(object):
                             'version': ncbi['INSDSeq_accession-version'],
                             'description': ncbi['INSDSeq_definition'],
                             'simple description': simplify(ncbi['INSDSeq_definition']),
-                            'organism name': ncbi['INSDSeq_organism'],
+                            'organism': ncbi['INSDSeq_organism'],
                         },
                         'body': {
                             'sequence': {
@@ -5996,7 +6020,7 @@ class Resolver(object):
                                         if 'INSDQualifier' in INSDFeature_qual:
                                             for INSDQualifier in INSDFeature_qual['INSDQualifier']:
                                                 if INSDQualifier['INSDQualifier_name'] == 'organism':
-                                                    document['head']['organism name'] = INSDQualifier['INSDQualifier_value']
+                                                    document['head']['organism'] = INSDQualifier['INSDQualifier_value']
                                                 elif INSDQualifier['INSDQualifier_name'] == 'strain':
                                                     document['head']['strain'] = INSDQualifier['INSDQualifier_value']
                                                     found = True
@@ -6196,7 +6220,7 @@ class Request(object):
 
                 cursor = self.resolver.database['gene'].find (
                     {
-                        'head.organism name': preset['organism name'],
+                        'head.organism': preset['organism'],
                         'head.strain': preset['strain'],
                     }
                 )
@@ -6846,15 +6870,13 @@ class Pipeline(object):
         cursor = request.cursor_for('gene')
         buffer = []
         for node in cursor:
-            document = node['body'].copy()
-            document.update(node['head'])
-            buffer.append(document)
+            buffer.append(Gene(self, node))
         cursor.close()
-        buffer.sort(key=lambda x: '' if 'allele' not in x else x['allele'])
-        buffer.sort(key=lambda x: '' if 'gene' not in x else x['gene'])
-        buffer.sort(key=lambda x: '' if 'family' not in x else x['family'])
-        buffer.sort(key=lambda x: '' if 'strain' not in x else x['strain'])
-        print(to_json(buffer))
+        buffer.sort(key=lambda x: '' if x.body['allele'] is None else x.body['allele'])
+        buffer.sort(key=lambda x: '' if x.body['gene'] is None else x.body['gene'])
+        buffer.sort(key=lambda x: '' if x.body['family'] is None else x.body['family'])
+        buffer.sort(key=lambda x: '' if x.body['strain'] is None else x.body['strain'])
+        print(to_json_document(buffer))
 
     def gene_html(self, request):
         cursor = request.cursor_for('gene')
@@ -6862,11 +6884,11 @@ class Pipeline(object):
         for node in cursor:
             buffer.append(Gene(self, node))
         cursor.close()
-        buffer.sort(key=lambda x: '' if 'allele' not in x.body else x.body['allele'])
-        buffer.sort(key=lambda x: '' if 'gene' not in x.body else x.body['gene'])
-        buffer.sort(key=lambda x: '' if 'family' not in x.body else x.body['family'])
-        buffer.sort(key=lambda x: '' if 'strain' not in x.body else x.body['strain'])
-        buffer.sort(key=lambda x: '' if 'reference start' not in x.body else x.body['reference start'])
+        buffer.sort(key=lambda x: '' if x.body['allele'] is None else x.body['allele'])
+        buffer.sort(key=lambda x: '' if x.body['gene'] is None else x.body['gene'])
+        buffer.sort(key=lambda x: '' if x.body['family'] is None else x.body['family'])
+        buffer.sort(key=lambda x: '' if x.body['strain'] is None else x.body['strain'])
+        buffer.sort(key=lambda x: '' if x.body['reference start'] is None else x.body['reference start'])
 
         print("""<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd" >
             <html xmlns="http://www.w3.org/1999/xhtml">
@@ -6875,7 +6897,8 @@ class Pipeline(object):
 
         if request.instruction['title'] is not None: print('<title>{}</title>'.format(request.instruction['title']))
 
-        print("""<style type="text/css">
+        print("""
+            <style type="text/css">
                 html {
                     font-family: Courier;
                     font-size: 12px;
