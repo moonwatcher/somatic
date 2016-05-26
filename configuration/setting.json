@@ -3,7 +3,7 @@
         "path": "~/.somatic/cache"
     }, 
     "constant": {
-        "buffer size": 1, 
+        "buffer size": 1024, 
         "fasta line length": 80, 
         "igblastn internal data": "/Users/lg/code/somatic/db/igblast/internal_data"
     }, 

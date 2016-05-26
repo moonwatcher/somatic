@@ -2195,10 +2195,16 @@ class Hit(object):
         self.log = logging.getLogger('Hit')
         self.sample = sample
         self._operation = None
-        self.node = {
+        self.node = merge(self.default, node)
+
+        if self.uuid is None:
+            self.node['uuid'] = str(uuid.uuid4())
+
+    @property
+    def default(self):
+        return {
             'valid': True,
             'picked': False,
-
             'uuid': None,
             'type': None,
             'region': None,
@@ -2215,7 +2221,6 @@ class Hit(object):
             'charge': None,
             'weight': None,
             'in frame': None,
-
             'strain': None,
             'gene': None,
             'family': None,
@@ -2226,10 +2231,8 @@ class Hit(object):
             'subject strand': None,
             'reference start': None,
             'reference end': None,
+            'comment': [],
         }
-        self.node = merge(self.node, node)
-        if self.node['uuid'] is None:
-            self.node['uuid'] = str(uuid.uuid4())
 
     @property
     def pipeline(self):
@@ -2241,18 +2244,53 @@ class Hit(object):
 
     @property
     def document(self):
-        document = to_document(self.node, True)
-        return document
+        return to_document(self.node, True)
 
     @property
     def uuid(self):
         return self.node['uuid']
 
     @property
+    def valid(self):
+        return self.node['valid']
+
+    @property
+    def picked(self):
+        return self.node['picked']
+
+    @picked.setter
+    def picked(self, value):
+        self.node['picked'] = value
+
+    @property
+    def FLAG(self):
+        return self.node['FLAG']
+
+    @property
+    def reverse_complemented(self):
+        return self.FLAG & 0x10 == 0x10
+
+    @property
+    def unmapped(self):
+        return self.FLAG & 0x4 == 0x4
+
+    @property
+    def sufficient(self):
+        return self.valid
+
+    @property
     def strain(self):
         if self.node['strain'] is None:
             self._load_subject()
         return self.node['strain']
+
+    @property
+    def region(self):
+        return self.node['region']
+
+    @region.setter
+    def region(self, value):
+        self.node['region'] = value
 
     @property
     def gene(self):
@@ -2285,14 +2323,14 @@ class Hit(object):
         return self.node['functionality']
 
     @property
+    def subject_id(self):
+        return self.node['subject id']
+
+    @property
     def subject(self):
         if self.node['subject'] is None:
             self._load_subject()
         return self.node['subject']
-
-    @property
-    def query_strand(self):
-        return self.subject_strand != self.reverse_complemented
 
     @property
     def subject_strand(self):
@@ -2313,64 +2351,8 @@ class Hit(object):
         return self.node['reference end']
 
     @property
-    def FLAG(self):
-        return self.node['FLAG']
-
-    @property
-    def reverse_complemented(self):
-        return self.FLAG & 0x10 == 0x10
-
-    @property
-    def unmapped(self):
-        return self.FLAG & 0x4 == 0x4
-
-    @property
-    def region(self):
-        return self.node['region']
-
-    @region.setter
-    def region(self, value):
-        self.node['region'] = value
-
-    @property
-    def subject_id(self):
-        return self.node['subject id']
-
-    @property
-    def valid(self):
-        return self.node['valid']
-
-    @property
-    def picked(self):
-        return self.node['picked']
-
-    @picked.setter
-    def picked(self, value):
-        self.node['picked'] = value
-
-    @property
-    def sufficient(self):
-        return self.valid
-
-    @property
-    def type(self):
-        return self.node['type']
-
-    @type.setter
-    def type(self, value):
-        self.node['type'] = value
-
-    @property
     def palindrome(self):
         return self.node['palindrome']
-
-    @property
-    def primary(self):
-        return self.node['primary']
-
-    @primary.setter
-    def primary(self, value):
-        self.node['primary'] = value
 
     @property
     def in_frame(self):
@@ -2383,6 +2365,22 @@ class Hit(object):
         if 'gapped' not in self.node:
             self.node['gapped'] = ( 'D' in self.CIGAR or 'I' in self.CIGAR )
         return self.node['gapped']
+
+    @property
+    def type(self):
+        return self.node['type']
+
+    @type.setter
+    def type(self, value):
+        self.node['type'] = value
+
+    @property
+    def primary(self):
+        return self.node['primary']
+
+    @primary.setter
+    def primary(self, value):
+        self.node['primary'] = value
 
     @property
     def score(self):
@@ -2419,6 +2417,10 @@ class Hit(object):
         return self.node['query']
 
     @property
+    def query_strand(self):
+        return self.subject_strand != self.reverse_complemented
+
+    @property
     def chew_3_prime(self):
         if '3 chew' not in self.node:
             if  self.valid and \
@@ -2441,6 +2443,10 @@ class Hit(object):
                     if self.subject_start > 0:
                         self.node['5 chew'] = gene.sequence.crop(0, self.subject_start)
         return None if '5 chew' not in self.node else self.node['5 chew']
+
+    @property
+    def cpmment(self):
+        return self.node['comment']
 
     @property
     def length(self):
@@ -2547,6 +2553,8 @@ class Hit(object):
                     record = match.groupdict()
                     record['region'] = region
                     record['type'] = type
+
+                    # Parsing
                     for field in [
                         'FLAG',
                         'POS',
@@ -2576,9 +2584,12 @@ class Hit(object):
                                         else:
                                             block.log.error('ignoring invalid %s optional field %s', o['TYPE'], o['VALUE'])
 
+                            # set the score to be the alignment score for now.
+                            # we can do better than that...
                             if 'AS' in record:
                                 record['score'] = record['AS']
 
+                            # remove irrelevant fields
                             for field in [
                                 'QUAL',
                                 'SEQ',
@@ -2592,10 +2603,10 @@ class Hit(object):
                                 if field in record:
                                     del record[field]
 
+                            instance = Hit(sample, record)
                             record['subject end'] = record['subject start']
                             record['query start'] = 0
                             record['query end'] = 0
-                            instance = Hit(sample, record)
                             if instance.operation:
                                 inside = False
                                 for o in instance.operation:
@@ -2691,32 +2702,22 @@ class Hit(object):
             block.log.error('block cannot be null')
         return instance
 
-    @classmethod
-    def clone(cls, hit):
-        instance = None
-        if hit is not None:
-            node = {}
-            for key, value in hit.node.items():
-                if key not in [
-                    'uuid',
-                    'query',
-                    'subject',
-                    'reference start',
-                    'reference end',
-                    'subject strand',
-                ]:
-                    node[key] = deepcopy(value)
-                else:
-                    node[key] = None
-
-            instance = Hit(hit.sample, node)
-        return instance
+    def clone(self):
+        node = deepcopy(self.document)
+        for term in [
+            'uuid',
+            'query',
+            'subject',
+            'reference start',
+            'reference end',
+            'subject strand',
+        ]:
+            del node[term]
+        return Hit(self.sample, node)
 
     def invalidate(self, message):
         self.node['valid'] = False
-        if 'comment' not in self.node:
-            self.node['comment'] = []
-        self.node['comment'].append(message)
+        self.comment.append(message)
         self.log.info('%dbp %s hit to %s on %s : %s', self.length, self.region, self.subject_id, self.sample.id, message)
 
     def trim(self, start, end):
