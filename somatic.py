@@ -1421,9 +1421,6 @@ class Artifact(object):
         else:
             self.body['sequence'] = Sequence(self.pipeline)
 
-        # if 'start' in self.body and 'end' not in self.body:
-        #     self.body['end'] = self.body['start'] + self.sequence.length
-
     @property
     def configuration(self):
         return self.pipeline.configuration
@@ -2194,9 +2191,8 @@ class Hit(object):
     def __init__(self, sample, node=None):
         self.log = logging.getLogger('Hit')
         self.sample = sample
-        self._operation = None
         self.node = merge(self.default, node)
-
+        self._operation = None
         if self.uuid is None:
             self.node['uuid'] = str(uuid.uuid4())
 
@@ -2232,6 +2228,7 @@ class Hit(object):
             'reference start': None,
             'reference end': None,
             'comment': [],
+            'average phread': None,
         }
 
     @property
@@ -2603,10 +2600,11 @@ class Hit(object):
                                 if field in record:
                                     del record[field]
 
-                            instance = Hit(sample, record)
                             record['subject end'] = record['subject start']
                             record['query start'] = 0
                             record['query end'] = 0
+
+                            instance = Hit(sample, record)
                             if instance.operation:
                                 inside = False
                                 for o in instance.operation:
@@ -2803,35 +2801,16 @@ class Hit(object):
                     self.node['subject strand'] = gene.reference_strand
 
 class Sample(object):
-    def __init__(self, pipeline, node=None, id=None, library=None):
+    def __init__(self, pipeline, node=None):
         self.log = logging.getLogger('Sample')
         self.pipeline = pipeline
-        self.node = node
-        self.index = {}
+        self.node = merge(self.default, node)
+        self.lookup = {}
         self._primary = None
         self._observation = None
-        
-        if self.node is None:
-            self.node = {
-                'head': {
-                    'id': None,
-                    'FLAG': 0,
-                    'library': library,
-                    'abundance': 1,
-                    'valid': True,
-                }
-            }
 
-            if id:
-                fragmented = id.split()
-                self.head['id'] = fragmented[0]
-                if len(fragmented) > 1:
-                    self.head['id comment'] = ' '.join(fragmented[1:])
-                    try:
-                        self.head['abundance'] = int(fragmented[1].split(':')[0])
-                    except ValueError:
-                        pass
-            self._reset()
+        for term in self.index:
+            self.head[term] = self.body[term]
 
         if not self.id:
             raise InvalidSampleError('sample must have an id')
@@ -2946,8 +2925,6 @@ class Sample(object):
                 del self.body[term]
 
     def _load_hit(self, hit):
-        if hit.uuid not in self.index:
-            self.index[hit.uuid] = hit
 
         for k in [
             'query',
@@ -2959,33 +2936,14 @@ class Sample(object):
                 hit.node[k] = Sequence(self.pipeline, hit.node[k])
 
     def _reset(self):
-        self.head['valid'] = True
-        self.head['gapped'] = False
-        self.head['framed'] = False
-        self.head['premature'] = False
-        self.head['in frame'] = False
-        self.head['productive'] = False
-        self.head['palindromic'] = False
-        self.head['p count'] = 0
-        self.head['n count'] = 0
-        self.head['conserved cdr3 c'] = False
-        self.head['conserved cdr3 w'] = False
-        self.head['cdr3 length'] = None
-        self.head['dh length'] = None
-        self.head['jh length'] = None
-        self.head['vh length'] = None
-        self.head['average phred'] = None
         self.body['primary'] = {}
 
         for term in [
             'effective',
-            'comment',
             'framed by',
             'effective query start',
             'effective query end'
         ]:
-            if term in self.body:
-                del self.body[term]
 
         # remove all implicit hits
         if 'hit' in self.body:
@@ -2994,7 +2952,6 @@ class Sample(object):
         for hit in self.hit:
             hit.reset()
 
-        self.head['gapped'] = any([ hit.gapped for hit in self.hit ])
 
     def _load_gene(self):
         for hit in self.hit:
@@ -3094,7 +3051,6 @@ class Sample(object):
                 # first hit to be picked that is framed sets the frame for the sample
                 # that also means deciding if the entire sample is reverse complemented
                 # any further hits will have to have the same orientation (except for dh region)
-                self.head['framed'] = True
                 self.body['framed by'] = framing.uuid
                 self.reverse_complemented = framing.reverse_complemented
                 self.sequence.read_frame = (framing.query_start + framing.subject.read_frame) % 3
@@ -3121,7 +3077,6 @@ class Sample(object):
         if jh is not None and vh is not None:
             if jh.reverse_complemented == vh.reverse_complemented:
                 if jh.in_frame and vh.in_frame:
-                    self.head['in frame'] = True
             else:
                 self.invalidate('vh and jh are on opposite strands')
         else:
@@ -3154,10 +3109,7 @@ class Sample(object):
                 junction.node['palindrome'] = ''.join(junction.node['palindrome'])
                 p = junction.node['palindrome'].count('P')
                 n = junction.node['palindrome'].count('N')
-                self.head['p count'] += p
-                self.head['n count'] += n
                 if p > 0:
-                    self.head['palindromic'] = True
                 if n > 0:
                     if p > 0:
                         junction.node['palindrome ratio'] = float(n) / float(p)
@@ -3197,7 +3149,6 @@ class Sample(object):
     def _check_for_stop_codon(self):
         if self.effective.codon and self.framed:
             if '*' in self.effective.codon:
-                self.head['premature'] = True
 
     def _identify_cdr3(self):
         def locate_cdr3_start(vh):
@@ -3220,7 +3171,6 @@ class Sample(object):
                         acid = self.sequence.nucleotide[position:position+3]
 
                     if acid in self.configuration.enumeration['nucleic to amino'] and self.configuration.enumeration['nucleic to amino'][acid] == 'C':
-                        self.head['conserved cdr3 c'] = True
                     else:
                         self.make_comment('framing cycteine not conserved {}'.format(acid))
             return position
@@ -3245,7 +3195,6 @@ class Sample(object):
                         acid = self.sequence.nucleotide[position-3:position]
 
                     if acid in self.configuration.enumeration['nucleic to amino'] and self.configuration.enumeration['nucleic to amino'][acid] == 'W':
-                        self.head['conserved cdr3 w'] = True
                     else:
                         self.make_comment('framing tryptophan not conserved {}'.format(acid))
             return position
@@ -3283,7 +3232,6 @@ class Sample(object):
             self.in_frame and not self.premature):
             if vh.functionality == 'F':
                 if jh.functionality == 'F':
-                    self.head['productive'] = True
                 else:
                     self.make_comment('leading jh {} is non functional {}'.format(jh.gene, jh.functionality))
             else:
@@ -3291,19 +3239,12 @@ class Sample(object):
 
     def _analyze_quality(self):
         for name, hit in self.primary.items():
-            self.head['{} length'.format(name)] = hit.query.length
             hit.node['average phread'] = float(sum(hit.query.phred)) / float((hit.query.length))
 
-        self.head['average phred'] = float(sum(self.effective.phred)) / float((self.effective.length))
-
     def invalidate(self, message):
-        self.head['valid'] = False
         self.make_comment(message)
 
     def make_comment(self, message):
-        if 'comment' not in self.body:
-            self.body['comment'] = []
-
         self.body['comment'].append(message)
         self.log.info('sample %s : %s', self.id, message)
 
@@ -3319,7 +3260,6 @@ class Sample(object):
 
     @property
     def abundance(self):
-        return self.head['abundance']
 
     @property
     def has_dh(self):
@@ -3479,10 +3419,6 @@ class Sample(object):
 
     @property
     def cdr3_sequence(self):
-        if 'cdr3' in self.primary:
-            return self.primary['cdr3']
-        else:
-            return None
 
     @property
     def configuration(self):
@@ -3490,21 +3426,14 @@ class Sample(object):
 
     @property
     def head(self):
-        if 'head' not in self.node:
-            self.node['head'] = {}
         return self.node['head']
 
     @property
     def body(self):
-        if 'body' not in self.node:
-            self.node['body'] = {}
         return self.node['body']
 
     @property
     def key(self):
-        if 'id sha1' not in self.head and self.id is not None:
-            self.head['id sha1'] = hashlib.sha1(self.id.encode('utf8')).hexdigest()
-        return self.head['id sha1']
 
     @property
     def document(self):
@@ -3520,7 +3449,6 @@ class Sample(object):
 
     @property
     def id(self):
-        return self.head['id']
 
     @property
     def length(self):
@@ -3528,11 +3456,9 @@ class Sample(object):
 
     @property
     def FLAG(self):
-        return self.head['FLAG']
 
     @FLAG.setter
     def FLAG(self, value):
-        self.head['FLAG'] = value
 
     @property
     def reverse_complemented(self):
@@ -3547,7 +3473,6 @@ class Sample(object):
 
     @property
     def library(self):
-        return self.head['library']
 
     @property
     def sequence(self):
@@ -3587,12 +3512,9 @@ class Sample(object):
 
     @property
     def valid(self):
-        return self.head['valid']
 
     @property
     def hit(self):
-        if 'hit' not in self.body:
-            self.body['hit'] = []
         return self.body['hit']
 
     @property
@@ -3601,43 +3523,31 @@ class Sample(object):
             self._primary = {}
             if 'primary' in self.body:
                 for k,v in self.body['primary'].items():
-                    self._primary[k] = self.index[v]
         return self._primary
 
     @property
     def comment(self):
-        if 'comment' in self.body:
-            return self.body['comment']
-        else:
-            return None
 
     @property
     def framed(self):
-        return self.head['framed']
 
     @property
     def gapped(self):
-        return self.head['gapped']
 
     @property
     def in_frame(self):
-        return self.head['in frame']
 
     @property
     def premature(self):
-        return self.head['premature']
 
     @property
     def conserved_cdr3_cycteine(self):
-        return self.head['conserved cdr3 c']
 
     @property
     def conserved_cdr3_tryptophan(self):
-        return self.head['conserved cdr3 w']
 
     @property
     def productive(self):
-        return self.head['productive']
 
 class Pivot(object):
     def __init__(self, study, node=None, name=None, rotate=None):
@@ -4550,7 +4460,6 @@ class Block(object):
                 if line:
                     if state == 0 and line[0] == '@':
                         try:
-                            sample = Sample(self.pipeline, id=line[1:], library=self.library)
                         except InvalidSampleError as e:
                             self.log.warning(e)
                         state = 1
@@ -6533,9 +6442,7 @@ class Pipeline(object):
         block = Block(self, request)
         while block.fill():
             count += block.size
-            # for sample in block.buffer:
             #     if sample.gapped:
-            #         print(to_json_document(sample))
             # self.resolver.bulk_store_sample(block.buffer)
             self.log.info('%s so far', count)
 
