@@ -1715,9 +1715,10 @@
                                         "parameter": {
                                             "-A": "2", 
                                             "-B": "4", 
-                                            "-T": "8",
+                                            "-T": "10",
                                             "-a": null, 
-                                            "-k": "4"
+                                            "-k": "4",
+                                            "-L": "0"
                                         }
                                     }, 
                                     "makeblastdb": {
@@ -1747,7 +1748,8 @@
                                             "-B": "4", 
                                             "-T": "48", 
                                             "-a": null, 
-                                            "-k": "4"
+                                            "-k": "4",
+                                            "-L": "0"
                                         }
                                     }, 
                                     "makeblastdb": {
@@ -1767,7 +1769,8 @@
                                             "-B": "4", 
                                             "-T": "54", 
                                             "-a": null, 
-                                            "-k": "4"
+                                            "-k": "4",
+                                            "-L": "0"
                                         }
                                     }, 
                                     "makeblastdb": {
@@ -2357,7 +2360,6 @@
                             "strand", 
                             "functionality", 
                             "in frame", 
-                            "gapped", 
                             "picked"
                         ]
                     }
@@ -2373,8 +2375,9 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
+                            "primary",
+                            "strand",
                             "functionality"
                         ], 
                         "track": {

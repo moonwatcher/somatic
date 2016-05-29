@@ -132,7 +132,7 @@ def to_document(node, clear=False):
     if isinstance(node, list) or isinstance(node, set):
         o = [ to_document(v, clear) for v in node ]
         if clear:
-            o = [ v for v in node if v is not None ]
+            o = [ v for v in o if v is not None ]
             if len(o) == 0:
                 o = None
         return o
@@ -607,9 +607,15 @@ class Configuration(object):
             },
             'strand': {
                 'format': lambda x: '+' if x else '-',
+                'title': 'O',
+                'width': 1,
+                'value': 'orientation',
+            },
+            'primary': {
+                'format': lambda x: '*' if x else ' ',
                 'title': 'S',
                 'width': 1,
-                'value': 'subject strand',
+                'value': 'primary',
             }
         }
 
@@ -1134,6 +1140,7 @@ class Sequence(object):
                 'codon': None,
                 'phred': None,
                 'reversed': None,
+                'expected error': None,
             },
         }
 
@@ -1165,6 +1172,7 @@ class Sequence(object):
             'quality': self.quality,
             'read frame': self.read_frame,
             'strand': self.strand,
+            'expected error': self.expected_error,
         }, True)
 
     def reset(self):
@@ -1276,6 +1284,12 @@ class Sequence(object):
         if self.node['phred'] is None and self.quality is not None:
             self.node['phred'] = [ (ord(c) - 33) for c in self.quality ]
         return self.node['phred']
+
+    @property
+    def expected_error(self):
+        if self.node['expected error'] is None and self.quality is not None:
+            self.node['expected error'] = expected_error(self.quality)
+        return self.node['expected error']
 
     def codon_at_frame(self, read_frame):
         codon = None
@@ -2199,6 +2213,7 @@ class Hit(object):
     @property
     def default(self):
         return {
+            'primary': False,
             'valid': True,
             'picked': False,
             'uuid': None,
@@ -2229,6 +2244,9 @@ class Hit(object):
             'reference end': None,
             'comment': [],
             'average phread': None,
+            '3 chew': None,
+            '5 chew': None,
+            'palindrome': None,
         }
 
     @property
@@ -2360,7 +2378,7 @@ class Hit(object):
     @property
     def gapped(self):
         if 'gapped' not in self.node:
-            self.node['gapped'] = ( 'D' in self.CIGAR or 'I' in self.CIGAR )
+            self.node['gapped'] = self.CIGAR is not None and ( 'D' in self.CIGAR or 'I' in self.CIGAR )
         return self.node['gapped']
 
     @property
@@ -2419,7 +2437,7 @@ class Hit(object):
 
     @property
     def chew_3_prime(self):
-        if '3 chew' not in self.node:
+        if self.node['3 chew'] is None:
             if  self.valid and \
                 self.type == 'gene segment' and \
                 (self.region == 'vh' or self.region == 'dh'):
@@ -2427,11 +2445,11 @@ class Hit(object):
                 if gene:
                     if self.subject_end < gene.length:
                         self.node['3 chew'] = gene.sequence.crop(self.subject_end, gene.length)
-        return None if '3 chew' not in self.node else self.node['3 chew']
+        return self.node['3 chew']
 
     @property
     def chew_5_prime(self):
-        if '5 chew' not in self.node:
+        if self.node['5 chew'] is None:
             if  self.valid and \
                 self.type == 'gene segment' and \
                 (self.region == 'jh' or self.region == 'dh'):
@@ -2439,10 +2457,10 @@ class Hit(object):
                 if gene:
                     if self.subject_start > 0:
                         self.node['5 chew'] = gene.sequence.crop(0, self.subject_start)
-        return None if '5 chew' not in self.node else self.node['5 chew']
+        return self.node['5 chew']
 
     @property
-    def cpmment(self):
+    def comment(self):
         return self.node['comment']
 
     @property
@@ -2563,7 +2581,7 @@ class Hit(object):
 
                     if record['QNAME'] in block.lookup:
                         if record['FLAG'] & 0x4 == 0:
-                            sample = block.lookup[record['QNAME']]
+                            sample = block.lookup[record['QNAME']]['sample']
                             record['subject id'] = record['RNAME']
                             record['subject start'] = record['POS'] - 1
                             if 'OPT' in record:
@@ -2629,7 +2647,8 @@ class Hit(object):
                                 block.log.error('discarding zero length hit %s', value)
                                 instance = None
                         else:
-                            block.log.debug('discarding unmapped hit for sample %s', record['QNAME'])
+                            pass
+                            # block.log.debug('discarding unmapped hit for sample %s', record['QNAME'])
                     else:
                         block.log.error('could not locate sample %s in block', record['QNAME'])
                 else:
@@ -2692,13 +2711,23 @@ class Hit(object):
                         record['identical'] /= 100.0
 
                     if record['QNAME'] in block.lookup:
-                        sample = block.lookup[record['QNAME']]
+                        sample = block.lookup[record['QNAME']]['sample']
                         instance = Hit(sample, record)
             else:
                 block.log.error('igblast record cannot be null')
         else:
             block.log.error('block cannot be null')
         return instance
+
+    def load(self):
+        for term in [
+            'query',
+            'subject',
+            '3 chew',
+            '5 chew'
+        ]:
+            if isinstance(self.node[term], dict):
+                self.node[term] = Sequence(self.pipeline, self.node[term])
 
     def clone(self):
         node = deepcopy(self.document)
@@ -2710,7 +2739,7 @@ class Hit(object):
             'reference end',
             'subject strand',
         ]:
-            del node[term]
+            node[term] = None
         return Hit(self.sample, node)
 
     def invalidate(self, message):
@@ -2728,7 +2757,7 @@ class Hit(object):
                     self.node['query start'] = start
                     self.node['subject start'] += overlap
                     self.score -= overlap * self.configuration.selected['region']['dh']['overlap penalty factor']
-                    self.reset()
+                    self._reset()
 
             if end < self.query_end:
                 overlap = self.query_end - end
@@ -2736,7 +2765,7 @@ class Hit(object):
                     self.node['query end'] = end
                     self.node['subject end'] -= overlap
                     self.score -= overlap * self.configuration.selected['region']['dh']['overlap penalty factor']
-                    self.reset()
+                    self._reset()
         else:
             self.invalidate('hit trimmed to length zero')
         return self.valid
@@ -2754,7 +2783,7 @@ class Hit(object):
             result = self.query_end - self.query_start - overlap
         return result
 
-    def reset(self):
+    def _reset(self):
         self.node['valid'] = True
         self.node['picked'] = False
         for term in [
@@ -2805,465 +2834,143 @@ class Sample(object):
         self.log = logging.getLogger('Sample')
         self.pipeline = pipeline
         self.node = merge(self.default, node)
-        self.lookup = {}
+        self._lookup = None
         self._primary = None
         self._observation = None
 
-        for term in self.index:
-            self.head[term] = self.body[term]
-
         if not self.id:
             raise InvalidSampleError('sample must have an id')
-            
         if not self.key:
             raise InvalidSampleError('sample must have a valid key')
-            
         if not self.library:
             raise InvalidSampleError('sample must have a library')
-            
         for sequence in ['sequence', 'effective']:
-            if sequence in self.body:
+            if self.body[sequence] is not None:
                 if isinstance(self.body[sequence], dict):
                     self.body[sequence] = Sequence(self.pipeline, self.body[sequence])
             else:
                 self.body[sequence] = Sequence(self.pipeline)
-            
+
+        self.body['hit'] = [ Hit(self, hit) for hit in self.body['hit'] ]
         for hit in self.hit:
-            self._load_hit(hit)
+            hit.load()
 
     def __str__(self):
         return self.id
 
-    def add_bwa_hit(self, hit):
-        if hit is not None and not hit.unmapped:
-            gene = self.pipeline.resolver.gene_fetch(hit.subject_id)
-            if gene is None:
-                hit.invalidate('unknown gene')
-            self._add_hit(hit)
-
-    def add_igblast_hit(self, hit):
-        if hit is not None:
-            if 'subject id' in hit:
-                gene = self.pipeline.resolver.gene_fetch(hit.subject_id)
-                # switch the hit to a zero based coordinate system
-                if gene:
-                    hit.query_start -= 1
-                    if hit.node['subject strand'] == gene.sequence.strand:
-                        hit.subject_start -= 1
-                    else:
-                        hit.subject_start = gene.length - hit.subject_start
-                        hit.subject_end = gene.length - hit.subject_end + 1
-                else:
-                    hit.invalidate('unknown gene')
-            self._add_hit(hit)
+    @classmethod
+    def from_fastq(cls, block, id):
+        if block is not None:
+            if id is not None:
+                fragmented = id.split()
+                node = {
+                    'body': {
+                        'id': fragmented[0],
+                        'library': block.library,
+                    }
+                }
+                if len(fragmented) > 1:
+                    node['body']['id comment'] = ' '.join(fragmented[1:])
+                    try:
+                        node['body']['abundance'] = int(fragmented[1].split(':')[0])
+                    except ValueError:
+                        pass
+                instance = Sample(block.pipeline, node)
+        else:
+            raise ValueError('block can not be null')
+        return instance
 
     @property
-    def residual(self):
-        start = 0
-        end = self.sequence.length
-        if 'jh' in self.primary:
-            jh = self.primary['jh']
-            if jh.query_strand:
-                if jh.query.strand != self.sequence.strand:
-                    start = max(start, self.sequence.length - jh.query_start)
-                else:
-                    end = min(end, jh.query_start)
-            else:
-                if jh.query.strand != self.sequence.strand:
-                    start = max(start, self.sequence.length - jh.query_start)
-                else:
-                    end = min(end, jh.query_start)
+    def document(self):
+        for term in self.index:
+            self.head[term] = self.body[term]
+        return to_document(self.node, True)
 
-        if 'vh' in self.primary:
-            vh = self.primary['vh']
-            if vh.query_strand:
-                if vh.query.strand != self.sequence.strand:
-                    end = min(end, self.sequence.length - vh.query_end)
-                else:
-                    start = max(start, vh.query_end)
-            else:
-                if vh.query.strand != self.sequence.strand:
-                    end = min(end, self.sequence.length - vh.query_end)
-                else:
-                    start = max(start, vh.query_end)
-
-        return self.sequence.crop(start, end)
-
-    def determine_region(self, region):
-        if region == 'jh':
-            self._pick_jh_region()
-        elif region == 'vh':
-            self._pick_vh_region()
-        elif region == 'dh':
-            self._pick_dh_region()
-
-    def analyze(self):
-        self._reset()
-        self._load_gene()
-        self._pick_jh_region()
-        self._pick_vh_region()
-        self._check_v_j_framing()
-        self._pick_dh_region()
-        self._identify_v_j_junction()
-        self._identify_v_d_junction()
-        self._identify_d_j_junction()
-        self._identify_cdr3()
-        self._identify_chewback()
-        self._check_for_stop_codon()
-        self._check_for_productivity()
-        self._analyze_quality()
-
-    def _add_hit(self, hit):
-        self.hit.append(hit)
-        self._load_hit(hit)
-        for term in [
-            'effective',
-            'effective query start',
-            'effective query end'
-        ]:
-            if term in self.body:
-                del self.body[term]
-
-    def _load_hit(self, hit):
-
-        for k in [
-            'query',
-            'subject',
-            '3 chew',
-            '5 chew'
-        ]:
-            if k in hit.node and isinstance(hit.node[k], dict):
-                hit.node[k] = Sequence(self.pipeline, hit.node[k])
-
-    def _reset(self):
-        self.body['primary'] = {}
-
-        for term in [
-            'effective',
+    @property
+    def index(self):
+        return [
+            'FLAG',
+            'abundance',
+            'expected error',
+            'conserved cdr3 c',
+            'conserved cdr3 w',
+            'framed',
             'framed by',
-            'effective query start',
-            'effective query end'
-        ]:
+            'gapped',
+            'id',
+            'id sha1',
+            'in frame',
+            'library',
+            'n count',
+            'p count',
+            'palindromic',
+            'premature',
+            'productive',
+            'valid',
+        ]
 
-        # remove all implicit hits
-        if 'hit' in self.body:
-            self.body['hit'] = [ hit for hit in self.body['hit'] if hit.type == 'gene segment']
-
-        for hit in self.hit:
-            hit.reset()
-
-
-    def _load_gene(self):
-        for hit in self.hit:
-            if hit.valid and hit.type == 'gene segment':
-                if hit.subject is None:
-                    hit.invalidate('unknown gene')
-
-    def _pick_jh_region(self):
-        return self._pick_region('jh', self.hit)
-
-    def _pick_vh_region(self):
-        return self._pick_region('vh', self.hit)
-
-    def _pick_dh_region(self):
-        jh = None if 'jh' not in self.primary else self.primary['jh']
-        vh = None if 'vh' not in self.primary else self.primary['vh']
-
-        if vh is not None and jh is not None:
-            top = None
-            search = { 'valid': [], 'map': {} }
-            for hit in self.hit:
-                if hit.region == 'dh':
-                    search['map'][hit.uuid] = hit
-                    if hit.valid:
-                        search['valid'].append(hit)
-
-            if len(search['valid']) > 0:
-                search['trimmed'] = []
-                for hit in search['valid']:
-                    length = hit.nonoverlapping(vh.query_end, jh.query_start)
-                    if length > 0:
-                        if length < hit.length:
-                            trimmed = Hit.clone(hit)
-                            trimmed.trim(vh.query_end, jh.query_start)
-                            trimmed.node['trimmed'] = True
-                            self.add_bwa_hit(trimmed)
-                            search['trimmed'].append(trimmed)
-                        else:
-                            search['trimmed'].append(hit)
-
-                if len(search['trimmed']) > 0:
-                    top = search['trimmed']
-
-                self._pick_region('dh', top)
-
-    def _pick_region(self, region, candidate):
-        picked = False
-        if candidate:
-            top = None
-            search = { 'valid': [] }
-            for hit in candidate:
-                if hit.region == region and hit.sufficient:
-                    search['valid'].append(hit)
-
-            if search['valid']:
-                top = search['valid']
-                top.sort(reverse=True, key=lambda x: x.score)
-                top = [ hit for hit in top if hit.score == top[0].score ]
-
-                if len(top) > 1:
-                    search['framed'] = []
-                    for hit in top:
-                        if hit.framed and hit.codon_mismatch is not None:
-                            search['framed'].append(hit)
-
-                    if search['framed']:
-                        top = search['framed']
-                        top.sort(key=lambda x: x.codon_mismatch)
-                        top = [ hit for hit in top if hit.codon_mismatch == top[0].codon_mismatch ]
-
-                # if there are multiple matches and at least one is functional, keep only the functional
-                if len(top) > 1:
-                    search['functional'] = [ hit for hit in top if hit.functionality == 'F' ]
-                    if search['functional']:
-                        top = search['functional']
-            if top:
-                # prefer a functional gene for a primary F > O > P
-                top.sort(key=lambda x: x.functionality)
-                for hit in top:
-                    self._pick_hit(hit)
-                picked = True
-        return picked
-
-    def _pick_hit(self, hit):
-        def pick_region_primary(hit):
-            if hit.region not in self.body['primary']:
-                hit.primary = True
-                self._primary = None
-                self.body['primary'][hit.region] = hit.uuid
-
-        def pick_framing_hit(framing):
-            if  not self.framed and \
-                framing.framed and \
-                framing.query_start is not None and \
-                framing.subject is not None:
-
-                # first hit to be picked that is framed sets the frame for the sample
-                # that also means deciding if the entire sample is reverse complemented
-                # any further hits will have to have the same orientation (except for dh region)
-                self.body['framed by'] = framing.uuid
-                self.reverse_complemented = framing.reverse_complemented
-                self.sequence.read_frame = (framing.query_start + framing.subject.read_frame) % 3
-                if self.reverse_complemented:
-                    self.sequence.read_frame = (self.sequence.length - self.sequence.read_frame) % 3
-
-                for hit in self.hit:
-                    if hit.valid and hit.uuid != framing.uuid:
-                        if self.reverse_complemented:
-                            hit.query.read_frame = 2 - (hit.query_start - self.sequence.reversed.read_frame - 1) % 3
-                        else:
-                            hit.query.read_frame = 2 - (hit.query_start - self.sequence.read_frame - 1) % 3
-
-                # self.log.debug('%s framed by %s', str(self), to_json_document(hit))
-
-        if hit is not None and hit.query is not None:
-            hit.picked = True
-            pick_region_primary(hit)
-            pick_framing_hit(hit)
-
-    def _check_v_j_framing(self):
-        jh = None if 'jh' not in self.primary else self.primary['jh']
-        vh = None if 'vh' not in self.primary else self.primary['vh']
-        if jh is not None and vh is not None:
-            if jh.reverse_complemented == vh.reverse_complemented:
-                if jh.in_frame and vh.in_frame:
-            else:
-                self.invalidate('vh and jh are on opposite strands')
-        else:
-            self.invalidate('could not establish a vh jh pair')
-
-    def _identify_junction(self, left, right, name):
-        def identify_palindrome(junction, left, right):
-            if junction.query.length > 0:
-                junction.node['palindrome'] = [ 'N' ] * junction.query.length
-                i = 0
-                while i < left.length and i < junction.query.length:
-                    mirror = -(i + 1)
-                    nucleotide = junction.query.nucleotide[i]
-                    palindrome = left.nucleotide[mirror]
-                    if self.configuration.enumeration['reverse complement'][nucleotide] == palindrome:
-                        junction.node['palindrome'][i] = 'P'
-                        i += 1
-                    else:
-                        break
-                i = 0
-                while i < right.length and i < junction.query.length:
-                    mirror = -(i + 1)
-                    nucleotide = right.nucleotide[i]
-                    palindrome = junction.query.nucleotide[mirror]
-                    if self.configuration.enumeration['reverse complement'][nucleotide] == palindrome:
-                        junction.node['palindrome'][mirror] = 'P'
-                        i += 1
-                    else:
-                        break
-                junction.node['palindrome'] = ''.join(junction.node['palindrome'])
-                p = junction.node['palindrome'].count('P')
-                n = junction.node['palindrome'].count('N')
-                if p > 0:
-                if n > 0:
-                    if p > 0:
-                        junction.node['palindrome ratio'] = float(n) / float(p)
-                    else:
-                        junction.node['palindrome ratio'] = 1.0
-                else:
-                    junction.node['palindrome ratio'] = 0.0
-
-        if left is not None and right is not None and left.query_end < right.query_start:
-            junction = Hit(self, {
-                'FLAG': self.FLAG,
-                'region': name,
-                'subject id': name,
-                'query start': left.query_end,
-                'query end': right.query_start,
-            })
-            identify_palindrome(junction, left.query, right.query)
-            self._add_hit(junction)
-            self._pick_hit(junction)
-
-    def _identify_v_d_junction(self):
-        vh = None if 'vh' not in self.primary else self.primary['vh']
-        dh = None if 'dh' not in self.primary else self.primary['dh']
-        self._identify_junction(vh, dh, 'V-D')
-
-    def _identify_d_j_junction(self):
-        dh = None if 'dh' not in self.primary else self.primary['dh']
-        jh = None if 'jh' not in self.primary else self.primary['jh']
-        self._identify_junction(dh, jh, 'D-J')
-
-    def _identify_v_j_junction(self):
-        if 'dh' not in self.primary:
-            vh = None if 'vh' not in self.primary else self.primary['vh']
-            jh = None if 'jh' not in self.primary else self.primary['jh']
-            self._identify_junction(vh, jh, 'V-J')
-
-    def _check_for_stop_codon(self):
-        if self.effective.codon and self.framed:
-            if '*' in self.effective.codon:
-
-    def _identify_cdr3(self):
-        def locate_cdr3_start(vh):
-            position = None
-            gene = self.pipeline.resolver.gene_fetch(vh.subject_id)
-            if 'cdr3' in gene.body:
-                gene_cdr3 = gene.body['cdr3']
-                position = vh.query_start + vh.reference_end - gene_cdr3['reference end']
-                
-                # because the gene annotation considers the cdr3 to start after the Cycteine
-                position -= 3
-                
-                if position < 0 or position > self.sequence.length - 3:
-                    self.make_comment('cdr3 start position out of range {}'.format(position))
-                    position = None
-                else:
-                    if self.reverse_complemented:
-                        acid = self.sequence.reversed.nucleotide[position:position+3]
-                    else:
-                        acid = self.sequence.nucleotide[position:position+3]
-
-                    if acid in self.configuration.enumeration['nucleic to amino'] and self.configuration.enumeration['nucleic to amino'][acid] == 'C':
-                    else:
-                        self.make_comment('framing cycteine not conserved {}'.format(acid))
-            return position
-
-        def locate_cdr3_end(jh):
-            position = None
-            gene = self.pipeline.resolver.gene_fetch(jh.subject_id)
-            if 'cdr3' in gene.body:
-                gene_cdr3 = gene.body['cdr3']
-                position = jh.query_start + jh.reference_end - gene_cdr3['reference start']
-
-                # because the gene annotation considers the cdr3 to end before the Tryptophan
-                position += 3
-
-                if position < 0 or position > self.sequence.length - 3:
-                    self.make_comment('cdr3 end position out of range {}'.format(position))
-                    position = None
-                else:
-                    if self.reverse_complemented:
-                        acid = self.sequence.reversed.nucleotide[position-3:position]
-                    else:
-                        acid = self.sequence.nucleotide[position-3:position]
-
-                    if acid in self.configuration.enumeration['nucleic to amino'] and self.configuration.enumeration['nucleic to amino'][acid] == 'W':
-                    else:
-                        self.make_comment('framing tryptophan not conserved {}'.format(acid))
-            return position
-
-        jh = None if 'jh' not in self.primary else self.primary['jh']
-        vh = None if 'vh' not in self.primary else self.primary['vh']
-        if vh is not None and jh is not None:
-            start = locate_cdr3_start(vh)
-            end = locate_cdr3_end(jh)
-            if start is not None and end is not None and start < end:
-                cdr3 = Hit(self, { 
-                    'FLAG': self.FLAG,
-                    'region': 'cdr3',
-                    'subject id': 'cdr3',
-                    'query start': start,
-                    'query end': end
-                })
-                if cdr3.valid:
-                    self._add_hit(cdr3)
-                    self._pick_hit(cdr3)
-                    cdr3.charge
-                    cdr3.weight
-
-    def _identify_chewback(self):
-        for hit in self.hit:
-            hit.chew_3_prime
-            hit.chew_5_prime
-
-    def _check_for_productivity(self):
-        jh = None if 'jh' not in self.primary else self.primary['jh']
-        vh = None if 'vh' not in self.primary else self.primary['vh']
-        cdr3 = None if 'cdr3' not in self.primary else self.primary['cdr3']
-        if (vh is not None and jh is not None and \
-            cdr3 is not None and self.conserved_cdr3_cycteine and self.conserved_cdr3_tryptophan and \
-            self.in_frame and not self.premature):
-            if vh.functionality == 'F':
-                if jh.functionality == 'F':
-                else:
-                    self.make_comment('leading jh {} is non functional {}'.format(jh.gene, jh.functionality))
-            else:
-                self.make_comment('leading vh {} is non functional {}'.format(vh.gene, vh.functionality))
-
-    def _analyze_quality(self):
-        for name, hit in self.primary.items():
-            hit.node['average phread'] = float(sum(hit.query.phred)) / float((hit.query.length))
-
-    def invalidate(self, message):
-        self.make_comment(message)
-
-    def make_comment(self, message):
-        self.body['comment'].append(message)
-        self.log.info('sample %s : %s', self.id, message)
-
-    def reverse(self):
-        self.body['sequence'] = self.body['sequence'].reversed
-
-    def view(self, request):
-        diagram = Diagram(self.pipeline, self, request)
-        print(diagram.draw())
-
-    def info(self):
-        print(to_json_document(self))
+    @property
+    def default(self):
+        return {
+            'body': {
+                '3 chew': None,
+                '5 chew': None,
+                'FLAG': 0,
+                'abundance': 1,
+                'expected error': None,
+                'cdr3 length': None,
+                'comment': [],
+                'conserved cdr3 c': None,
+                'conserved cdr3 w': None,
+                'effective': None,
+                'effective query end': None,
+                'effective query start': None,
+                'framed': False,
+                'framed by': None,
+                'gapped': None,
+                'hit': [],
+                'id': None,
+                'id comment': None,
+                'id sha1': None,
+                'in frame': None,
+                'library': None,
+                'n count': None,
+                'p count': None,
+                'palindromic': None,
+                'premature': None,
+                'primary': {},
+                'productive': None,
+                'query': None,
+                'sequence': None,
+                'subject': None,
+                'valid': True,
+            },
+            'head': {}
+        }
 
     @property
     def abundance(self):
+        return self.body['abundance']
 
     @property
-    def has_dh(self):
-        return 'dh' in self.primary
+    def palindromic(self):
+        return self.body['palindromic']
+
+    @property
+    def primary_vh(self):
+        return None if 'vh' not in self.primary else self.primary['vh']
+
+    @property
+    def primary_dh(self):
+      return None if 'dh' not in self.primary else self.primary['dh']
+
+    @property
+    def primary_jh(self):
+      return None if 'jh' not in self.primary else self.primary['jh']
+
+    @property
+    def primary_cdr3(self):
+      return None if 'cdr3' not in self.primary else self.primary['cdr3']
 
     @property
     def observable(self):
@@ -3345,16 +3052,16 @@ class Sample(object):
                         breakdown['feature']['d5 chew']
 
                     # junction
-                    if 'V-D' in self.primary:
-                        breakdown['feature']['vd length'] = float(self.primary['V-D'].query.length)
-                        breakdown['feature']['vd n count'] = float(self.primary['V-D'].palindrome.count('N'))
-                        breakdown['feature']['vd p count'] = float(self.primary['V-D'].palindrome.count('P'))
+                    if 'v-d' in self.primary:
+                        breakdown['feature']['vd length'] = float(self.primary['v-d'].query.length)
+                        breakdown['feature']['vd n count'] = float(self.primary['v-d'].palindrome.count('N'))
+                        breakdown['feature']['vd p count'] = float(self.primary['v-d'].palindrome.count('P'))
                         breakdown['feature']['n count'] += breakdown['feature']['vd n count']
                         breakdown['feature']['p count'] += breakdown['feature']['vd p count']
-                    if 'D-J' in self.primary:
-                        breakdown['feature']['dj length'] = float(self.primary['D-J'].query.length)
-                        breakdown['feature']['dj n count'] = float(self.primary['D-J'].palindrome.count('N'))
-                        breakdown['feature']['dj p count'] = float(self.primary['D-J'].palindrome.count('P'))
+                    if 'd-j' in self.primary:
+                        breakdown['feature']['dj length'] = float(self.primary['d-j'].query.length)
+                        breakdown['feature']['dj n count'] = float(self.primary['d-j'].palindrome.count('N'))
+                        breakdown['feature']['dj p count'] = float(self.primary['d-j'].palindrome.count('P'))
                         breakdown['feature']['n count'] += breakdown['feature']['dj n count']
                         breakdown['feature']['p count'] += breakdown['feature']['dj p count']
 
@@ -3402,10 +3109,10 @@ class Sample(object):
                         breakdown['feature']['v3 chew']
 
                     # junction
-                    if 'V-J' in self.primary:
-                        breakdown['feature']['vj length'] = float(self.primary['V-J'].query.length)
-                        breakdown['feature']['vj n count'] = float(self.primary['V-J'].palindrome.count('N'))
-                        breakdown['feature']['vj p count'] = float(self.primary['V-J'].palindrome.count('P'))
+                    if 'v-j' in self.primary:
+                        breakdown['feature']['vj length'] = float(self.primary['v-j'].query.length)
+                        breakdown['feature']['vj n count'] = float(self.primary['v-j'].palindrome.count('N'))
+                        breakdown['feature']['vj p count'] = float(self.primary['v-j'].palindrome.count('P'))
 
                     for vh in breakdown['region']['vh']:
                         for jh in breakdown['region']['jh']:
@@ -3418,7 +3125,16 @@ class Sample(object):
         return self._observation
 
     @property
+    def lookup(self):
+        if self._lookup is None:
+            self._lookup = {}
+            for hit in self.hit:
+                self._lookup[hit.uuid] = hit
+        return self._lookup
+
+    @property
     def cdr3_sequence(self):
+        return self.primary['cdr3']
 
     @property
     def configuration(self):
@@ -3434,10 +3150,9 @@ class Sample(object):
 
     @property
     def key(self):
-
-    @property
-    def document(self):
-        return to_document(self.node)
+        if self.body['id sha1'] is None and self.id is not None:
+            self.body['id sha1'] = hashlib.sha1(self.id.encode('utf8')).hexdigest()
+        return self.body['id sha1']
 
     @property
     def fasta(self):
@@ -3449,6 +3164,7 @@ class Sample(object):
 
     @property
     def id(self):
+        return self.body['id']
 
     @property
     def length(self):
@@ -3456,9 +3172,11 @@ class Sample(object):
 
     @property
     def FLAG(self):
+        return self.body['FLAG']
 
     @FLAG.setter
     def FLAG(self, value):
+        self.body['FLAG'] = value
 
     @property
     def reverse_complemented(self):
@@ -3473,6 +3191,7 @@ class Sample(object):
 
     @property
     def library(self):
+        return self.body['library']
 
     @property
     def sequence(self):
@@ -3480,19 +3199,26 @@ class Sample(object):
 
     @property
     def effective(self):
-        if 'effective' not in self.body:
-            # find the borders
+        # if self.body['effective'] is None:
+        #     if self.reverse_complemented:
+        #         self.body['effective'] = self.sequence.reversed
+        #     else:
+        #         self.body['effective'] = self.sequence
+        #     self.body['effective query start'] = 0
+        #     self.body['effective query end'] = self.sequence.length
+        # return self.body['effective']
+
+        if  self.body['effective'] is None:
             start = self.sequence.length
             end = 0
             for hit in self.hit:
                 if hit.valid and hit.type == 'gene segment':
-                    if self.reverse_complemented:
+                    if hit.reverse_complemented:
                         start = min(start, self.sequence.length - hit.query_end)
                         end = max(end, self.sequence.length - hit.query_start)
                     else:
                         start = min(start, hit.query_start)
                         end = max(end, hit.query_end)
-
             if start > end:
                 # no hits
                 if self.reverse_complemented:
@@ -3505,13 +3231,52 @@ class Sample(object):
                 self.body['effective query start'] = start
                 self.body['effective query end'] = end
                 if self.reverse_complemented:
-                    self.body['effective'] = self.sequence.reversed.crop(start, end)
+                    self.body['effective'] = self.sequence.reversed.crop(self.sequence.length - end, self.sequence.length - start)
                 else:
                     self.body['effective'] = self.sequence.crop(start, end)
         return self.body['effective']
 
     @property
+    def residual(self):
+        start = 0
+        end = self.sequence.length
+        if self.primary_jh is not None:
+            if self.primary_jh.query_strand:
+                if self.primary_jh.query.strand != self.sequence.strand:
+                    start = max(start, self.sequence.length - self.primary_jh.query_start)
+                else:
+                    end = min(end, self.primary_jh.query_start)
+            else:
+                if self.primary_jh.query.strand != self.sequence.strand:
+                    start = max(start, self.sequence.length - self.primary_jh.query_start)
+                else:
+                    end = min(end, self.primary_jh.query_start)
+
+        if self.primary_vh is not None:
+            if self.primary_vh.query_strand:
+                if self.primary_vh.query.strand != self.sequence.strand:
+                    end = min(end, self.sequence.length - self.primary_vh.query_end)
+                else:
+                    start = max(start, self.primary_vh.query_end)
+            else:
+                if self.primary_vh.query.strand != self.sequence.strand:
+                    end = min(end, self.sequence.length - self.primary_vh.query_end)
+                else:
+                    start = max(start, self.primary_vh.query_end)
+
+        sequence = self.sequence.crop(start, end)
+        if sequence is not None:
+            return {
+                'sequence': sequence,
+                'start': start,
+                'end': end,
+            }
+        else:
+            return None
+
+    @property
     def valid(self):
+        return self.body['valid']
 
     @property
     def hit(self):
@@ -3521,33 +3286,410 @@ class Sample(object):
     def primary(self):
         if self._primary is None:
             self._primary = {}
-            if 'primary' in self.body:
-                for k,v in self.body['primary'].items():
+            for key,hit in self.body['primary'].items():
+                self._primary[key] = self.lookup[hit]
         return self._primary
 
     @property
+    def gapped(self):
+        if self.body['gapped'] is None:
+           self.body['gapped'] = any([ hit.gapped for hit in self.hit if hit.picked ])
+        return self.body['gapped']
+
+    @property
     def comment(self):
+        return self.body['comment']
 
     @property
     def framed(self):
-
-    @property
-    def gapped(self):
+        return self.body['framed']
 
     @property
     def in_frame(self):
+        return self.body['in frame']
 
     @property
     def premature(self):
+        return self.body['premature']
 
     @property
     def conserved_cdr3_cycteine(self):
+        return self.body['conserved cdr3 c']
 
     @property
     def conserved_cdr3_tryptophan(self):
+        return self.body['conserved cdr3 w']
 
     @property
     def productive(self):
+        return self.body['productive']
+
+    def add_bwa_hit(self, hit):
+        if hit is not None and not hit.unmapped:
+            gene = self.pipeline.resolver.gene_fetch(hit.subject_id)
+            if gene is None:
+                hit.invalidate('unknown gene')
+            self.add_hit(hit)
+
+    def add_igblast_hit(self, hit):
+        if hit is not None:
+            if 'subject id' in hit:
+                gene = self.pipeline.resolver.gene_fetch(hit.subject_id)
+                # switch the hit to a zero based coordinate system
+                if gene:
+                    hit.query_start -= 1
+                    if hit.node['subject strand'] == gene.sequence.strand:
+                        hit.subject_start -= 1
+                    else:
+                        hit.subject_start = gene.length - hit.subject_start
+                        hit.subject_end = gene.length - hit.subject_end + 1
+                else:
+                    hit.invalidate('unknown gene')
+            self.add_hit(hit)
+
+    def determine_region(self, region):
+        def pick_region(region, candidate):
+            picked = False
+            if candidate:
+                top = None
+                search = { 'valid': [] }
+                for hit in candidate:
+                    if hit.region == region and hit.sufficient:
+                        search['valid'].append(hit)
+
+                if search['valid']:
+                    top = search['valid']
+                    top.sort(reverse=True, key=lambda x: x.score)
+                    top = [ hit for hit in top if hit.score == top[0].score ]
+
+                    if len(top) > 1:
+                        search['framed'] = []
+                        for hit in top:
+                            if hit.framed and hit.codon_mismatch is not None:
+                                search['framed'].append(hit)
+
+                        if search['framed']:
+                            top = search['framed']
+                            top.sort(key=lambda x: x.codon_mismatch)
+                            top = [ hit for hit in top if hit.codon_mismatch == top[0].codon_mismatch ]
+
+                    # if there are multiple matches and at least one is functional, keep only the functional
+                    if len(top) > 1:
+                        search['functional'] = [ hit for hit in top if hit.functionality == 'F' ]
+                        if search['functional']:
+                            top = search['functional']
+                if top:
+                    # prefer a functional gene for a primary F > O > P
+                    top.sort(key=lambda x: x.functionality)
+                    for hit in top:
+                        self._pick_hit(hit)
+                    picked = True
+            return picked
+
+        if region == 'jh':
+            pick_region('jh', self.hit)
+
+        elif region == 'vh':
+            pick_region('vh', self.hit)
+
+        elif region == 'dh':
+            if self.primary_jh is not None and self.primary_vh is not None:
+                top = None
+                search = { 'valid': [ hit for hit in self.hit if hit.region == 'dh' and hit.valid ] }
+                search['map'] = dict([(hit.uuid, hit) for hit in search['valid']])
+                if len(search['valid']) > 0:
+                    top = search['valid']
+                    search['trimmed'] = []
+                    for hit in top:
+                        length = hit.nonoverlapping(self.primary_vh.query_end, self.primary_jh.query_start)
+                        if length > 0:
+                            if length < hit.length:
+                                trimmed = Hit.clone(hit)
+                                trimmed.trim(self.primary_vh.query_end, self.primary_jh.query_start)
+                                trimmed.node['trimmed'] = True
+                                search['trimmed'].append(trimmed)
+                                self.add_bwa_hit(trimmed)
+                            else:
+                                search['trimmed'].append(hit)
+                    if len(search['trimmed']) > 0:
+                        top = search['trimmed']
+                    pick_region('dh', top)
+
+    def add_hit(self, hit):
+        self.hit.append(hit)
+        self._reset()
+        hit.load()
+
+    def _pick_hit(self, hit):
+        def pick_region_primary(hit):
+            if hit.region not in self.body['primary']:
+                hit.primary = True
+                self.body['primary'][hit.region] = hit.uuid
+
+        def pick_framing_hit(framing):
+            if  not self.framed and \
+                framing.framed and \
+                framing.query_start is not None and \
+                framing.subject is not None:
+
+                # first hit to be picked that is framed sets the frame for the sample
+                # that also means deciding if the entire sample is reverse complemented
+                # any further hits will have to have the same orientation (except for dh region)
+                self.body['framed'] = True
+                self.body['framed by'] = framing.uuid
+                self.reverse_complemented = framing.reverse_complemented
+                self.sequence.read_frame = (framing.query_start + framing.subject.read_frame) % 3
+                if self.reverse_complemented:
+                    self.sequence.read_frame = (self.sequence.length - self.sequence.read_frame) % 3
+
+        if hit is not None and hit.query is not None:
+            hit.picked = True
+            pick_region_primary(hit)
+            pick_framing_hit(hit)
+
+    def analyze(self):
+        self._load_gene()
+        self._apply_framing()
+        self._check_v_j_framing()
+        self._identify_junction()
+        self._identify_cdr3()
+        self._identify_chewback()
+        self._check_for_stop_codon()
+        self._check_for_productivity()
+        # self.compact()
+
+    def _reset(self):
+        self._primary = None
+        self._lookup = None
+        for term in [
+            'query',
+            'gapped',
+            'effective',
+            'effective query start',
+            'effective query end',
+        ]:
+            self.body[term] = None
+
+    def _load_gene(self):
+        for hit in self.hit:
+            if hit.valid and hit.type == 'gene segment' and hit.subject is None:
+                hit.invalidate('unknown gene')
+
+    def _apply_framing(self):
+        if self.framed:
+            for hit in self.hit:
+                if hit.valid:
+                    if self.reverse_complemented:
+                        hit.query.read_frame = 2 - (hit.query_start - self.sequence.reversed.read_frame - 1) % 3
+                    else:
+                        hit.query.read_frame = 2 - (hit.query_start - self.sequence.read_frame - 1) % 3
+
+    def _check_v_j_framing(self):
+        if self.primary_jh is not None and self.primary_vh is not None:
+            if self.primary_jh.reverse_complemented == self.primary_vh.reverse_complemented:
+                if self.primary_jh.in_frame and self.primary_vh.in_frame:
+                    self.body['in frame'] = True
+                else:
+                    self.body['in frame'] = False
+            else:
+                self.invalidate('vh and jh are on opposite strands')
+        else:
+            self.invalidate('could not establish a vh jh pair')
+
+    def _identify_junction(self):
+        def make_junction(left, right, name, orientation):
+            if left is not None and right is not None:
+                if left.reverse_complemented == orientation:
+                    start = left.query_end
+                    lq = left.query
+                else:
+                    start = self.sequence.length - left.query_start
+                    lq = left.query.reversed
+
+                if right.reverse_complemented == orientation:
+                    end = right.query_start
+                    rq = right.query
+                else:
+                    end = self.sequence.length - right.query_end
+                    rq = right.query.reversed
+
+                if start < end:
+                    junction = Hit(self, {
+                        'FLAG': self.FLAG,
+                        'region': name,
+                        'subject id': name,
+                        'query start': start,
+                        'query end': end,
+                    })
+
+                    # identify palindrome
+                    if junction.query.length > 0:
+                        junction.node['palindrome'] = [ 'N' ] * junction.query.length
+                        if self.palindromic is None:
+                            self.body['palindromic'] = False
+                            self.body['p count'] = 0
+                            self.body['n count'] = 0
+
+                        i = 0
+                        while i < lq.length and i < junction.query.length:
+                            mirror = -(i + 1)
+                            nucleotide = junction.query.nucleotide[i]
+                            palindrome = lq.nucleotide[mirror]
+                            if self.configuration.enumeration['reverse complement'][nucleotide] == palindrome:
+                                junction.node['palindrome'][i] = 'P'
+                                i += 1
+                            else:
+                                break
+
+                        i = 0
+                        while i < rq.length and i < junction.query.length:
+                            mirror = -(i + 1)
+                            nucleotide = rq.nucleotide[i]
+                            palindrome = junction.query.nucleotide[mirror]
+                            if self.configuration.enumeration['reverse complement'][nucleotide] == palindrome:
+                                junction.node['palindrome'][mirror] = 'P'
+                                i += 1
+                            else:
+                                break
+
+                        junction.node['palindrome'] = ''.join(junction.node['palindrome'])
+                        junction.node['p count'] = junction.node['palindrome'].count('P')
+                        junction.node['n count'] = junction.node['palindrome'].count('N')
+
+                        self.body['p count'] += junction.node['p count']
+                        self.body['n count'] += junction.node['n count']
+                        if self.body['p count'] > 0:
+                            self.body['palindromic'] = True
+
+                    self.add_hit(junction)
+                    self._pick_hit(junction)
+
+        self._primary = None
+        if self.primary_dh is None:
+            if self.primary_vh is not None:
+                make_junction(self.primary_vh, self.primary_jh, 'v-j', self.primary_vh.reverse_complemented)
+        else:
+            if self.primary_vh is not None:
+                make_junction(self.primary_vh, self.primary_dh, 'v-d', self.primary_vh.reverse_complemented)
+
+            if self.primary_jh is not None:
+                make_junction(self.primary_dh, self.primary_jh, 'd-j', self.primary_jh.reverse_complemented)
+
+    def _identify_cdr3(self):
+        def locate_cdr3_start():
+            position = None
+            gene = self.pipeline.resolver.gene_fetch(self.primary_vh.subject_id)
+            if 'cdr3' in gene.artifacts:
+                # because the gene annotation considers the cdr3 to start after the Cycteine
+                position = self.primary_vh.query_start + self.primary_vh.reference_end - gene.artifacts['cdr3'].reference_end
+                position -= 3
+
+                if position < 0 or position > self.sequence.length - 3:
+                    self.make_comment('cdr3 start position out of range {}'.format(position))
+                    position = None
+                else:
+                    self.body['conserved cdr3 c'] = False
+                    if self.reverse_complemented:
+                        acid = self.sequence.reversed.nucleotide[position:position+3]
+                    else:
+                        acid = self.sequence.nucleotide[position:position+3]
+
+                    if acid in self.configuration.enumeration['nucleic to amino'] and self.configuration.enumeration['nucleic to amino'][acid] == 'C':
+                        self.body['conserved cdr3 c'] = True
+                    else:
+                        self.make_comment('framing cycteine not conserved {}'.format(acid))
+            return position
+
+        def locate_cdr3_end():
+            position = None
+            gene = self.pipeline.resolver.gene_fetch(self.primary_jh.subject_id)
+            if 'cdr3' in gene.artifacts:
+                # because the gene annotation considers the cdr3 to end before the Tryptophan
+                position = self.primary_jh.query_start + self.primary_jh.reference_end - gene.artifacts['cdr3'].reference_start
+                position += 3
+
+                if position < 0 or position > self.sequence.length - 3:
+                    self.make_comment('cdr3 end position out of range {}'.format(position))
+                    position = None
+                else:
+                    self.body['conserved cdr3 w'] = False
+                    if self.reverse_complemented:
+                        acid = self.sequence.reversed.nucleotide[position-3:position]
+                    else:
+                        acid = self.sequence.nucleotide[position-3:position]
+
+                    if acid in self.configuration.enumeration['nucleic to amino'] and self.configuration.enumeration['nucleic to amino'][acid] == 'W':
+                        self.body['conserved cdr3 w'] = True
+                    else:
+                        self.make_comment('framing tryptophan not conserved {}'.format(acid))
+            return position
+
+        if self.primary_vh is not None and self.primary_jh is not None:
+            start = locate_cdr3_start()
+            end = locate_cdr3_end()
+            if start is not None and end is not None and start < end:
+                cdr3 = Hit(self, { 
+                    'FLAG': self.FLAG,
+                    'region': 'cdr3',
+                    'subject id': 'cdr3',
+                    'query start': start,
+                    'query end': end
+                })
+                if cdr3.valid:
+                    cdr3.charge
+                    cdr3.weight
+                    self.add_hit(cdr3)
+                    self._pick_hit(cdr3)
+
+    def _identify_chewback(self):
+        for hit in self.hit:
+            hit.chew_3_prime
+            hit.chew_5_prime
+
+    def _check_for_stop_codon(self):
+        if self.effective.codon and self.framed:
+            self.body['premature'] = ( '*' in self.effective.codon )
+
+    def _check_for_productivity(self):
+        if  self.primary_vh is not None and \
+            self.primary_jh is not None and \
+            self.primary_cdr3 is not None:
+            self.body['productive'] = False
+            if self.conserved_cdr3_cycteine and self.conserved_cdr3_tryptophan:
+                if self.in_frame:
+                    if not self.premature:
+                        if self.primary_vh.functionality == 'F':
+                            if self.primary_jh.functionality == 'F':
+                                self.body['productive'] = True
+                            else:
+                                self.make_comment('leading jh {} is non functional {}'.format(self.primary_jh.gene, self.primary_jh.functionality))
+                        else:
+                            self.make_comment('leading vh {} is non functional {}'.format(self.primary_vh.gene, self.primary_vh.functionality))
+                    else:
+                        self.make_comment('premature termination')
+                else:
+                    self.make_comment('out of frame')
+
+    def compact(self):
+        self.body['hit'] = [ hit for hit in self.body['hit'] if hit.picked ]
+
+    def invalidate(self, message):
+        self.body['valid'] = False
+        self.make_comment(message)
+
+    def make_comment(self, message):
+        self.body['comment'].append(message)
+        self.log.info('sample %s : %s', self.id, message)
+
+    def reverse(self):
+        self.body['sequence'] = self.body['sequence'].reversed
+
+    def view(self, request):
+        diagram = Diagram(self.pipeline, self, request)
+        print(diagram.draw())
+
+    def info(self):
+        print(to_json_document(self))
 
 class Pivot(object):
     def __init__(self, study, node=None, name=None, rotate=None):
@@ -4060,7 +4202,10 @@ class Diagram(object):
         self.pipeline = pipeline
         self.sample = sample
         self.sequence = self.sample.effective
-        self.offset = self.sample.body['effective query start']
+        if self.sample.reverse_complemented:
+            self.offset = self.sample.sequence.length - self.sample.body['effective query end']
+        else:
+            self.offset = self.sample.body['effective query start']
 
         self.node = {
             'track offset': {},
@@ -4080,31 +4225,33 @@ class Diagram(object):
                 for k,v in profile['format']['diagram']['track'].items():
                     self.query[k] = v
 
-        for track in sample.hit:
-            if track['region'] not in self.configuration.region.keys() or all([k in track and track[k] == v for k,v in self.query.items()]):
-                self.track.append(track)
-                
+        for hit in sample.hit:
+            if not hit.gapped:
+                if hit.type != 'gene segment' or all([k in hit.node and hit.node[k] == v for k,v in self.query.items()]):
+                    hit.node['orientation'] = hit.query_strand == hit.subject_strand
+                    self.track.append(hit)
+
         for k in profile['format']['diagram']['feature']:
             if k in self.configuration.diagram['prototype']:
                 feature = dict(self.configuration.diagram['prototype'][k])
                 if feature['width'] == 'auto':
                     feature['width'] = 0
                     for track in self.track:
-                        if feature['value'] in track:
-                            feature['width'] = max(feature['width'], len(feature['format'](track[feature['value']])))
+                        if track.node[feature['value']] is not None:
+                            feature['width'] = max(feature['width'], len(feature['format'](track.node[feature['value']])))
                 self.pattern['feature'].append(feature)
                 self.pattern['phrase'].append('{{: <{:}}}'.format(feature['width']))
                 self.pattern['title'].append(feature['title'])
                 self.pattern['width'] += max(feature['width'], len(feature['title']))
         self.pattern['width'] += (len(self.pattern['phrase']) - 1)
         self.pattern['phrase'] = ' '.join(self.pattern['phrase'])
-        self.width['sample read frame'] = self.sequence.read_frame
+        self.width['sample read frame'] = 0 if self.sequence.read_frame is None else self.sequence.read_frame
         self.width['table'] = self.pattern['width']
         self.width['table padding'] = 2
         self.width['diagram start'] = self.width['table'] + self.width['table padding']
-        
+
         for track in self.track:
-            self.node['track offset'][track['uuid']] = self._find_track_offset(track)
+            self.node['track offset'][track.uuid] = self._find_track_offset(track)
 
     @property
     def configuration(self):
@@ -4137,8 +4284,8 @@ class Diagram(object):
     def format_track_features(self, track):
         values = []
         for feature in self.pattern['feature']:
-            if feature['value'] in track:
-                values.append(feature['format'](track[feature['value']]))
+            if track.node[feature['value']] is not None:
+                values.append(feature['format'](track.node[feature['value']]))
             else:
                 values.append('')
         return self.pattern['phrase'].format(*values)
@@ -4168,8 +4315,8 @@ class Diagram(object):
 
         if 'cdr3' in self.sample.primary:
             cdr3 = self.sample.primary['cdr3']
-            if 'charge' in cdr3 and 'weight' in cdr3:
-                b.append('{} : {:.3} {}'.format(cdr3.region, cdr3.node['charge'], cdr3.node['weight']))
+            if cdr3.charge is not None and cdr3.weight is not None:
+                b.append('{} : {:.3} {}'.format(cdr3.region, cdr3.charge, cdr3.weight))
 
         if self.sample.productive:
             b.append('productive')
@@ -4235,55 +4382,56 @@ class Diagram(object):
             buffer.write('\n')
 
     def _draw_track_without_subject(self, buffer, track):
-        offset = self.node['track offset'][track['uuid']]
-        if 'subject' not in track and 'query' in track:
+        offset = self.node['track offset'][track.uuid]
+        if track.subject is None and track.query is not None:
             if offset > 0: buffer.write(' ' * offset)
-            if track['query'].read_frame > 0:
-                buffer.write('-' * min(track['query'].read_frame, track['query'].length))
+            if track.query.read_frame > 0:
+                buffer.write('-' * min(track.query.read_frame, track.query.length))
                 # buffer.write(track['query'].nucleotide[0:track['query'].read_frame])
                 buffer.write(self.gap)
                 
-            for index in range(track['query'].read_frame, track['query'].length, 3):
-                buffer.write('-' * len(track['query'].nucleotide[index:index + 3]))
+            for index in range(track.query.read_frame, track.query.length, 3):
+                buffer.write('-' * len(track.query.nucleotide[index:index + 3]))
                 # buffer.write(track['query'].nucleotide[index:index + 3])
                 buffer.write(self.gap)
             buffer.write('\n')
             
-            if 'palindrome' in track and 'P' in track['palindrome']:
+            if track.palindrome is not None and 'P' in track.palindrome:
                 buffer.write(' ' * self.width['diagram start'])
                 if offset > 0: buffer.write(' ' * offset)
-                if track['query'].read_frame > 0:
-                    buffer.write(track['palindrome'][0:min(track['query'].read_frame, track['query'].length)])
+                if track.query.read_frame > 0:
+                    buffer.write(track.palindrome[0:min(track.query.read_frame, track.query.length)])
                     buffer.write(self.gap)
                     
-                for index in range(track['query'].read_frame, track['query'].length, 3):
-                    buffer.write(track['palindrome'][index:index + 3])
+                for index in range(track.query.read_frame, track.query.length, 3):
+                    buffer.write(track.palindrome[index:index + 3])
                     buffer.write(self.gap)
                 buffer.write('\n')
                 
-            if False and self.sample.framed and track['query'].codon:
+            if False and self.sample.framed and track.query.codon:
                 buffer.write(' ' * self.width['diagram start'])
                 if offset > 0: buffer.write(' ' * offset)
                 
-                if track['query'].read_frame > 0:
-                    buffer.write(' ' * track['query'].read_frame)
+                if track.query.read_frame > 0:
+                    buffer.write(' ' * track.query.read_frame)
                     buffer.write(self.gap)
                     
-                for codon in track['query'].codon:
+                for codon in track.query.codon:
                     buffer.write('{: <3}'.format(codon))
                     buffer.write(self.gap)
                 buffer.write('\n')
 
     def _draw_track_with_subject(self, buffer, track):
-        offset = self.node['track offset'][track['uuid']]
-        if 'subject' in track and 'query' in track:
-            subject = track['subject'].clone()
-            subject.read_frame = track['query'].read_frame
+        offset = self.node['track offset'][track.uuid]
+        if track.subject is not None and track.query is not None:
+            subject = track.subject.clone()
+            subject.read_frame = track.query.read_frame
+
             mask = []
             for index,n in enumerate(subject.nucleotide):
-                mask.append('-' if n == track['query'].nucleotide[index] else n)
+                mask.append('-' if n == track.query.nucleotide[index] else n)
             mask = ''.join(mask)
-            
+
             if offset > 0: buffer.write(' ' * offset)
             if subject.read_frame > 0:
                 buffer.write(mask[0:subject.read_frame])
@@ -4298,7 +4446,7 @@ class Diagram(object):
                 display = False
                 mask = []
                 for index,c in enumerate(subject.codon):
-                    if c == track['query'].codon[index]: mask.append('-')
+                    if c == track.query.codon[index]: mask.append('-')
                     else:
                         mask.append(c)
                         display = True
@@ -4317,7 +4465,11 @@ class Diagram(object):
 
     def _find_track_offset(self, track):
         result = 0
-        start = track['query start'] - self.offset
+        if track.reverse_complemented == self.sample.reverse_complemented:
+            start = track.query_start - self.offset
+        else:
+            start = (self.sample.sequence.length - track.query_end) - self.offset
+
         if start > 0:
             result = start
             if self.sample.framed:
@@ -4358,7 +4510,7 @@ class Block(object):
             'preset': request.preset_for('sample'),
             'library': request.instruction['library'],
             'buffer': None,
-            'lookup': None
+            'lookup': None,
         }
         self.reset()
 
@@ -4435,7 +4587,9 @@ class Block(object):
         #if sample is not None and sample.sequence.length > 0:
         if sample.id not in self.lookup:
             self.buffer.append(sample)
-            self.lookup[sample.id] = sample
+            self.lookup[sample.id] = {
+                'sample': sample
+            }
         else:
             self.log.error('%s already present', sample.id)
 
@@ -4444,8 +4598,6 @@ class Block(object):
             self.search()
             for sample in self.buffer:
                 sample.analyze()
-                print(to_json_document(sample))
-                # print(sample.productive)
         return not self.empty
 
     def read(self):
@@ -4460,6 +4612,7 @@ class Block(object):
                 if line:
                     if state == 0 and line[0] == '@':
                         try:
+                            sample = Sample.from_fastq(self, line[1:])
                         except InvalidSampleError as e:
                             self.log.warning(e)
                         state = 1
@@ -4505,6 +4658,18 @@ class Block(object):
                 if line[0] != '@':
                     hit = Hit.from_bwa(self, line, region['key'], region['type'])
                     if hit and hit.valid:
+                        residual = self.lookup[hit.sample.id]['residual']
+                        if hit.reverse_complemented:
+                            start = residual['sequence'].length - hit.node['query end']
+                            end = residual['sequence'].length - hit.node['query start']
+                            start += residual['start']
+                            end += residual['start']
+                            hit.node['query start'] = hit.sample.sequence.length - end
+                            hit.node['query end'] = hit.sample.sequence.length - start
+                        else:
+                            hit.node['query start'] += residual['start']
+                            hit.node['query end'] += residual['start']
+                        hit.node['query'] = None
                         hit.sample.add_bwa_hit(hit)
 
     def igblast(self):
@@ -4531,7 +4696,7 @@ class Block(object):
                     # this is the query id for the record
                     id = line[9:]
                     if id in self.lookup:
-                        sample = self.lookup[id]
+                        sample = self.lookup[id]['sample']
                         state = 2
                     else:
                         self.log.error('could not locate %s in buffer', id)
@@ -4553,9 +4718,16 @@ class Block(object):
     def to_fastq(self):
         buffer = StringIO()
         for sample in self.buffer:
-            residual = sample.residual
-            if residual is not None:
-                buffer.write(to_fastq(sample.id, residual.nucleotide, residual.quality))
+            self.lookup[sample.id]['residual'] = sample.residual
+            # print(to_json_document(self.lookup[sample.id]['residual']))
+            if self.lookup[sample.id]['residual'] is not None:
+                buffer.write(
+                    to_fastq(
+                        sample.id, 
+                        self.lookup[sample.id]['residual']['sequence'].nucleotide, 
+                        self.lookup[sample.id]['residual']['sequence'].quality
+                    )
+                )
                 buffer.write('\n')
         buffer.seek(0)
         return buffer
@@ -6442,9 +6614,11 @@ class Pipeline(object):
         block = Block(self, request)
         while block.fill():
             count += block.size
-            #     if sample.gapped:
-            # self.resolver.bulk_store_sample(block.buffer)
-            self.log.info('%s so far', count)
+            # for sample in block.buffer:
+            #     print(to_json_document(sample))
+                # sample.view(request)
+            self.resolver.bulk_store_sample(block.buffer)
+            # self.log.info('%s so far', count)
 
     def reanalyze(self, request):
         def flush(buffer, collection):
@@ -6541,7 +6715,8 @@ class Pipeline(object):
         cursor = request.cursor_for('sample')
         for node in cursor:
             sample = Sample(self, node)
-            sample.view(request)
+            if sample.gapped:
+                sample.view(request)
         cursor.close()
 
     def sample_filter(self, request):
