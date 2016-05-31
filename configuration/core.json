@@ -1549,6 +1549,7 @@
                 }, 
                 {
                     "argument": [
+                        "profile", 
                         "limit", 
                         "skip", 
                         "drop", 
@@ -1715,10 +1716,10 @@
                                         "parameter": {
                                             "-A": "2", 
                                             "-B": "4", 
-                                            "-T": "10",
+                                            "-L": "0", 
+                                            "-T": "10", 
                                             "-a": null, 
-                                            "-k": "4",
-                                            "-L": "0"
+                                            "-k": "4"
                                         }
                                     }, 
                                     "makeblastdb": {
@@ -1746,10 +1747,10 @@
                                         "parameter": {
                                             "-A": "2", 
                                             "-B": "4", 
+                                            "-L": "0", 
                                             "-T": "48", 
                                             "-a": null, 
-                                            "-k": "4",
-                                            "-L": "0"
+                                            "-k": "4"
                                         }
                                     }, 
                                     "makeblastdb": {
@@ -1767,10 +1768,10 @@
                                         "parameter": {
                                             "-A": "2", 
                                             "-B": "4", 
+                                            "-L": "0", 
                                             "-T": "54", 
                                             "-a": null, 
-                                            "-k": "4",
-                                            "-L": "0"
+                                            "-k": "4"
                                         }
                                     }, 
                                     "makeblastdb": {
@@ -2360,7 +2361,8 @@
                             "strand", 
                             "functionality", 
                             "in frame", 
-                            "picked"
+                            "picked", 
+                            "gapped"
                         ]
                     }
                 }
@@ -2376,8 +2378,9 @@
                         "feature": [
                             "region", 
                             "name", 
-                            "primary",
-                            "strand",
+                            "primary", 
+                            "strand", 
+                            "gapped", 
                             "functionality"
                         ], 
                         "track": {
@@ -2399,11 +2402,10 @@
                         "feature": [
                             "region", 
                             "name", 
+                            "gapped", 
+                            "picked", 
                             "functionality"
-                        ], 
-                        "track": {
-                            "gapped": false
-                        }
+                        ]
                     }
                 }, 
                 "select": {
@@ -2424,7 +2426,6 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "picked", 
                             "functionality"
@@ -2447,7 +2448,6 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "functionality"
                         ], 
@@ -2472,7 +2472,6 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "functionality"
                         ], 
@@ -2498,7 +2497,6 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "functionality"
                         ], 
@@ -2531,7 +2529,6 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "picked", 
                             "functionality"
@@ -2553,7 +2550,6 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "functionality"
                         ], 
@@ -2577,7 +2573,6 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "functionality"
                         ], 
@@ -2602,7 +2597,6 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "functionality"
                         ], 
@@ -2629,11 +2623,11 @@
                     "diagram": {
                         "feature": [
                             "region", 
-                            "phred", 
                             "name", 
                             "functionality", 
                             "in frame", 
-                            "picked"
+                            "picked", 
+                            "strand"
                         ], 
                         "track": {
                             "valid": true

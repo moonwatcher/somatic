@@ -94,37 +94,6 @@ def to_fasta(id, sequence, description, limit):
     else:
         raise ValueError('FASTA sequence must have an id and sequence')
 
-def merge_base_quality(bi, bj, qi, qj):
-    pi = phred_to_probability(qi)
-    pj = phred_to_probability(qj)
-    if bi == bj:
-        pij = (pi * pj / 3.0) / (1.0 - pi - pj + ((4.0 * pi * pj) / 3.0))
-    else:
-        if qi > qj:
-            pij = (pi * (1.0 - (pj / 3.0))) / (pi + pj - ((4.0 * pi * pj) / 3.0))
-        else:
-            pij = (pj * (1.0 - (pi / 3.0))) / (pj + pi - ((4.0 * pj * pi) / 3.0))
-
-    qij = probability_to_phred(pij)
-    if qij > 'I': qij = 'I'
-    elif qij < '#': qij = '#'
-    return qij
-
-def phred_to_quality(code):
-    return ord(code) - 33
-
-def quality_to_phred(value):
-    return chr(round(value) + 33)
-
-def phred_to_probability(score):
-    return pow(10, -(ord(score) - 33) / 10)
-
-def probability_to_phred(probability):
-    return chr(round(-10 * math.log(probability, 10)) + 33)
-
-def expected_error(quality):
-    return sum([ phred_to_probability(q) for q in quality ])
-
 def to_csv(row):
     return ','.join([str(column) for column in row])
 
@@ -187,6 +156,37 @@ def to_json(node):
 
 def to_json_document(node):
     return to_json(to_document(node))
+
+def merge_base_quality(bi, bj, qi, qj):
+    pi = phred_to_probability(qi)
+    pj = phred_to_probability(qj)
+    if bi == bj:
+        pij = (pi * pj / 3.0) / (1.0 - pi - pj + ((4.0 * pi * pj) / 3.0))
+    else:
+        if qi > qj:
+            pij = (pi * (1.0 - (pj / 3.0))) / (pi + pj - ((4.0 * pi * pj) / 3.0))
+        else:
+            pij = (pj * (1.0 - (pi / 3.0))) / (pj + pi - ((4.0 * pj * pi) / 3.0))
+
+    qij = probability_to_phred(pij)
+    if qij > 'I': qij = 'I'
+    elif qij < '#': qij = '#'
+    return qij
+
+def phred_to_quality(code):
+    return ord(code) - 33
+
+def quality_to_phred(value):
+    return chr(round(value) + 33)
+
+def phred_to_probability(score):
+    return pow(10, -(ord(score) - 33) / 10)
+
+def probability_to_phred(probability):
+    return chr(round(-10 * math.log(probability, 10)) + 33)
+
+def expected_error(quality):
+    return sum([ phred_to_probability(q) for q in quality ])
 
 def simplify(value):
     if value: return value.lower()
@@ -568,12 +568,6 @@ class Configuration(object):
                 'title': 'strain',
                 'width': 'auto',
                 'value': 'strain',
-            },
-            'phred': {
-                'format': lambda x: '' if x is None else '{:.3}'.format(x),
-                'title': 'Q',
-                'width': 'auto',
-                'value': 'average phread',
             },
             'region': {
                 'format': lambda x: x,
@@ -1146,12 +1140,15 @@ class Sequence(object):
 
     def __str__(self):
         buffer = StringIO()
-        if self.read_frame > 0:
-            buffer.write(self.nucleotide[0:self.read_frame])
-            buffer.write(' ')
-        for index in range(self.read_frame, self.length, 3):
-            buffer.write(self.nucleotide[index:index + 3])
-            buffer.write(' ')
+        if self.read_frame is None:
+            buffer.write(self.nucleotide)
+        else:
+            if self.read_frame > 0:
+                buffer.write(self.nucleotide[0:self.read_frame])
+                buffer.write(' ')
+            for index in range(self.read_frame, self.length, 3):
+                buffer.write(self.nucleotide[index:index + 3])
+                buffer.write(' ')
         buffer.write('\n')
         buffer.seek(0)
         return buffer.read()
@@ -2637,7 +2634,7 @@ class Hit(object):
                                             instance.node['query end'] += o[1]
                                             instance.node['subject end'] += o[1]
                                         elif o[0] is 'I':
-                                            pass
+                                            instance.node['query end'] += o[1]
                                         elif o[0] is 'D':
                                             instance.node['subject end'] += o[1]
                                         elif o[0] in ['S', 'H']:
@@ -2718,6 +2715,75 @@ class Hit(object):
         else:
             block.log.error('block cannot be null')
         return instance
+
+    @property
+    def mask(self):
+        result = []
+        if self.gapped:
+            inside = False
+            q = 0
+            s = 0
+            for o in self.operation:
+                if not inside:
+                    if o[0] not in ['S', 'H']:
+                        inside = True
+                if inside:
+                    if o[0] in ['M', '=', 'X']:
+                        end = q + o[1]
+                        while q < end:
+                            if self.query.nucleotide[q] == self.subject.nucleotide[s]:
+                                result.append('-')
+                            else:
+                                result.append(self.subject.nucleotide[q])
+                            q += 1
+                            s += 1
+
+                    elif o[0] is 'I':
+                        end = q + o[1]
+                        while q < end:
+                            result.append('.')
+                            q += 1
+
+                    elif o[0] is 'D':
+                        end = s + o[1]
+                        while s  < end:
+                            # mask.append('.')
+                            s += 1
+                    elif o[0] in ['S', 'H']:
+                        break
+        else:
+            for s,q in zip(self.subject.nucleotide, self.query.nucleotide):
+                result.append('-' if s == q else s)
+
+        return ''.join(result)
+
+    @property
+    def codon_mask(self):
+        result = []
+        query = self.query.codon_at_frame(self.query.read_frame)
+        subject = self.subject.codon_at_frame(self.query.read_frame)
+        for s,q in zip(subject, query):
+            if s == q:
+                result.append('-')
+            else:
+                result.append(s)
+
+        # for index,c in enumerate(self.subject.codon):
+        #     if c == self.query.codon[index]:
+        #         result.append('-')
+        #     else:
+        #         result.append(c)
+
+        # for index,n in enumerate(self.subject.nucleotide):
+        #     result.append('-' if n == self.query.nucleotide[index] else n)
+
+        # for s,q in zip(self.subject.codon, self.query.codon):
+        #     if s == q:
+        #         result.append('-')
+        #     else:
+        #         result.append(s)
+
+        return ''.join(result)
 
     def load(self):
         for term in [
@@ -2844,14 +2910,18 @@ class Sample(object):
             raise InvalidSampleError('sample must have a valid key')
         if not self.library:
             raise InvalidSampleError('sample must have a library')
+
         for sequence in ['sequence', 'effective']:
             if self.body[sequence] is not None:
                 if isinstance(self.body[sequence], dict):
                     self.body[sequence] = Sequence(self.pipeline, self.body[sequence])
-            else:
+
+        for sequence in [ 'sequence' ]:
+            if self.body[sequence] is None:
                 self.body[sequence] = Sequence(self.pipeline)
 
         self.body['hit'] = [ Hit(self, hit) for hit in self.body['hit'] ]
+        self.compact()
         for hit in self.hit:
             hit.load()
 
@@ -3155,14 +3225,6 @@ class Sample(object):
         return self.body['id sha1']
 
     @property
-    def fasta(self):
-        return to_fasta(self.id, self.sequence.nucleotide, None, self.configuration.constant['fasta line length'])
-
-    @property
-    def fastq(self):
-        return to_fastq(self.id, self.sequence.nucleotide, self.sequence.quality)
-
-    @property
     def id(self):
         return self.body['id']
 
@@ -3197,43 +3259,56 @@ class Sample(object):
     def sequence(self):
         return self.body['sequence']
 
+    def _load_effective(self):
+        # if self.reverse_complemented:
+        #     self.body['effective'] = self.sequence.reversed
+        # else:
+        #     self.body['effective'] = self.sequence
+        # self.body['effective query start'] = 0
+        # self.body['effective query end'] = self.sequence.length
+
+        start = self.sequence.length
+        end = 0
+        for hit in self.hit:
+            if hit.valid and hit.type == 'gene segment':
+                if hit.reverse_complemented:
+                    start = min(start, self.sequence.length - hit.query_end)
+                    end = max(end, self.sequence.length - hit.query_start)
+                else:
+                    start = min(start, hit.query_start)
+                    end = max(end, hit.query_end)
+        if start > end:
+            # no hits
+            if self.reverse_complemented:
+                self.body['effective'] = self.sequence.reversed
+            else:
+                self.body['effective'] = self.sequence
+            self.body['effective query start'] = 0
+            self.body['effective query end'] = self.sequence.length
+        else:
+            self.body['effective query start'] = start
+            self.body['effective query end'] = end
+            if self.reverse_complemented:
+                self.body['effective'] = self.sequence.reversed.crop(self.sequence.length - end, self.sequence.length - start)
+            else:
+                self.body['effective'] = self.sequence.crop(start, end)
+
+    @property
+    def effective_query_start(self):
+        if self.body['effective query start'] is None:
+            self._load_effective()
+        return self.body['effective query start']
+
+    @property
+    def effective_query_end(self):
+        if self.body['effective query end'] is None:
+            self._load_effective()
+        return self.body['effective query end']
+
     @property
     def effective(self):
-        # if self.body['effective'] is None:
-        #     if self.reverse_complemented:
-        #         self.body['effective'] = self.sequence.reversed
-        #     else:
-        #         self.body['effective'] = self.sequence
-        #     self.body['effective query start'] = 0
-        #     self.body['effective query end'] = self.sequence.length
-        # return self.body['effective']
-
-        if  self.body['effective'] is None:
-            start = self.sequence.length
-            end = 0
-            for hit in self.hit:
-                if hit.valid and hit.type == 'gene segment':
-                    if hit.reverse_complemented:
-                        start = min(start, self.sequence.length - hit.query_end)
-                        end = max(end, self.sequence.length - hit.query_start)
-                    else:
-                        start = min(start, hit.query_start)
-                        end = max(end, hit.query_end)
-            if start > end:
-                # no hits
-                if self.reverse_complemented:
-                    self.body['effective'] = self.sequence.reversed
-                else:
-                    self.body['effective'] = self.sequence
-                self.body['effective query start'] = 0
-                self.body['effective query end'] = self.sequence.length
-            else:
-                self.body['effective query start'] = start
-                self.body['effective query end'] = end
-                if self.reverse_complemented:
-                    self.body['effective'] = self.sequence.reversed.crop(self.sequence.length - end, self.sequence.length - start)
-                else:
-                    self.body['effective'] = self.sequence.crop(start, end)
+        if self.body['effective'] is None:
+            self._load_effective()
         return self.body['effective']
 
     @property
@@ -3393,27 +3468,32 @@ class Sample(object):
             pick_region('vh', self.hit)
 
         elif region == 'dh':
-            if self.primary_jh is not None and self.primary_vh is not None:
-                top = None
-                search = { 'valid': [ hit for hit in self.hit if hit.region == 'dh' and hit.valid ] }
-                search['map'] = dict([(hit.uuid, hit) for hit in search['valid']])
-                if len(search['valid']) > 0:
-                    top = search['valid']
-                    search['trimmed'] = []
-                    for hit in top:
-                        length = hit.nonoverlapping(self.primary_vh.query_end, self.primary_jh.query_start)
-                        if length > 0:
-                            if length < hit.length:
-                                trimmed = Hit.clone(hit)
-                                trimmed.trim(self.primary_vh.query_end, self.primary_jh.query_start)
-                                trimmed.node['trimmed'] = True
-                                search['trimmed'].append(trimmed)
-                                self.add_bwa_hit(trimmed)
-                            else:
-                                search['trimmed'].append(hit)
-                    if len(search['trimmed']) > 0:
-                        top = search['trimmed']
-                    pick_region('dh', top)
+            pick_region('dh', self.hit)
+
+            # if self.primary_jh is not None and self.primary_vh is not None:
+            #     top = None
+            #     search = { 'valid': [ hit for hit in self.hit if hit.region == 'dh' and hit.valid ] }
+            #     search['map'] = dict([(hit.uuid, hit) for hit in search['valid']])
+            #     if len(search['valid']) > 0:
+            #         top = search['valid']
+            #         search['trimmed'] = []
+            #         for hit in top:
+            #             length = hit.nonoverlapping(self.primary_vh.query_end, self.primary_jh.query_start)
+            #             if length > 0:
+            #                 if length < hit.length:
+            #                     trimmed = Hit.clone(hit)
+            #                     trimmed.trim(self.primary_vh.query_end, self.primary_jh.query_start)
+            #                     trimmed.node['trimmed'] = True
+            #                     search['trimmed'].append(trimmed)
+            #                     self.add_bwa_hit(trimmed)
+            #                 else:
+            #                     search['trimmed'].append(hit)
+            #         if len(search['trimmed']) > 0:
+            #             top = search['trimmed']
+            #         pick_region('dh', top)
+
+        if region not in self.primary and region in [ 'vh', 'jh' ]:
+            self.invalidate('missing {} region'.format(region))
 
     def add_hit(self, hit):
         self.hit.append(hit)
@@ -3480,9 +3560,15 @@ class Sample(object):
             for hit in self.hit:
                 if hit.valid:
                     if self.reverse_complemented:
-                        hit.query.read_frame = 2 - (hit.query_start - self.sequence.reversed.read_frame - 1) % 3
+                        if hit.reverse_complemented:
+                            hit.query.read_frame = 2 - (hit.query_start - self.sequence.reversed.read_frame - 1) % 3
+                        else:
+                            hit.query.read_frame = 2 - (self.sequence.length - hit.query_end - self.sequence.reversed.read_frame - 1) % 3
                     else:
-                        hit.query.read_frame = 2 - (hit.query_start - self.sequence.read_frame - 1) % 3
+                        if hit.reverse_complemented:
+                            hit.query.read_frame = 2 - (self.sequence.length - hit.query_end - self.sequence.read_frame - 1) % 3
+                        else:
+                            hit.query.read_frame = 2 - (hit.query_start - self.sequence.read_frame - 1) % 3
 
     def _check_v_j_framing(self):
         if self.primary_jh is not None and self.primary_vh is not None:
@@ -3672,6 +3758,9 @@ class Sample(object):
 
     def compact(self):
         self.body['hit'] = [ hit for hit in self.body['hit'] if hit.picked ]
+        self.body['effective'] = None
+        self.body['effective query start'] = None
+        self.body['effective query end'] = None
 
     def invalidate(self, message):
         self.body['valid'] = False
@@ -3684,12 +3773,30 @@ class Sample(object):
     def reverse(self):
         self.body['sequence'] = self.body['sequence'].reversed
 
-    def view(self, request):
+    def diagram(self, request):
         diagram = Diagram(self.pipeline, self, request)
         print(diagram.draw())
 
-    def info(self):
+    def json(self, request):
         print(to_json_document(self))
+
+    def fasta(self, request):
+        print(
+            to_fasta(
+                self.id, self.sequence.nucleotide,
+                None,
+                self.configuration.constant['fasta line length']
+            )
+        )
+
+    def fastq(self, request):
+        print(
+            to_fastq(
+                self.id,
+                self.sequence.nucleotide,
+                self.sequence.quality
+            )
+        )
 
 class Pivot(object):
     def __init__(self, study, node=None, name=None, rotate=None):
@@ -4203,9 +4310,9 @@ class Diagram(object):
         self.sample = sample
         self.sequence = self.sample.effective
         if self.sample.reverse_complemented:
-            self.offset = self.sample.sequence.length - self.sample.body['effective query end']
+            self.offset = self.sample.sequence.length - self.sample.effective_query_end
         else:
-            self.offset = self.sample.body['effective query start']
+            self.offset = self.sample.effective_query_start
 
         self.node = {
             'track offset': {},
@@ -4226,9 +4333,10 @@ class Diagram(object):
                     self.query[k] = v
 
         for hit in sample.hit:
-            if not hit.gapped:
+            # if not hit.gapped:
                 if hit.type != 'gene segment' or all([k in hit.node and hit.node[k] == v for k,v in self.query.items()]):
                     hit.node['orientation'] = hit.query_strand == hit.subject_strand
+                    hit.node['gapped'] = hit.gapped
                     self.track.append(hit)
 
         for k in profile['format']['diagram']['feature']:
@@ -4341,7 +4449,7 @@ class Diagram(object):
         if self.width['sample read frame'] > 0:
             buffer.write('{: <{}}'.format(self.offset, self.width['sample read frame']))
             buffer.write(self.gap)
-            
+
         for index in range(self.width['sample read frame'] + self.offset, self.sequence.length + self.offset, 3):
             buffer.write('{: <3}'.format(index))
             buffer.write(self.gap)
@@ -4426,11 +4534,7 @@ class Diagram(object):
         if track.subject is not None and track.query is not None:
             subject = track.subject.clone()
             subject.read_frame = track.query.read_frame
-
-            mask = []
-            for index,n in enumerate(subject.nucleotide):
-                mask.append('-' if n == track.query.nucleotide[index] else n)
-            mask = ''.join(mask)
+            mask = track.mask
 
             if offset > 0: buffer.write(' ' * offset)
             if subject.read_frame > 0:
@@ -4444,13 +4548,8 @@ class Diagram(object):
             
             if self.sample.framed and subject.codon:
                 display = False
-                mask = []
-                for index,c in enumerate(subject.codon):
-                    if c == track.query.codon[index]: mask.append('-')
-                    else:
-                        mask.append(c)
-                        display = True
-                if display:
+                mask = track.codon_mask
+                if any([c != '-' for c in mask]):
                     buffer.write(' ' * self.width['diagram start'])
                     if offset > 0: buffer.write(' ' * offset)
                     
@@ -4593,6 +4692,10 @@ class Block(object):
         else:
             self.log.error('%s already present', sample.id)
 
+    def diagram(self, request):
+        for sample in self.buffer:
+            sample.diagram(request)
+
     def fill(self):
         if self.read():
             self.search()
@@ -4658,12 +4761,11 @@ class Block(object):
                 if line[0] != '@':
                     hit = Hit.from_bwa(self, line, region['key'], region['type'])
                     if hit and hit.valid:
+                        # correct the coordinates to fit the full untrimmed sequence
                         residual = self.lookup[hit.sample.id]['residual']
                         if hit.reverse_complemented:
-                            start = residual['sequence'].length - hit.node['query end']
-                            end = residual['sequence'].length - hit.node['query start']
-                            start += residual['start']
-                            end += residual['start']
+                            start = residual['sequence'].length - hit.node['query end'] + residual['start']
+                            end = residual['sequence'].length - hit.node['query start'] + residual['start']
                             hit.node['query start'] = hit.sample.sequence.length - end
                             hit.node['query end'] = hit.sample.sequence.length - start
                         else:
@@ -4718,17 +4820,17 @@ class Block(object):
     def to_fastq(self):
         buffer = StringIO()
         for sample in self.buffer:
-            self.lookup[sample.id]['residual'] = sample.residual
-            # print(to_json_document(self.lookup[sample.id]['residual']))
-            if self.lookup[sample.id]['residual'] is not None:
-                buffer.write(
-                    to_fastq(
-                        sample.id, 
-                        self.lookup[sample.id]['residual']['sequence'].nucleotide, 
-                        self.lookup[sample.id]['residual']['sequence'].quality
+            if sample.valid:
+                self.lookup[sample.id]['residual'] = sample.residual
+                if self.lookup[sample.id]['residual'] is not None:
+                    buffer.write(
+                        to_fastq(
+                            sample.id, 
+                            self.lookup[sample.id]['residual']['sequence'].nucleotide, 
+                            self.lookup[sample.id]['residual']['sequence'].quality
+                        )
                     )
-                )
-                buffer.write('\n')
+                    buffer.write('\n')
         buffer.seek(0)
         return buffer
 
@@ -5907,11 +6009,7 @@ class Resolver(object):
     def bulk_store_sample(self, buffer):
         bulk = pymongo.bulk.BulkOperationBuilder(self.database['sample'])
         for sample in buffer:
-            document = sample.document
-            if '_id' in document:
-                bulk.find({'_id': document['_id']}).upsert().replace_one(document)
-            else:
-                bulk.insert(document)
+            bulk.find({'head.id': sample.id}).upsert().replace_one(sample.document)
         try:
             bulk.execute()
         except BulkWriteError as e:
@@ -6614,109 +6712,43 @@ class Pipeline(object):
         block = Block(self, request)
         while block.fill():
             count += block.size
-            # for sample in block.buffer:
-            #     print(to_json_document(sample))
-                # sample.view(request)
+            # block.diagram(request)
             self.resolver.bulk_store_sample(block.buffer)
-            # self.log.info('%s so far', count)
-
-    def reanalyze(self, request):
-        def flush(buffer, collection):
-            if buffer:
-                bulk = pymongo.bulk.BulkOperationBuilder(collection)
-                for sample in buffer:
-                    bulk.find({'_id': sample.document['_id']}).upsert().replace_one(sample.document)
-                try:
-                    bulk.execute()
-                except BulkWriteError as e:
-                    self.log.critical(e.details)
-                    raise SystemExit()
-                return len(buffer)
-            else:
-                return 0
-
-        cursor = request.cursor_for('sample')
-        collection = self.resolver.database['sample']
-
-        count = 0
-        buffer = []
-        for node in cursor:
-            sample = Sample(self, node)
-            sample.analyze()
-            buffer.append(sample)
-            if len(buffer) >= self.configuration.constant['buffer size']:
-                count += flush(buffer, collection)
-                buffer = []
-                self.log.info('%s so far', count)
-        cursor.close()
-        flush(buffer, collection)
+            self.log.info('%s so far', count)
 
     # drop
     def drop(self, request):
         if request.kind == 'sample':
-            self.sample_drop(request)
+            self.resolver.sample_drop(request.instruction['library'])
 
         if request.kind == 'gene':
             pass
 
-    def sample_drop(self, request):
-        self.resolver.sample_drop(request.instruction['library'])
-
     # count
     def count(self, request):
         if request.kind == 'sample':
-            self.sample_count(request)
+            print(request.count_for('sample'))
 
         if request.kind == 'gene':
-            self.gene_count(request)
-
-    def sample_count(self, request):
-        print(request.count_for('sample'))
-
-    def gene_count(self, request):
-        print(request.count_for('gene'))
+            print(request.count_for('gene'))
 
     # sample
     def sample(self, request):
-        if request.format == 'json':
-            self.sample_json(request)
-
-        if request.format == 'fasta':
-            self.sample_fasta(request)
-
-        if request.format == 'fastq':
-            self.sample_fastq(request)
-
-        if request.format == 'diagram':
-            self.sample_alignment(request)
-
-    def sample_json(self, request):
         cursor = request.cursor_for('sample')
         for node in cursor:
             sample = Sample(self, node)
-            sample.info()
-        cursor.close()
+            if request.format == 'json':
+                sample.json(request)
 
-    def sample_fasta(self, request):
-        cursor = request.cursor_for('sample')
-        for node in cursor:
-            sample = Sample(self, node)
-            print(sample.fasta)
-        cursor.close()
+            elif request.format == 'diagram':
+                sample.diagram(request)
 
-    def sample_fastq(self, request):
-        cursor = request.cursor_for('sample')
-        for node in cursor:
-            sample = Sample(self, node)
-            print(sample.fastq)
-        cursor.close()
+            elif request.format == 'fasta':
+                sample.fasta(request)
 
-    def sample_alignment(self, request):
-        cursor = request.cursor_for('sample')
-        for node in cursor:
-            sample = Sample(self, node)
-            if sample.gapped:
-                sample.view(request)
+            elif request.format == 'fastq':
+                sample.fastq(request)
+
         cursor.close()
 
     def sample_filter(self, request):
@@ -7209,29 +7241,24 @@ class Pipeline(object):
 def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
-    
+
     configuration = Configuration()
     command = CommandLineParser(configuration.interface)
     if command.sectioned and command.action is None:
         command.help()
-
     else:
         configuration.select(command.instruction)
         logging.getLogger().setLevel(log_levels[command.instruction['verbosity']])
         pipeline = Pipeline(configuration)
         try:
             pipeline.execute(command.instruction)
-
         except ValueError as e:
             logging.getLogger('main').critical(e)
             sys.exit(1)
-
         except(KeyboardInterrupt, SystemExit) as e:
             pipeline.close()
             sys.exit(1)
-
         pipeline.close()
-
     sys.exit(0)
 
 if __name__ == '__main__':
