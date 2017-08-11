@@ -1,0 +1,40 @@
+{
+    "folders": [
+        {
+            "file_exclude_patterns": [
+                "somatic.sublime-project", 
+                "somatic.sublime-workspace"
+            ], 
+            "folder_exclude_patterns": [
+                "__pycache__", 
+                "contrib", 
+                "bootstrap", 
+                "script", 
+                "example", 
+                "doc"
+            ], 
+            "name": "src", 
+            "path": "./"
+        }, 
+        {
+            "name": "contrib", 
+            "path": "contrib"
+        }, 
+        {
+            "name": "bootstrap", 
+            "path": "bootstrap"
+        }, 
+        {
+            "name": "doc", 
+            "path": "doc"
+        }, 
+        {
+            "name": "example", 
+            "path": "example"
+        }, 
+        {
+            "name": "script", 
+            "path": "script"
+        }
+    ]
+}

@@ -4658,20 +4658,6 @@ class Block(object):
     def full(self):
         return not self.size < self.capacity
 
-    def reset(self):
-        self.node['buffer'] = []
-        self.node['lookup'] = {}
-
-    def add(self, sample):
-        #if sample is not None and sample.sequence.length > 0:
-        if sample.id not in self.lookup:
-            self.buffer.append(sample)
-            self.lookup[sample.id] = {
-                'sample': sample
-            }
-        else:
-            self.log.error('%s already present', sample.id)
-
     def diagram(self, request):
         for sample in self.buffer:
             sample.diagram(request)
@@ -4679,8 +4665,8 @@ class Block(object):
     def fill(self):
         if self.read():
             self.search()
-            for sample in self.buffer:
-                sample.analyze()
+            self.analyze()
+
         return not self.empty
 
     def read(self):
@@ -4723,6 +4709,23 @@ class Block(object):
         for key in self.chain['alignment order']:
             self.bwa(self.region[key])
             self.determine_region(key)
+
+    def analyze(self):
+        for sample in self.buffer:
+            sample.analyze()
+
+    def reset(self):
+        self.node['buffer'] = []
+        self.node['lookup'] = {}
+
+    def add(self, sample):
+        if sample.id not in self.lookup:
+            self.buffer.append(sample)
+            self.lookup[sample.id] = {
+                'sample': sample
+            }
+        else:
+            self.log.error('%s already present', sample.id)
 
     def determine_region(self, region):
         for sample in self.buffer:

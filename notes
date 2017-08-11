@@ -1,0 +1,24 @@
+use admin
+db.createUser(
+  {
+    user: "root",
+    pwd: "Oo6IRnwwe5Q5bzT26rk3hPoIKS5br2",
+    roles: [ { role: "userAdminAnyDatabase", db: "admin" } ]
+  }
+)
+
+mongo -u "root" -p "Oo6IRnwwe5Q5bzT26rk3hPoIKS5br2" --authenticationDatabase "admin"    
+
+use admin
+db.auth("root", "Oo6IRnwwe5Q5bzT26rk3hPoIKS5br2" )
+
+
+use somatic
+db.createUser(
+  {
+    user: "somatic",
+    pwd: "YpuONTfNS3pN40qKM9Lgb8X3Xzu9yb",
+    roles: [ { role: "readWrite", db: "somatic" },
+             { role: "read", db: "reporting" } ]
+  }
+)
