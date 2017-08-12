@@ -6,777 +6,291 @@ Bootstrap the system
 somatic rebuild
 ```
 
-**Load genes for c57bl6**
+**Load a config file**
 ```
-somatic gene-populate bootstrap/mouse_ighd.json 
-somatic gene-populate bootstrap/mouse_ighj.json 
-somatic gene-populate bootstrap/mouse_ighv_c57bl6_bn000872.json 
-somatic gene-populate bootstrap/mouse_ighv_extra.json 
+somatic populate ~/code/somatic/bootstrap/c57bl6.json
+
 ```
 
 **Align the genes to the reference with up to 200bp flanking sequences**
 ```
-somatic gene-align -F 200 --strain 'c57bl6'
+somatic align --flanking 200
 ```
 
-**Create FASTA files with the c57bl6 genes**
+**Verify RSS signals around the genes**
 ```
-somatic gene-fasta --strain 'c57bl6' -r JH -p aligned > db/igblast/database/mouse_c57bl6_ighj
-somatic gene-fasta --strain 'c57bl6' -r VH -p aligned > db/igblast/database/mouse_c57bl6_ighv
-somatic gene-fasta --strain 'c57bl6' -r DH -p aligned > db/igblast/database/mouse_c57bl6_ighd
+somatic rss --flanking 60 --distance 9
 ```
 
-**Generate an igblast database**
+**Create BWA alignment reference files**
 ```
-makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_jh -in db/igblast/database/mouse_c57bl6_ighj
-makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_vh -in db/igblast/database/mouse_c57bl6_ighv
-makeblastdb -parse_seqids -dbtype nucl -input_type fasta -title mouse_imgt_dh -in db/igblast/database/mouse_c57bl6_ighd
-
-somatic gene-igblast-aux -r VH --strain 'c57bl6' >  db/igblast/optional_file/mouse_gl.aux
-somatic gene-igblast-aux -r DH --strain 'c57bl6' >> db/igblast/optional_file/mouse_gl.aux
-somatic gene-igblast-aux -r JH --strain 'c57bl6' >> db/igblast/optional_file/mouse_gl.aux
+somatic index
 ```
 
 Load a sample
 =============
-```zcat "A4G6U l01n01 b6_spf_preb_2.fastq.gz" | somatic populate --strain c57bl6 --library c57bl6b02t01spfpreb```
+```zcat A4G6U_b6_conv_fo_3_b.fastq.gz|somatic analyze --library spf_fo_b03t02```
 
 Look at an alignment diagram
 ============================
-```somatic view -L 1 -S 128 -p productive```
+```somatic sample --id M00595:21:000000000-A4G6U:1:1101:10960:6129 --format diagram```
 
 ```
-R    name        F  c57bl6b03t03spffo | @M00595:21:000000000-A4G6U:1:1101:10492:4386 1:N:0:ATCAC | VH : J558.16.106 | DH : DSP2.2 | JH : IGHJ1 | productive | Q 36.25
-                    0  2   5   8   11  14  17  20  23  26  29  32  35  38  41  44  47  50  53  56  59  62  65  68  71  74  77  80  83  86  89  92  95  98  101 104 107 110 113 116 119 122 125 128 131 134 137 140 143 
-                    CC AGC ACA GCC TAC ATG GAG CTC CGC AGC CTG ACA TCT GAG GAC ACT GCA GTC TAT TAC TGT GCA AGA CGG GGT TAT GAT TAC GAC GGT TAC TGG TAC TTC GAT GTC TGG GGC ACA GGG ACC ACG GTC ACC GTC TCC TCA GGT AAG 
-                    CD DFF HG< F22 F>@ 2HH G0C B>C DGF HHH HGH HGD B3F G4? F?? BCH HHH GFH HHF HHH HGE HHG GE> GGH HHH HHH HFF F>E EEA FFG HHH HHH HFG HFF HHH GGA GDH HFF GFG HHH HGH GGG HGH GGG GGG GGG GEF FCD FFF 
-                       S   T   A   Y   M   E   L   R   S   L   T   S   E   D   T   A   V   Y   Y   C   A   R   R   G   Y   D   Y   D   G   Y   W   Y   F   D   V   W   G   T   G   T   T   V   T   V   S   S   G   K   
-VH   J558.16.106 F  -- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- 
-DH   DSP2.2      F                                                                                                     --- --- --- --- 
-JH   IGHJ1       F                                                                                                                         --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- - 
-V-D                                                                                                            --- --- 
-CDR3                                                                                               --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- 
-D-J                                                                                                                                    --- 
-                                                                                                                                       PNN 
-```
+R    name        S O G F  spf_fo_b03t02 | 1 | M00595:21:000000000-A4G6U:1:1101:10960:6129 | vh : J558.78.182 | dh : DSP2.x | jh : IGHJ4 | cdr3 : -20.1 2463 | productive
+                          0   3   6   9   12  15  18  21  24  27  30  33  36  39  42  45  48  51  54  57  60  63  66  69  72  75  78  81  84  87  90  93  96  99  102 105 108 111 114 117 120 123 126 129 132 135 138 141 144 147 150 153 156 159 162 165 168 171 174 177 180 
+                          AAG TTC AAG GGC AAG GCC ACA CTG ACT GTA GAC AAA TCC TCC AGC ACA GCC TAC ATG TTG CTC AGC AGC CTG ACC TCT GAG GAC TCT GCG GTC TAT TTC TGT GCA AGA GAG AGG GCC TAC TAT AGT AAC TAC GAT GCT ATG GAC TAC TGG GGT CAA GGA ACC TCA GTC ACC GTC TCC GCA G 
+                          BBB BBF FFF FBB GGG GGG GGG 2FH HHH HHG HHH HCG GGG HHH HHH GHH HHH HHH HHH HFH HHH HGH HHH HHH HHG HGH HHH GHH GHH HHH GDG HHH HGG HHH HHH HGG F2F HE@ ?HE GFF ?FB 4FG BFH HHG HHH HGH HHF HHH HHH GEE GHG HHH HHH HGH HHH G00 EFE FEA EA1 1A1 F 
+                          K   F   K   G   K   A   T   L   T   V   D   K   S   S   S   T   A   Y   M   L   L   S   S   L   T   S   E   D   S   A   V   Y   F   C   A   R   E   R   A   Y   Y   S   N   Y   D   A   M   D   Y   W   G   Q   G   T   S   V   T   V   S   A   
+jh   IGHJ4       * -   F                                                                                                                                                                              --- T-- --- --- --- --- --- --- --- --- --- --- --- --- --- --- T-- - 
+                                                                                                                                                                                                      -   Y   -   -   -   -   -   -   -   -   -   -   -   -   -   -   S   
+vh   J558.78.182 * -   F  --- --- --- --- --- --- --- --T --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- 
+dh   DSP2.x      * -   F                                                                                                                                                           -- --- --- --- --- 
+v-d              * -                                                                                                                                                      --- --- - 
+                                                                                                                                                                          NNN NNP P 
+cdr3             * -                                                                                                                                          --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ```
 
 Inspect a complete record
 =========================
-```somatic info -L 1 -S 128 -p productive```
+```somatic sample --id M00595:21:000000000-A4G6U:1:1101:10960:6129 --format json```
+
 ```json
 {
-    "_id": "55511bf4a9605a812edb5d75",
-    "framed by": "IGHJ1*01-c57bl6",
-    "head": {
-        "CDR3 length": 51,
-        "D-J length": 3,
-        "DH length": 12,
-        "JH length": 52,
-        "V-D length": 6,
-        "VH length": 68,
-        "average phred": 36.25342465753425,
+    "_id": "598f619f040bf36784816e79",
+    "body": {
+        "FLAG": 16,
+        "abundance": 1,
+        "conserved cdr3 c": true,
+        "conserved cdr3 w": true,
         "framed": true,
-        "gapped": false,
-        "id": "@M00595:21:000000000-A4G6U:1:1101:10492:4386 1:N:0:ATCAC",
-        "id sha1": "16b04f32de11e1ec43c5fc3d6668afd148d557d1",
+        "framed by": "82d332a8-a877-48ee-a8f6-7fbdd47f1dd0",
+        "hit": [
+            {
+                "5 chew": {
+                    "nucleotide": "AT",
+                    "read frame": 2,
+                    "strand": true
+                },
+                "AS": 92,
+                "CIGAR": "129S52M5S",
+                "FLAG": 16,
+                "MAPQ": 60,
+                "MD": "3T44T3",
+                "NM": 2,
+                "TLEN": 0,
+                "XS": 38,
+                "allele": "IGHJ4*01",
+                "family": "IGHJ",
+                "framed": true,
+                "functionality": "F",
+                "gene": "IGHJ4",
+                "in frame": true,
+                "picked": true,
+                "primary": true,
+                "query": {
+                    "expected error": 0.1473087788135559,
+                    "nucleotide": "TACGATGCTATGGACTACTGGGGTCAAGGAACCTCAGTCACCGTCTCCGCAG",
+                    "quality": "HHGHHHHGHHHFHHHHHHGEEGHGHHHHHHHGHHHHG00EFEFEAEA11A1F",
+                    "read frame": 0,
+                    "strand": false
+                },
+                "query end": 181,
+                "query start": 129,
+                "reference end": 113428565,
+                "reference start": 113428513,
+                "region": "jh",
+                "score": 92,
+                "strain": "c57bl6",
+                "subject": {
+                    "nucleotide": "TACTATGCTATGGACTACTGGGGTCAAGGAACCTCAGTCACCGTCTCCTCAG",
+                    "read frame": 0,
+                    "strand": true
+                },
+                "subject end": 54,
+                "subject id": "IGHJ4",
+                "subject start": 2,
+                "subject strand": false,
+                "type": "gene segment",
+                "uuid": "82d332a8-a877-48ee-a8f6-7fbdd47f1dd0",
+                "valid": true
+            },
+            {
+                "AS": 210,
+                "CIGAR": "108M21S",
+                "FLAG": 16,
+                "MAPQ": 21,
+                "MD": "23T84",
+                "NM": 1,
+                "TLEN": 0,
+                "XS": 192,
+                "allele": "J558.78.182*01",
+                "family": "J558",
+                "framed": true,
+                "functionality": "F",
+                "gene": "J558.78.182",
+                "in frame": true,
+                "picked": true,
+                "primary": true,
+                "query": {
+                    "expected error": 0.03787568981918923,
+                    "nucleotide": "AAGTTCAAGGGCAAGGCCACACTGACTGTAGACAAATCCTCCAGCACAGCCTACATGTTGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
+                    "quality": "BBBBBFFFFFBBGGGGGGGGG2FHHHHHHGHHHHCGGGGHHHHHHGHHHHHHHHHHHHFHHHHHGHHHHHHHHHGHGHHHHGHHGHHHHHGDGHHHHGGHHHHHHHGG",
+                    "read frame": 0,
+                    "strand": false
+                },
+                "query end": 108,
+                "query start": 0,
+                "reference end": 115834057,
+                "reference start": 115833949,
+                "region": "vh",
+                "score": 210,
+                "strain": "c57bl6",
+                "subject": {
+                    "nucleotide": "AAGTTCAAGGGCAAGGCCACACTTACTGTAGACAAATCCTCCAGCACAGCCTACATGTTGCTCAGCAGCCTGACCTCTGAGGACTCTGCGGTCTATTTCTGTGCAAGA",
+                    "read frame": 0,
+                    "strand": true
+                },
+                "subject end": 305,
+                "subject id": "J558.78.182",
+                "subject start": 197,
+                "subject strand": false,
+                "type": "gene segment",
+                "uuid": "11d9327c-8f82-4a78-a33c-523d02f4fb1f",
+                "valid": true
+            },
+            {
+                "3 chew": {
+                    "nucleotide": "TAC",
+                    "read frame": 1,
+                    "strand": true
+                },
+                "AS": 28,
+                "CIGAR": "7S14M",
+                "FLAG": 16,
+                "MAPQ": 17,
+                "MD": "14",
+                "NM": 0,
+                "SA": "IGHD5-8,11,+,15S5M1S,0,0;",
+                "TLEN": 0,
+                "XS": 20,
+                "allele": "DSP2.x*02",
+                "family": "DSP2",
+                "framed": true,
+                "functionality": "F",
+                "gene": "DSP2.x",
+                "picked": true,
+                "primary": true,
+                "query": {
+                    "expected error": 0.016409212106682676,
+                    "nucleotide": "CCTACTATAGTAAC",
+                    "quality": "HEGFF?FB4FGBFH",
+                    "read frame": 2,
+                    "strand": false
+                },
+                "query end": 129,
+                "query start": 115,
+                "reference end": 113461385,
+                "reference start": 113461371,
+                "region": "dh",
+                "score": 28,
+                "strain": "c57bl6",
+                "subject": {
+                    "nucleotide": "CCTACTATAGTAAC",
+                    "read frame": 0,
+                    "strand": true
+                },
+                "subject end": 14,
+                "subject id": "DSP2.x",
+                "subject start": 0,
+                "subject strand": false,
+                "type": "gene segment",
+                "uuid": "8ec835aa-be07-46e7-95f5-dfbdd1d378c7",
+                "valid": true
+            },
+            {
+                "FLAG": 16,
+                "n count": 5,
+                "p count": 2,
+                "palindrome": "NNNNNPP",
+                "picked": true,
+                "primary": true,
+                "query": {
+                    "expected error": 0.022523085031737236,
+                    "nucleotide": "GAGAGGG",
+                    "quality": "F2FHE@?",
+                    "read frame": 0,
+                    "strand": false
+                },
+                "query end": 115,
+                "query start": 108,
+                "region": "v-d",
+                "subject id": "v-d",
+                "uuid": "e5234732-2739-4f05-aeaf-7e1280a71b74",
+                "valid": true
+            },
+            {
+                "FLAG": 16,
+                "charge": -20.099999999999998,
+                "picked": true,
+                "primary": true,
+                "query": {
+                    "expected error": 0.043196283158396444,
+                    "nucleotide": "TGTGCAAGAGAGAGGGCCTACTATAGTAACTACGATGCTATGGACTACTGG",
+                    "quality": "HHHHHHHGGF2FHE@?HEGFF?FB4FGBFHHHGHHHHGHHHFHHHHHHGEE",
+                    "read frame": 0,
+                    "strand": false
+                },
+                "query end": 150,
+                "query start": 99,
+                "region": "cdr3",
+                "subject id": "cdr3",
+                "uuid": "eca8151e-f0ee-4646-ba23-321d23a1e9d0",
+                "valid": true,
+                "weight": 2463
+            }
+        ],
+        "id": "M00595:21:000000000-A4G6U:1:1101:10960:6129",
+        "id comment": "1:N:0:ATGAG",
+        "id sha1": "ca92c85e3589bf8d74d3de8fb5b01ae784cf087f",
         "in frame": true,
-        "library": "c57bl6b03t03spffo",
+        "library": "spf_fo_b03t02",
+        "n count": 5,
+        "p count": 2,
+        "palindromic": true,
+        "premature": false,
+        "primary": {
+            "cdr3": "eca8151e-f0ee-4646-ba23-321d23a1e9d0",
+            "dh": "8ec835aa-be07-46e7-95f5-dfbdd1d378c7",
+            "jh": "82d332a8-a877-48ee-a8f6-7fbdd47f1dd0",
+            "v-d": "e5234732-2739-4f05-aeaf-7e1280a71b74",
+            "vh": "11d9327c-8f82-4a78-a33c-523d02f4fb1f"
+        },
+        "productive": true,
+        "sequence": {
+            "expected error": 0.22511439692865007,
+            "nucleotide": "CTTACCTGCGGAGACGGTGACTGAGGTTCCTTGACCCCAGTAGTCCATAGCATCGTAGTTACTATAGTAGGCCCTCTCTCTTGCACAGAAATAGACCGCAGAGTCCTCAGAGGTCAGGCTGCTGAGCAACATGTAGGCTGTGCTGGAGGATTTGTCTACAGTCAGTGTGGCCTTGCCCTTGAACTT",
+            "quality": "FFFFFF1A11AEAEFEFE00GHHHHGHHHHHHHGHGEEGHHHHHHFHHHGHHHHGHHHFBGF4BF?FFGEH?@EHF2FGGHHHHHHHGGHHHHGDGHHHHHGHHGHHHHGHGHHHHHHHHHGHHHHHFHHHHHHHHHHHHGHHHHHHGGGGCHHHHGHHHHHHF2GGGGGGGGGBBFFFFFBBBBB",
+            "read frame": 0,
+            "strand": true
+        },
+        "valid": true
+    },
+    "head": {
+        "FLAG": 16,
+        "abundance": 1,
+        "conserved cdr3 c": true,
+        "conserved cdr3 w": true,
+        "framed": true,
+        "framed by": "82d332a8-a877-48ee-a8f6-7fbdd47f1dd0",
+        "id": "M00595:21:000000000-A4G6U:1:1101:10960:6129",
+        "id sha1": "ca92c85e3589bf8d74d3de8fb5b01ae784cf087f",
+        "in frame": true,
+        "library": "spf_fo_b03t02",
+        "n count": 5,
+        "p count": 2,
         "palindromic": true,
         "premature": false,
         "productive": true,
-        "region": [
-            "DSP2.2*01-c57bl6",
-            "IGHJ1*01-c57bl6",
-            "D-J",
-            "J558.16.106*01-c57bl6",
-            "CDR3",
-            "V-D"
-        ],
         "valid": true
-    },
-    "hit": [
-        {
-            "alignment length": 68,
-            "allele": "J558.16.106*01",
-            "average phread": 34.64705882352941,
-            "bit score": 107.0,
-            "evalue": 3e-26,
-            "family": "J558",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "J558.16.106",
-            "identical": 1.0,
-            "in frame": true,
-            "mismatch": 0,
-            "picked": true,
-            "query": {
-                "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
-                "quality": "CDDFFHG<F22F>@2HHG0CB>CDGFHHHHGHHGDB3FG4?F??BCHHHHGFHHHFHHHHGEHHGGE>",
-                "read frame": 2,
-                "strand": false
-            },
-            "query end": 68,
-            "query start": 0,
-            "region": "vh",
-            "score": 107.0,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
-                "read frame": 2,
-                "strand": true
-            },
-            "subject end": 294,
-            "subject id": "J558.16.106*01-c57bl6",
-            "subject start": 226,
-            "subject strand": true,
-            "uuid": "010900c4-d97a-4c73-96f8-cbd9ec702749",
-            "valid": true
-        },
-        {
-            "alignment length": 68,
-            "allele": "J558.26.116*01",
-            "bit score": 104.0,
-            "evalue": 2e-25,
-            "family": "J558",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "J558.26.116",
-            "identical": 0.9853000000000001,
-            "in frame": true,
-            "mismatch": 1,
-            "picked": false,
-            "query": {
-                "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
-                "quality": "CDDFFHG<F22F>@2HHG0CB>CDGFHHHHGHHGDB3FG4?F??BCHHHHGFHHHFHHHHGEHHGGE>",
-                "read frame": 2,
-                "strand": false
-            },
-            "query end": 68,
-            "query start": 0,
-            "region": "vh",
-            "score": 104.0,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
-                "read frame": 2,
-                "strand": true
-            },
-            "subject end": 294,
-            "subject id": "J558.26.116*01-c57bl6",
-            "subject start": 226,
-            "subject strand": true,
-            "uuid": "34f6deb0-a6bb-4693-985a-8185bcd7bdf9",
-            "valid": true
-        },
-        {
-            "alignment length": 68,
-            "allele": "J558.34.124*01",
-            "bit score": 104.0,
-            "evalue": 2e-25,
-            "family": "J558",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "J558.34.124",
-            "identical": 0.9853000000000001,
-            "in frame": true,
-            "mismatch": 1,
-            "picked": false,
-            "query": {
-                "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
-                "quality": "CDDFFHG<F22F>@2HHG0CB>CDGFHHHHGHHGDB3FG4?F??BCHHHHGFHHHFHHHHGEHHGGE>",
-                "read frame": 2,
-                "strand": false
-            },
-            "query end": 68,
-            "query start": 0,
-            "region": "vh",
-            "score": 104.0,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACTCTGCAGTCTATTACTGTGCAAGA",
-                "read frame": 2,
-                "strand": true
-            },
-            "subject end": 294,
-            "subject id": "J558.34.124*01-c57bl6",
-            "subject start": 226,
-            "subject strand": true,
-            "uuid": "221667e0-93bc-4ca4-af52-8f63510fff0d",
-            "valid": true
-        },
-        {
-            "5 chew": {
-                "nucleotide": "TCTAC",
-                "read frame": 0,
-                "strand": true
-            },
-            "alignment length": 12,
-            "allele": "DSP2.2*01",
-            "average phread": 36.333333333333336,
-            "bit score": 24.4,
-            "evalue": 0.001,
-            "family": "DSP2",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "DSP2.2",
-            "identical": 1.0,
-            "in frame": false,
-            "mismatch": 0,
-            "overlap": 0,
-            "picked": true,
-            "query": {
-                "nucleotide": "TATGATTACGAC",
-                "quality": "HHHHFFF>EEEA",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 86,
-            "query start": 74,
-            "region": "dh",
-            "score": 24.4,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "TATGATTACGAC",
-                "read frame": 1,
-                "strand": true
-            },
-            "subject end": 17,
-            "subject id": "DSP2.2*01-c57bl6",
-            "subject start": 5,
-            "subject strand": true,
-            "uuid": "5a5e18ec-047b-4f58-ba86-656d87d5cbc1",
-            "valid": true
-        },
-        {
-            "3 chew": {
-                "nucleotide": "TACTAC",
-                "read frame": 1,
-                "strand": true
-            },
-            "5 chew": {
-                "nucleotide": "TCTATGAT",
-                "read frame": 0,
-                "strand": true
-            },
-            "alignment length": 3,
-            "allele": "DSP2.9*01",
-            "bit score": 14.4,
-            "evalue": 1.3,
-            "family": "DSP2",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "DSP2.9",
-            "identical": 1.0,
-            "in frame": false,
-            "mismatch": 0,
-            "overlap": 4,
-            "picked": false,
-            "query": {
-                "nucleotide": "GGT",
-                "quality": "FFG",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 89,
-            "query start": 86,
-            "region": "dh",
-            "score": 12.4,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "GGT",
-                "read frame": 1,
-                "strand": true
-            },
-            "subject end": 11,
-            "subject id": "DSP2.9*01-c57bl6",
-            "subject start": 8,
-            "subject strand": true,
-            "uuid": "b2f22881-0fa5-4927-bada-b30d3c04f676",
-            "valid": true
-        },
-        {
-            "5 chew": {
-                "nucleotide": "TCTACTATGG",
-                "read frame": 0,
-                "strand": true
-            },
-            "alignment length": 7,
-            "allele": "DSP2.3*01",
-            "bit score": 14.4,
-            "evalue": 1.3,
-            "family": "DSP2",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "DSP2.3",
-            "identical": 1.0,
-            "in frame": false,
-            "mismatch": 0,
-            "overlap": 0,
-            "picked": false,
-            "query": {
-                "nucleotide": "TTACGAC",
-                "quality": "FF>EEEA",
-                "read frame": 1,
-                "strand": false
-            },
-            "query end": 86,
-            "query start": 79,
-            "region": "dh",
-            "score": 14.4,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "TTACGAC",
-                "read frame": 2,
-                "strand": true
-            },
-            "subject end": 17,
-            "subject id": "DSP2.3*01-c57bl6",
-            "subject start": 10,
-            "subject strand": true,
-            "uuid": "d0147038-2bf9-461f-9b68-80780c9c9053",
-            "valid": true
-        },
-        {
-            "3 chew": {
-                "nucleotide": "GGTTACTAC",
-                "read frame": 1,
-                "strand": true
-            },
-            "5 chew": {
-                "nucleotide": "TC",
-                "read frame": 0,
-                "strand": true
-            },
-            "alignment length": 6,
-            "allele": "DSP2.9*01",
-            "bit score": 12.4,
-            "evalue": 5.2,
-            "family": "DSP2",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "DSP2.9",
-            "identical": 1.0,
-            "in frame": false,
-            "mismatch": 0,
-            "overlap": 0,
-            "picked": false,
-            "query": {
-                "nucleotide": "TATGAT",
-                "quality": "HHHHFF",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 80,
-            "query start": 74,
-            "region": "dh",
-            "score": 12.4,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "TATGAT",
-                "read frame": 1,
-                "strand": true
-            },
-            "subject end": 8,
-            "subject id": "DSP2.9*01-c57bl6",
-            "subject start": 2,
-            "subject strand": true,
-            "uuid": "dbe155c4-1c65-4f3b-ad3b-5439840840fb",
-            "valid": true
-        },
-        {
-            "3 chew": {
-                "nucleotide": "TACGAC",
-                "read frame": 1,
-                "strand": true
-            },
-            "5 chew": {
-                "nucleotide": "TCTACTAT",
-                "read frame": 0,
-                "strand": true
-            },
-            "alignment length": 3,
-            "allele": "DSP2.3*01",
-            "bit score": 12.4,
-            "evalue": 5.2,
-            "family": "DSP2",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "DSP2.3",
-            "identical": 1.0,
-            "in frame": false,
-            "mismatch": 0,
-            "overlap": 3,
-            "picked": false,
-            "query": {
-                "nucleotide": "GGT",
-                "quality": "FFG",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 89,
-            "query start": 86,
-            "region": "dh",
-            "score": 10.9,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "GGT",
-                "read frame": 1,
-                "strand": true
-            },
-            "subject end": 11,
-            "subject id": "DSP2.3*01-c57bl6",
-            "subject start": 8,
-            "subject strand": true,
-            "uuid": "f097bf08-a2c4-4e77-8ade-6fb3d40f78d3",
-            "valid": true
-        },
-        {
-            "5 chew": {
-                "nucleotide": "C",
-                "read frame": 1,
-                "strand": true
-            },
-            "alignment length": 52,
-            "allele": "IGHJ1*01",
-            "average phread": 38.01923076923077,
-            "bit score": 103.0,
-            "evalue": 2e-27,
-            "family": "IGHJ",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "IGHJ1",
-            "identical": 1.0,
-            "in frame": true,
-            "mismatch": 0,
-            "picked": true,
-            "query": {
-                "nucleotide": "TACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG",
-                "quality": "HHHHHHHFGHFFHHHGGAGDHHFFGFGHHHHGHGGGHGHGGGGGGGGGGEFF",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 141,
-            "query start": 89,
-            "region": "jh",
-            "score": 103.0,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "TACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG",
-                "read frame": 0,
-                "strand": true
-            },
-            "subject end": 53,
-            "subject id": "IGHJ1*01-c57bl6",
-            "subject start": 1,
-            "subject strand": true,
-            "uuid": "d1fe985e-b81a-4d58-a60d-daa858a44969",
-            "valid": true
-        },
-        {
-            "5 chew": {
-                "nucleotide": "CCTGGTTTGCTTA",
-                "read frame": 2,
-                "strand": true
-            },
-            "alignment length": 7,
-            "allele": "IGHJ3*01",
-            "bit score": 14.4,
-            "evalue": 1.1,
-            "family": "IGHJ",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "IGHJ3",
-            "identical": 1.0,
-            "in frame": true,
-            "mismatch": 0,
-            "picked": false,
-            "query": {
-                "nucleotide": "CTGGGGC",
-                "quality": "AGDHHFF",
-                "read frame": 1,
-                "strand": false
-            },
-            "query end": 113,
-            "query start": 106,
-            "region": "jh",
-            "score": 14.4,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "CTGGGGC",
-                "read frame": 1,
-                "strand": true
-            },
-            "subject end": 20,
-            "subject id": "IGHJ3*01-c57bl6",
-            "subject start": 13,
-            "subject strand": true,
-            "uuid": "83c1b70a-177c-4c64-a2ef-5de07b61c4e5",
-            "valid": true
-        },
-        {
-            "5 chew": {
-                "nucleotide": "CCTGGTTTGC",
-                "read frame": 2,
-                "strand": true
-            },
-            "alignment length": 7,
-            "allele": "IGHJ3*01",
-            "bit score": 14.4,
-            "evalue": 1.1,
-            "family": "IGHJ",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "IGHJ3",
-            "identical": 1.0,
-            "in frame": true,
-            "mismatch": 0,
-            "picked": false,
-            "query": {
-                "nucleotide": "TTACTGG",
-                "quality": "GHHHHHH",
-                "read frame": 1,
-                "strand": false
-            },
-            "query end": 95,
-            "query start": 88,
-            "region": "jh",
-            "score": 14.4,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "TTACTGG",
-                "read frame": 1,
-                "strand": true
-            },
-            "subject end": 17,
-            "subject id": "IGHJ3*01-c57bl6",
-            "subject start": 10,
-            "subject strand": true,
-            "uuid": "dc9be552-684d-452b-a703-be59edb48d97",
-            "valid": true
-        }
-    ],
-    "matched": true,
-    "region": {
-        "CDR3": {
-            "average phread": 37.450980392156865,
-            "picked": true,
-            "query": {
-                "nucleotide": "TGTGCAAGACGGGGTTATGATTACGACGGTTACTGGTACTTCGATGTCTGG",
-                "quality": "HGEHHGGE>GGHHHHHHHHFFF>EEEAFFGHHHHHHHFGHFFHHHGGAGDH",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 110,
-            "query start": 59,
-            "region": "CDR3",
-            "subject id": "CDR3",
-            "subject strand": true
-        },
-        "D-J": {
-            "average phread": 37.333333333333336,
-            "palindrome": "PNN",
-            "palindrome ratio": 2.0,
-            "picked": true,
-            "query": {
-                "nucleotide": "GGT",
-                "quality": "FFG",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 89,
-            "query start": 86,
-            "region": "D-J",
-            "subject id": "D-J",
-            "subject strand": true
-        },
-        "dh": {
-            "5 chew": {
-                "nucleotide": "TCTAC",
-                "read frame": 0,
-                "strand": true
-            },
-            "alignment length": 12,
-            "allele": "DSP2.2*01",
-            "average phread": 36.333333333333336,
-            "bit score": 24.4,
-            "evalue": 0.001,
-            "family": "DSP2",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "DSP2.2",
-            "identical": 1.0,
-            "in frame": false,
-            "mismatch": 0,
-            "overlap": 0,
-            "picked": true,
-            "query": {
-                "nucleotide": "TATGATTACGAC",
-                "quality": "HHHHFFF>EEEA",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 86,
-            "query start": 74,
-            "region": "dh",
-            "score": 24.4,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "TATGATTACGAC",
-                "read frame": 1,
-                "strand": true
-            },
-            "subject end": 17,
-            "subject id": "DSP2.2*01-c57bl6",
-            "subject start": 5,
-            "subject strand": true,
-            "uuid": "5a5e18ec-047b-4f58-ba86-656d87d5cbc1",
-            "valid": true
-        },
-        "jh": {
-            "5 chew": {
-                "nucleotide": "C",
-                "read frame": 1,
-                "strand": true
-            },
-            "alignment length": 52,
-            "allele": "IGHJ1*01",
-            "average phread": 38.01923076923077,
-            "bit score": 103.0,
-            "evalue": 2e-27,
-            "family": "IGHJ",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "IGHJ1",
-            "identical": 1.0,
-            "in frame": true,
-            "mismatch": 0,
-            "picked": true,
-            "query": {
-                "nucleotide": "TACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG",
-                "quality": "HHHHHHHFGHFFHHHGGAGDHHFFGFGHHHHGHGGGHGHGGGGGGGGGGEFF",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 141,
-            "query start": 89,
-            "region": "jh",
-            "score": 103.0,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "TACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAG",
-                "read frame": 0,
-                "strand": true
-            },
-            "subject end": 53,
-            "subject id": "IGHJ1*01-c57bl6",
-            "subject start": 1,
-            "subject strand": true,
-            "uuid": "d1fe985e-b81a-4d58-a60d-daa858a44969",
-            "valid": true
-        },
-        "V-D": {
-            "average phread": 38.666666666666664,
-            "palindrome": "NNNNNN",
-            "palindrome ratio": 1.0,
-            "picked": true,
-            "query": {
-                "nucleotide": "CGGGGT",
-                "quality": "GGHHHH",
-                "read frame": 0,
-                "strand": false
-            },
-            "query end": 74,
-            "query start": 68,
-            "region": "V-D",
-            "subject id": "V-D",
-            "subject strand": true
-        },
-        "vh": {
-            "alignment length": 68,
-            "allele": "J558.16.106*01",
-            "average phread": 34.64705882352941,
-            "bit score": 107.0,
-            "evalue": 3e-26,
-            "family": "J558",
-            "framed": true,
-            "functionality": "F",
-            "gap openings": 0,
-            "gapped": false,
-            "gaps": 0,
-            "gene": "J558.16.106",
-            "identical": 1.0,
-            "in frame": true,
-            "mismatch": 0,
-            "picked": true,
-            "query": {
-                "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
-                "quality": "CDDFFHG<F22F>@2HHG0CB>CDGFHHHHGHHGDB3FG4?F??BCHHHHGFHHHFHHHHGEHHGGE>",
-                "read frame": 2,
-                "strand": false
-            },
-            "query end": 68,
-            "query start": 0,
-            "region": "vh",
-            "score": 107.0,
-            "strain": "c57bl6",
-            "subject": {
-                "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGA",
-                "read frame": 2,
-                "strand": true
-            },
-            "subject end": 294,
-            "subject id": "J558.16.106*01-c57bl6",
-            "subject start": 226,
-            "subject strand": true,
-            "uuid": "010900c4-d97a-4c73-96f8-cbd9ec702749",
-            "valid": true
-        }
-    },
-    "sequence": {
-        "nucleotide": "CCAGCACAGCCTACATGGAGCTCCGCAGCCTGACATCTGAGGACACTGCAGTCTATTACTGTGCAAGACGGGGTTATGATTACGACGGTTACTGGTACTTCGATGTCTGGGGCACAGGGACCACGGTCACCGTCTCCTCAGGTAAG",
-        "quality": "CDDFFHG<F22F>@2HHG0CB>CDGFHHHHGHHGDB3FG4?F??BCHHHHGFHHHFHHHHGEHHGGE>GGHHHHHHHHFFF>EEEAFFGHHHHHHHFGHFFHHHGGAGDHHFFGFGHHHHGHGGGHGHGGGGGGGGGGEFFCDFFF",
-        "read frame": 2,
-        "strand": false
-    },
-    "strand": true
+    }
 }
 ```
