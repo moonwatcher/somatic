@@ -649,7 +649,7 @@ class Configuration(object):
 
     def load_expression(self):
         self.expression['cigar'] = re.compile('\*|([0-9]+[MIDNSHPX=])+')
-        self.expression['ncbi accession url'] = 'http://www.ncbi.nlm.nih.gov/sviewer/viewer.cgi?sendto=on&dopt=gbc_xml&val={}'
+        self.expression['ncbi accession url'] = 'https://www.ncbi.nlm.nih.gov//sviewer/viewer.cgi?db=nuccore&report=gbc_xml&retmode=text&val={}'
         self.expression['igblast reversed query'] = '# Note that your query represents the minus strand of a V gene and has been converted to the plus strand.'
         self.expression['nucleotide sequence'] = re.compile('^[ACGTRYKMSWBdhVN]+$', re.IGNORECASE)
         self.expression['sam record'] = re.compile(
@@ -1854,7 +1854,7 @@ class Gene(Artifact):
     def check_rss(self, flank, distance):
         # reset the implicit flanking artifacts
         for key, artifact in self.artifacts.items():
-            if artifact.source in ['implied', 'pattern'] and artifact.position != 'inside':
+            if artifact and artifact.source in ['implied', 'pattern'] and artifact.position != 'inside':
                 self.artifacts[key] = None
 
         flanking = self.flanking_reference_query(flank)
@@ -2005,7 +2005,7 @@ class Gene(Artifact):
                 end = flanking['flank end'] - artifact['reference start']
 
             artifact['sequence'] = flanking['sequence'].crop(start, end)
-            artifact == Artifact(self.pipeline, artifact)
+            artifact = Artifact(self.pipeline, artifact)
             self.artifacts[gap] = artifact
             self.log.info('annotating %s with %dbp %s %s', self.id, artifact.length, gap, artifact.sequence.nucleotide)
 
@@ -2104,11 +2104,11 @@ class Gene(Artifact):
                 'reference strand': flanking['reference strand'],
             }
             if flanking['reference strand'] == orientation:
-                artifact['reference start'] = heptamer['reference end']
-                artifact['reference end'] = nonamer['reference start']
+                artifact['reference start'] = heptamer.node['reference end']
+                artifact['reference end'] = nonamer.node['reference start']
             else:
-                artifact['reference start'] = nonamer['reference end']
-                artifact['reference end'] = heptamer['reference start']
+                artifact['reference start'] = nonamer.node['reference end']
+                artifact['reference end'] = heptamer.node['reference start']
 
             if flanking['reference strand']:
                 start = artifact['reference start'] - flanking['flank start']
@@ -6259,7 +6259,6 @@ class Resolver(object):
         def fetch(url):
             content = None
             request = urllib.request.Request(url, None, { 'Accept': 'application/xml' })
-
             try:
                 response = urllib.request.urlopen(request)
             except http.client.BadStatusLine as e:

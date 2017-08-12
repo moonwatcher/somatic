@@ -22,3 +22,8 @@ db.createUser(
              { role: "read", db: "reporting" } ]
   }
 )
+
+somatic -v debug rebuild
+somatic -v debug populate ~/code/somatic/bootstrap/c57bl6.json
+somatic -v debug align -F 200
+somatic -v debug rss --flanking 60 --distance 9
