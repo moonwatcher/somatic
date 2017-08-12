@@ -27,3 +27,5 @@ somatic -v debug rebuild
 somatic -v debug populate ~/code/somatic/bootstrap/c57bl6.json
 somatic -v debug align -F 200
 somatic -v debug rss --flanking 60 --distance 9
+somatic -v debug index
+cat ~/Downloads/somatic/A4G6U_b6_conv_fo_3_b.fastq|head -n 4096 |somatic -v debug analyze --library spf_fo_b03t02
