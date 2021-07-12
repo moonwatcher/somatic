@@ -1,6 +1,7 @@
 # ignore pyc files
 *.pyc
 *.pyo
+**/.DS_Store
 __pycache__/
 resource/
 bin/
